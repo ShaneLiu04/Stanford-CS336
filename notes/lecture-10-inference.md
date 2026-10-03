@@ -514,44 +514,35 @@ TTFT”。然后预先指定 baselines、sweep、stopping rule 与主要指标�
 
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
-| TTFT 高、TPOT 正常 | queue/prefill | 长 prompt、prefill blocking |
+| TTFT 高、TPOT 正常 / 尾部尖刺 | queue/prefill | 长 prompt、prefill blocking、未 chunked prefill |
 | TPOT 随 context 急升 | KV traffic | attention bandwidth |
 | throughput 高但 p99 差 | scheduler trace | 大 batch/head-of-line |
-| KV OOM 早于公式 | allocator/pages | fragmentation/reservation |
+| KV OOM 早于公式 / cache OOM | allocator/pages / 容量公式 | fragmentation/reservation、未分页、未用 GQA/KV 量化 |
 | prefix cache 命中低 | token/template key | tokenizer/version 不一致 |
-| speculative 不加速 | acceptance/cost | draft 太慢、batch 已饱和 |
+| speculative 不加速 / 加速为负 | acceptance/cost | draft 太慢、batch 已饱和、接受率低 |
 | quantized 更慢 | kernel coverage | dequant/unsupported ops |
-| output 与 base 不同 | sampling correction | speculative/residual bug |
+| output 与 base 不同 / 输出退化重复 | sampling correction | speculative/residual bug、温度/top-p 边界 |
 | CUDA graph 命中低 | shape buckets | 动态 batch/length |
 | worker hang | distributed state | rank failure/collective mismatch |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
-| TTFT 尾部尖刺 | prefill 调度与 chunked prefill | 长 prompt 独占计算、阻塞 decode |
 | decode 吞吐低 | batch 组成与 KV 读取带宽 | batch 过小、权重/KV 每步全量读取 |
-| KV cache OOM | 容量公式×batch×上下文 | 未分页、未用 GQA/KV 量化 |
-| goodput 远低于吞吐 | SLO 违约率与准入 | admission control 缺失、排队策略不当 |
+| goodput 远低于 throughput | SLO 违约率与准入 | admission control 缺失、排队策略不当 |
 | 量化后质量下降 | scale 校准与 outlier 通道 | 未做 per-channel scale、激活异常值未处理 |
-| speculative 加速为负 | 接受率与 draft 成本 | draft 接受率低或 draft 推理本身过慢 |
-| 输出退化/重复 | 采样实现审计 | 温度/top-p 边界条件 bug |
 
 ## 14. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 14.1 Construct validity
 - tokens/s 不区分 input/output，也不体现 SLO；
 - average latency 隐藏 p99/tail；
 - model-only benchmark 排除 queue/sampling/network；
 - memory capacity 不等于可稳定服务并发。
 
-### Internal validity
+### 14.2 Internal validity
 - synthetic fixed lengths、closed-loop clients 会夸大 batching；
 - prefix cache warm/cold、compile/capture 状态影响结果；
 - quantization 方法若 kernel coverage 不同，不能只按 bits 比；
 - speculative sampling 参数/seed 不一致会混入质量差异。
 
-### External validity
+### 14.3 External validity
 - 单一 GPU/traffic trace 不外推多租户生产；
 - offline throughput 不外推 bursty arrival goodput；
 - 小模型 acceptance/quantization 规律不外推 70B；
@@ -560,28 +551,128 @@ TTFT”。然后预先指定 baselines、sweep、stopping rule 与主要指标�
 学术报告应公开 arrival/length distribution、SLO、client model、concurrency、batch scheduler、
 cache state、sampling config、hardware/software 和质量评测；否则“serves X tok/s”不可比较。
 
-## 面试要点速记
+## 15. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> LLM 推理是 serving 系统面试的核心：面试官常从「prefill 和 decode 谁是 memory-bound」切入，
+> 追到「KV cache 显存公式」「continuous batching」「PagedAttention」「speculative decoding 为什么无损」。
+> 核心是区分「compute-bound 的 prefill」与「memory-bound 的 decode」，围绕 KV cache 这一瓶颈展开所有优化。
+> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：prefill 和 decode 谁是 memory-bound？** 要点：decode——每步读全部
-   权重与 KV 却只算一个 token（GEMV、低 arithmetic intensity）；prefill 是
-   大 GEMM，通常 compute-bound。两者 SLO 不同（TTFT vs TPOT）。
-2. **Q：KV cache 怎么估？** 要点：2·l·h_kv·d_h·seq·B·bytes；70B 级 GQA
-   模型 + 128k 上下文可达每请求 GB 量级 → 必须分页/量化/分层。
-3. **Q：continuous batching 的收益来源？** 要点：迭代级调度，异质长度请求
-   不再互相等整批；GPU 利用率随到达率平滑变化。
-4. **Q：speculative decoding 为什么无损？** 要点：对 target 分布做 rejection
-   sampling（接受/重采样），输出分布不变；净加速 = 接受率×草稿并行度 − 验证开销。
-5. **Q：goodput 与 throughput 的区别？** 要点：吞吐不区分 SLO 违约；
-   goodput 只计满足 SLO 的有效吞吐，是容量规划的正确目标。
+### 15.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：推理 = 可并行、偏 compute-bound 的 prefill + 串行、偏 memory-bound 的 decode；
+KV cache 消除历史 K/V 重算，却把显存容量与带宽推到核心位置，所有优化都围绕这个瓶颈展开。
 
-- KV cache 公式；TTFT/TPOT/goodput 三指标；chunked prefill 与
-  prefill-decode 分离是尾延迟治理的两个主杠杆。
+**必背数字与公式**
 
-## 15. 本讲小结
+- KV cache：\(M_{\mathrm{KV}}=2\,B\,L\,S\,K\,H\,b_e\)（K/V 各一份，bf16 `b_e=2`）。
+- arithmetic intensity：prefill MLP \(\sim BS\)、attention \(\sim S/2\)；decode MLP \(\sim B\)、attention \(<1\)。
+- 服务指标：TTFT（首 token）、TPOT（token 间隔）、E2E、throughput、goodput（满足 SLO 的有效吞吐）。
+- speculative 接受率 \(a(x)=\min(1,q(x)/p(x))\)，拒绝后从残差 \(r\propto\max(q-p,0)\) 重采样。
+
+**三句话答高频**
+
+1. prefill 是大 GEMM、compute-bound；decode 每步读全权重+KV 只算一个 token、memory-bound。
+2. KV cache 用显存换计算：\(2BLSKH·b_e\) bytes，长上下文下直接决定可并发请求数。
+3. speculative decoding 用 rejection sampling 严格保持 target 分布，是无损加速而非近似。
+
+### 15.2 高频面试题与答题框架
+
+**Q1：prefill 与 decode 谁是 memory-bound？为什么？**
+
+- **prefill**：一次算全部 prompt `[B,S,d]`，大 GEMM 复用强、arithmetic intensity 高 → compute-bound。
+- **decode**：每步 `[B,1,d]`，只算一个新 token 却要读全权重 + 整段 KV，matrix-vector/small-batch GEMM → memory-bound。
+- **SLO 不同**：prefill 影响 TTFT，decode 影响 TPOT；两者调度目标冲突，需分开治理。
+
+**Q2：KV cache 显存怎么估？给个 70B 例子？**
+
+- \(M_{\mathrm{KV}}=2BLSKHb_e\)。设 70B 级模型 `L=80, K=8, H=128`、bf16、上下文 `S=32768`：
+- 单 request 约 \(2\times80\times32768\times8\times128\times2\approx10.7\text{ GiB}\)——不做 GQA/量化/分页根本撑不起并发。
+- 若 `S=128k` 再翻 4 倍；所以长上下文 serving 的容量由 KV cache 主导，而非权重。
+
+**Q3：TTFT 与 TPOT 的区别？为什么它们的目标冲突？**
+
+- TTFT = 首 token 时间（受排队 + prefill 影响）；TPOT/inter-token latency = 后续每 token 时间（受 decode 影响）。
+- 大 prefill batch 提高吞吐，却阻塞正在 decode 的 latency-sensitive 请求（head-of-line blocking）。
+- chunked prefill 把长 prompt 切成 chunks 与 decode 交错，是治理这一冲突的主杠杆。
+
+**Q4：continuous batching 是什么？收益来源？**
+
+- 以 decode iteration 为调度粒度：每轮所有活跃请求各执行一步，完成的移出、新请求插入空位。
+- 相比 static batching（等整批、短请求被长请求拖住、padding 浪费），异质长度请求不再互相等待。
+- 收益来源：摊销权重读取、减少 padding 与 head-of-line blocking，GPU 利用率随到达率平滑变化。
+
+**Q5：PagedAttention 是什么？解决什么？**
+
+- 把 KV cache 切成固定 block，逻辑 token 映射到非连续物理 block，支持 copy-on-write 分叉。
+- 解决的是**内存管理**（内部/外部碎片 + 预留最大长度浪费 + prefix 共享），不改变 attention 数学结果。
+- 代价是 block table 查找、kernel 复杂度与 block size 取舍。
+
+**Q6：speculative decoding 的原理？为什么是无损的？**
+
+- 小 draft model 连续提议 \(k\) 个 token，target model 一次并行验证；候选 \(x\) 以 \(a(x)=\min(1,q(x)/p(x))\) 接受，拒绝后从残差 \(r\propto\max(q-p,0)\) 采样。
+- 这个 rejection sampling 修正使最终样本**严格服从 target 分布**，不是近似改 logits。
+- 加速条件：draft 成本低、接受率高、\(k\) 个 token 并行验证高效、额外开销可控。
+
+**Q7：quantization 为什么能加速？weight-only / KV / W8A8 各解决什么？**
+
+- decode 是 memory-bound，减少 bytes 比减少 FLOPs 更直接有效。
+- **weight-only**：减权重读取带宽，适合 decode；**KV int8/int4**：直接提长上下文容量；**W8A8**：利用 integer tensor core。
+- **陷阱**：压缩比 ≠ 速度比；若硬件无对应低比特 kernel，dequant 开销会让 int4 比 bf16 更慢。
+
+**Q8：goodput 与 throughput 的区别？**
+
+- throughput 不区分 SLO 违约，可能通过牺牲延迟换 token 数。
+- goodput = 满足 TTFT/TPOT/E2E SLO 的有效请求或 token 吞吐，是容量规划的正确目标。
+- benchmark 应扫 offered load、画 goodput-latency 曲线，而不是只在饱和点报最高 tokens/s。
+
+**Q9：chunked prefill 与 prefill-decode disaggregation 的区别？**
+
+- **chunked prefill**：同一资源池内把长 prompt 切块与 decode 交错，限制每轮 prefill 工作量、保护 TPOT。
+- **disaggregation**：prefill 与 decode 分到不同 GPU pool 独立扩缩容，用 KV transfer 连接；收益来自 resource specialization（compute vs bandwidth），代价是 KV 网络传输与路由复杂度。
+
+**Q10：为什么 decode 的 arithmetic intensity 低？**
+
+- decode 每步 MLP 是 `[B,1,d]×[d,F]`，主要流量是读权重，intensity \(\sim B\) FLOPs/byte（`B` 小则极低）。
+- attention 每步读 \(S+t\) 的 KV 却只算一个 query，intensity \(<1\)，几乎纯带宽。
+- 所以 GQA、KV 量化、weight-only 量化之所以有效，是减少 bytes 而非 FLOPs。
+
+### 15.3 手撕要点（KV cache 容量核算）
+
+面试让「算 KV cache 显存 / 最大并发」时，按公式逐步写：
+
+```text
+KV cache（单 request，bf16）
+  M_KV = 2 * L * S * K * H * b_e
+       = 2 * 层数 * 上下文 * KV heads * head dim * 2 bytes
+
+最大并发（给定 KV 显存预算 M_budget）
+  B_max <= M_budget / (2 * L * S_avg * K * H * b_e)
+         再减去 weights / workspace / 碎片 / 安全余量
+
+例：L=40, K=8, H=128, S=4096, bf16
+  单 request = 2*40*4096*8*128*2 = 640 MiB
+  64 并发 = 40 GiB（尚未算权重）
+```
+
+**三个必踩坑**
+
+1. **别忘乘 2**：K 和 V 各一份；MHA 时 `K = 所有 query heads`，GQA/MQA 才变小。
+2. **`S_avg` 不够**：p95/p99 上下文比均值更决定 OOM 风险，admission 要按 reserved max 或动态分配 + eviction。
+3. **KV cache 降低重算、不降低单步读取**：每步仍要读全部历史 KV，long-context 下 attention bandwidth 取代 weight bandwidth 成为瓶颈。
+
+### 15.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| batch 越大越好吗？ | 否，throughput 升但 TTFT/TPOT/显存恶化 |
+| speculative 是近似采样吗？ | 否，正确 rejection correction 下是 target 精确样本 |
+| 量化位数减半就 2× 吗？ | 否，受 kernel、packing、反量化、非量化算子限制 |
+| KV cache 让 attention 变快吗？ | 它避免重算 K/V，但每步仍读全部历史 cache |
+| 只报 tokens/s 够吗？ | 否，须说明 input/output、并发、SLO、硬件 |
+| prefix cache 一定命中吗？ | 否，token/template/version 不一致会错误复用 |
+
+## 16. 本讲小结
 
 推理包含可并行、偏 compute-bound 的 prefill，以及串行、偏 memory-bound 的 decode。KV cache 消除历史 K/V 重算，却把显存容量和带宽推到核心位置；GQA、量化、连续批处理和分页管理都是围绕这一瓶颈展开。Speculative decoding 则利用“并行验证比逐 token 生成高效”的不对称，在保持 target 分布不变的前提下换取速度。
 
