@@ -313,26 +313,118 @@ match 需说明大小写、Unicode 和版面 normalization；grounding 同时报
 论文式表述应报告：counterfactual 一致率、分轴置信区间、预处理流水线版本与 judge
 校准协议，而不是单一的 benchmark 平均分。
 
-## 面试要点速记
+## 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> 多模态 LLM 是面试的进阶架构题：面试官常从「三种连接结构怎么选」切入，追到
+> 「视觉 token 数随分辨率二次增长」「CLIP 的 InfoNCE」「多模态幻觉怎么操作化诊断」
+> 「图内 prompt injection 怎么防」。核心是理解「token 化 → 连接结构 → 对齐阶段 → 评估证据」
+> 四层，并牢记评估必须证明模型「看见了证据」而非「输出了合理答案」。下面按
+> 「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：三种连接结构怎么选？** 要点：linear projector（LLaVA）最简，冻结
-   两塔阶段够用；Q-Former/Flamingo 式 cross-attention 压缩 token 数或按需
-   读取，但结构侵入；VQ 统一 token 支持自回归生成，代价是量化损失。
-2. **Q：视觉 token 数与成本？** 要点：\((H/P)(W/P)\)；全拼接 attention 为
-   \(O((N_t+N_v)^2)\)；高分辨率靠 tiles + 缩略图，但必须保序保几何。
-3. **Q：多模态幻觉如何操作化？** 要点：counterfactual image pairs（换图不
-   改问）、遮挡 ablation、image-shuffle 一致性；“回答合理”≠看见证据。
-4. **Q：CLIP 的目标一句话？** 要点：batch 内 InfoNCE 对比，让匹配图文对的
-   相似度高于所有负对，学到对齐的联合表示空间。
-5. **Q：图内 prompt injection 怎么防？** 要点：OCR 文本是不可信数据；系统
-   指令 / 用户输入 / 图像文字三级信任边界必须显式建模。
+### 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：多模态 LLM 的第一性问题是把高带宽感知输入压缩成有限 token、在预算内接入 LLM；
+评估的核心论点是「回答合理」无法区分真实感知与语言先验，必须用 counterfactual 对证明证据读取。
 
-- patch 数公式；GQA 级压缩思想在视觉 token（resampler 查询数）上的同构；
-  面试必答：多模态评估必须分感知/推理/grounding/幻觉/安全五轴报告。
+**必背数字与公式**
+
+- 图像 patch 数 \(N_{\text{img}}=(H/P)(W/P)\)，随分辨率**二次**增长。
+- 全序列 self-attention \(O((N_{\text{text}}+N_{\text{img}})^2)\)；cross-attention 约 \(O(N_t N_v)\)。
+- CLIP InfoNCE \(-\frac1B\sum_i\log\frac{\exp(s(v_i,t_i)/\tau)}{\sum_j\exp(s(v_i,t_j)/\tau)}\)。
+- VQ 量化 \(k^\star=\arg\min_k\|z_e(x)-e_k\|_2^2\)。
+
+**三句话答高频**
+
+1. linear projector 最简（LLaVA）；cross-attention 按需读取（Flamingo）；VQ 统一 token 支持生成。
+2. 视觉 token 随分辨率二次增长，高分辨率靠 tiles + 缩略图，但必须保序保几何。
+3. 幻觉诊断用 counterfactual pairs + 遮挡 ablation；「回答合理」≠「看见证据」。
+
+### 高频面试题与答题框架
+
+**Q1：三种连接结构怎么选？**
+
+- **linear/MLP projector**：参数少、训练快，冻结 encoder/LLM 的第一阶段表示对齐；LLaVA 证明极简结构 + 高质量指令数据即可（GPT-4 生成指令数据低成本撬动）。
+- **Q-Former / resampler**：用固定数量 learned queries 压缩可变视觉 token，控制 LLM 上下文成本；**cross-attention（Flamingo）**：在若干 LLM 层插入，让 text query 按需读视觉 memory，支持交错图文少样本，但结构侵入、预训练/部署复杂。
+- **VQ 离散 token**：与语言 token 统一自回归建模、便于生成，代价是量化误差 + 大 codebook 训练。
+
+**Q2：视觉 token 数与成本？**
+
+- \(N_{\text{img}}=(H/P)(W/P)\)，提高分辨率二次增加 token 数；全拼接 attention \(O((N_t+N_v)^2)\)。
+- 动态分辨率把大图切 tiles + 加 thumbnail/二维位置编码，但必须保留 tile 顺序与几何，否则 OCR/图表/空间关系退化。
+- 取舍：token 少便宜但丢小字/计数/定位，token 多保细节但显存/延迟/长上下文竞争加剧。
+
+**Q3：ViT 的 patch tokenization？**
+
+- 把图像切成不重叠 \(P\times P\) patch，每个 patch 展平 + 线性映射为 \(d_v\) 维，再经 ViT 得视觉 tokens \(Z_v\in\mathbb R^{N_{\text{img}}\times d_v}\)。
+- 确立「图像即 token 序列」范式，是多模态接入 LLM 的基础。
+
+**Q4：CLIP 的目标（InfoNCE）？**
+
+- batch 内对比学习：让匹配 image-text 对的相似度高于所有负对，学到可迁移的对齐表示空间。
+- 用 4 亿 image-caption 对，自然语言监督即可产生强视觉表示；InfoNCE 成为多模态表示对齐的标准构件。
+
+**Q5：多模态对齐的三阶段？**
+
+- **表示对齐**：用 image-caption 对让 projector/encoder 输出落入 LLM 可用表示空间（caption loss 或 InfoNCE）。
+- **多模态指令微调**：图像问答/OCR/grounding/图表/文档/多轮，response-only loss；数据混合要控制 caption/OCR/开放问答比例，避免只学会描述图像。
+- **偏好与安全对齐**：RM/DPO/PPO，但偏好标注必须让 annotator 真正看到所有模态（纯文本 judge 无法判图像事实）。
+
+**Q6：Flamingo 的 gated cross-attention？为什么 gate 初始化接近零？**
+
+- 在若干 LLM 层插入 cross-attention，让 text queries 按需读视觉 memory；成本 \(O(N_t N_v)\)，视觉 memory 可复用。
+- gated 以接近零的 gate 初始化，减少接入新模态时破坏原语言能力；但 gate 过小会「忽略图像」，需 image ablation 检查。
+
+**Q7：Q-Former 的作用？**
+
+- 以少量 learned queries 从冻结视觉 encoder 提取与语言最相关的表示，把可变视觉 token 压缩成固定长度，控制 LLM 上下文成本。
+- 属于「resampler」一类：用固定数量查询压缩，代价是压缩可能丢失细粒度信息。
+
+**Q8：多模态幻觉如何操作化诊断？**
+
+- 不能只用开放式「回答合理」；要 counterfactual image pairs（换图不改问）、遮挡关键区域、交换对象属性、image-shuffle 一致性。
+- 验证输出随证据变化：换图答案不变说明语言先验主导、没真正读图。
+
+**Q9：VQ-VAE / VQGAN 的离散 token？**
+
+- VQ-VAE 用 codebook 量化把连续观测转离散隐变量；VQGAN 加感知损失 + 对抗训练，使高分辨率保真。
+- 离散 tokens 可与语言 token 统一自回归建模、便于生成；代价是量化误差与大 codebook 训练。
+
+**Q10：图内 prompt injection 怎么防？**
+
+- 图中 OCR 文本是不可信数据，不能被当作高优先级指令；要显式建模「系统指令 / 用户输入 / 图像文字」三级信任边界。
+- 红队测试：图像文字注入、敏感属性推断、身份推断、医疗/定位、深伪。
+
+### 手撕要点（视觉 token 数与形状审计）
+
+面试让「算视觉 token 数」或「审计形状」时，按公式写：
+
+```text
+图像 patch 数: N_img = (H/P) * (W/P)     （随分辨率二次增长）
+全序列 attention: O((N_text + N_img)^2)
+cross-attention:   O(N_t * N_v)
+
+最小接口:
+  vision_encoder(pixel_values[B,C,H,W]) -> visual_tokens[B,Nv,Dv]
+  projector(visual_tokens) -> multimodal_tokens[B,Nm,Dllm]
+  merge(input_ids, multimodal_tokens, image_positions)
+    -> inputs_embeds[B,Nt+Nm,Dllm], attention_mask, labels
+```
+
+**三个必踩坑**
+
+1. **`<image>` 占位数与视觉 embeddings 数必须一致**：不一致会静默错位。
+2. **projector 输出 token 数变化后要同步 attention mask 与 position ids**。
+3. **训练/评估的 resize/crop/归一化必须一致**：不一致会破坏位置/文字、制造虚假差距。
+
+### 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| 换图答案不变说明什么？ | 语言先验主导、gate 接近零或没真正读图 |
+| 用 text-only judge 评视觉事实可以吗？ | 否，会得虚假高分，须多模态 judge + 人工校准 |
+| benchmark 图片会污染吗？ | 会，视觉 encoder 预训练数据可能与 benchmark 重叠 |
+| 高分辨率一定好吗？ | 否，token 二次增长，需 tiles + 缩略图权衡 |
+| 「回答合理」够吗？ | 否，须 counterfactual 对证明证据读取 |
 
 ## 小结
 
