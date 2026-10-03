@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_08.pdf"
   - "../experiments/topics/systems.md"
-  - "../assignments/spring2026/assignment2-systems/"
+  - "../assignments/assignment2-systems/"
 ---
 
 # Lecture 08 — TP、PP、FSDP 与多维并行：容量、通信与拓扑的联合设计
@@ -354,7 +354,7 @@ sharded 并行写入高效，但恢复需要 metadata、world-size reshard 与�
 
 ## 5. 仓库教学型 FSDP
 
-实现：`assignments/spring2026/assignment2-systems/cs336_systems/fsdp.py`
+实现：`assignments/assignment2-systems/cs336_systems/fsdp.py`
 
 它只分片课程自定义 `Linear`/`Embedding` weights：
 
@@ -559,42 +559,34 @@ model 自动搜索 [[8]](#ref-8)[[9]](#ref-9)[[10]](#ref-10)。自动计划仍�
 |---|---|---|
 | TP output 不一致 | shard axis/collective | row/column 切反 |
 | TP 显存未降 | activation gather | 过早 all-gather、未 SP |
-| PP 吞吐低 | timeline/stage time | bubble、stage skew |
+| TP 提速不明显 | 通信量与互联域 | TP 组跨节点、all-reduce 未 overlap |
+| PP 吞吐低 / 气泡占比大 | timeline/stage time / microbatch 数 | bubble、stage skew、microbatch 不足、未用 1F1B/interleaved |
 | PP 显存高 | schedule/activation | GPipe 保存过多 microbatches |
-| FSDP 峰值接近 DDP | memory snapshot | unit 太大、未 reshard、prefetch 重叠 |
-| FSDP 通信很多 | wrap policy | units 太小、latency-bound |
+| FSDP 峰值接近 DDP / 仍 OOM | memory snapshot / wrap 策略 | unit 太大、未 reshard、prefetch 重叠、未 offload |
+| FSDP 通信很多 / all-gather 慢 | wrap policy / prefetch 分片 | units 太小、latency-bound、分片过碎 |
 | mixed precision 发散 | master/reduce dtype | 低精度累加 |
 | tied weight 错误 | wrap/state dict alias | 跨 units 或 load 后 alias 丢失 |
 | checkpoint 无法换 world size | state-dict type | 缺 sharding metadata/reshard |
 | 2D/3D hang | process groups | mesh rank 映射不一致 |
 | 多节点骤降 | topology trace | 高频 TP/CP 跨慢链路 |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
-| TP 提速不明显 | 通信量 \(3S{+}2S\) 与互联域 | TP 组跨节点、all-reduce 未 overlap |
-| PP 气泡占比大 | microbatch 数与调度 | microbatch 不足、未用 1F1B/interleaved |
-| FSDP all-gather 慢 | prefetch 与分片大小 | 未开 backward prefetch、分片过碎 |
-| FSDP 仍 OOM | wrap 策略与 reshard_after_forward | wrap 粒度不当、未及时 reshard、未 offload |
 | 3D 组合后不收敛 | 梯度裁剪的归约顺序 | 裁剪须在完整梯度上跨组归约后进行 |
 | ZeRO-3 训练停滞 | 通信串行化 | 通信未与计算重叠、prefetch 失效 |
 
 ## 12. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 12.1 Construct validity
 - theoretical memory lower bound 不含 full-unit peak/workspace；
 - total communication bytes 不等于 exposed communication；
 - MFU/throughput 不等于 time-to-quality；
 - weak scaling 不代表固定训练任务加速。
 
-### Internal validity
+### 12.2 Internal validity
 - 并行度变化常同时改变 global batch、microbatch 与 optimizer recipe；
 - stage/wrap/bucket tuning budget 不等会造成 selection bias；
 - 只测 rank0 隐藏 straggler/peak；
 - profiler、checkpoint、compile 与 first-step overhead 口径不一致。
 
-### External validity
+### 12.3 External validity
 - 单节点 NVLink mapping 不外推跨节点；
 - 小模型 layer balance 不外推大模型；
 - 教学 FSDP correctness 不代表生产 memory/performance；
@@ -603,26 +595,132 @@ model 自动搜索 [[8]](#ref-8)[[9]](#ref-9)[[10]](#ref-10)。自动计划仍�
 论文式结论必须限定 model、mesh、topology、dtype、batch/context、schedule、software 与
 measurement protocol，并公开 OOM/hang/failed configurations。
 
-## 面试要点速记
+## 13. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> 多维并行是 LLM 系统面试的压轴题：面试官常从「DP/TP/PP/FSDP 各切什么」切入，追到
+> 「TP 每层通信量」「PP 气泡公式」「FSDP 参数生命周期」「3D 下梯度裁剪顺序」。
+> 核心是「先找最大放不下的对象，再映射到合适拓扑」，用 local shape + collective 账本支撑判断。
+> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：TP 的通信量与适用边界？** 要点：每层前向 2 次、反向 2 次 all-reduce
-   （合计 ~4S 量级）；必须限制在 NVLink 单机域内，跨节点会被通信淹没。
-2. **Q：PP 气泡占比公式？** 要点：**(p−1)/(m+p−1)**；增大 microbatch 数 m、
-   用 1F1B/interleaved schedule 降气泡。
-3. **Q：FSDP 与 TP 怎么选？** 要点：FSDP（=ZeRO-3）通信 3S、参数全分片，
-   适合跨机大模型；TP 通信频繁但算子级并行无参数复制，适合单机多卡；
-   超大规模组合为 3D（数据×流水×张量）。
-4. **Q：3D 并行下梯度裁剪的顺序？** 要点：所有并行组归约完成后，在完整梯度
-   上裁剪，再分发回各分片；顺序错误是最常见的静默 bug。
+### 13.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：并行是沿不同维度切分——改变存储位置、collective 类型、同步频率与数值顺序；
+关键是先找「最大放不下的对象」（参数/激活/单层/上下文/expert），再把高频通信映射到最快链路。
 
-- TP 4S（层内高频）/ PP 气泡 (p−1)/(m+p−1) / FSDP 3S；三者的量纲都是
-  “每步每参数字节数”，可直接进 cost model。
+**必背数字与公式**
 
-## 13. 小结
+- TP：每层约 4 次 all-reduce（forward 2 + backward 2），通信量级 \(4S\)，必须放 NVLink 单机域内。
+- PP：bubble fraction \(\frac{p-1}{m+p-1}\)（GPipe 式），增大 microbatch \(m\) 或 1F1B/interleaved 缓解。
+- FSDP：通信约 \(3S\)（forward/backward 各 all-gather + 梯度 reduce-scatter），显存降到 \(16P/f\)。
+- 显存：DDP `16P`；ZeRO-1 `8P+8P/f`；ZeRO-2 `4P+12P/f`；ZeRO-3 `16P/f`。
+
+**三句话答高频**
+
+1. TP 切宽度、每层高频通信 activation；PP 切深度、承受 bubble；FSDP 切状态、按需 gather/scatter。
+2. 2D/3D 组合把高频 TP/CP 放节点内，低频大粒度 FSDP/DP 跨节点，而非把公式相乘。
+3. 梯度裁剪必须在所有并行组归约完成后、完整梯度上做，顺序错误是最常见的静默 bug。
+
+### 13.2 高频面试题与答题框架
+
+**Q1：DP / TP / PP / FSDP / CP 各切什么维度？**
+
+- DP 切 batch；TP 切 hidden/head/FFN 宽度；PP 切 layer/depth；FSDP/ZeRO 切模型状态（参数/梯度/优化器）；CP 切 sequence/KV；EP 切 experts。
+- 各自的主要 collective：DP all-reduce；TP 每层 all-reduce/all-gather；PP stage 间 P2P；FSDP all-gather + reduce-scatter；CP ring P2P；EP all-to-all。
+
+**Q2：TP 的 column-parallel 与 row-parallel 怎么切？为什么 MLP 要配对？**
+
+- **column-parallel**：按输出维切 \(W=[W_0,\dots,W_{t-1}]\)，每 rank 算 \(Y_r=XW_r\)，输出天然分片；需要完整 Y 时 all-gather。
+- **row-parallel**：按输入维切，每 rank 算 partial \(\tilde Y_r\)，forward 要 all-reduce。
+- **MLP 配对**：扩张层 \(W_1\) column-parallel（中间 `d_ff/t` 保持分片）、收缩层 \(W_2\) row-parallel（最后规约 partial），中间 activation 不必 all-gather，每个 block 只需少数大 collective。
+
+**Q3：TP 每层通信量？为什么限制在单机？**
+
+- 每层约 4 次 all-reduce（fwd 2 + bwd 2），通信量级 \(4S\)；且随 tokens 增长、每层发生。
+- 因此要求高带宽、低延迟互联；跨节点会被通信淹没。TP degree 增大虽继续分参数，却提高高频 activation 通信。
+
+**Q4：PP 的 bubble 公式？怎么减小？**
+
+- GPipe 式流水利用率 \(U\approx m/(m+p-1)\)，bubble fraction \(\approx(p-1)/(m+p-1)\)。
+- 减小方式：增大 microbatch \(m\)（但会缩小每个 GEMM、增调度开销）、用 1F1B（forward/backward 交替降峰值）、interleaved 1F1B（每 rank 多个 virtual stage 缩短 bubble）。
+- step 由最慢 stage 决定 \(T\gtrsim m·\max_s T_s\)，需按实测 per-layer time/memory 做 partition。
+
+**Q5：GPipe / 1F1B / interleaved 的区别？**
+
+- **GPipe**：先全部 forward 再全部 backward；简单、weight version 一致，但保存更多 microbatch activations。
+- **1F1B**：warmup 后 forward/backward 交替，降低 activation peak。
+- **Interleaved 1F1B**：每 rank 多个 virtual stages，进一步缩短 bubble，但增加 P2P/调度复杂度。
+- **PipeDream-style async**：bubble 更小但不同 microbatch 看到不同 weight version，需 weight stashing。
+
+**Q6：FSDP 的参数生命周期？**
+
+- 常驻 FP32 参数 shard（`1/f`）；forward 前 all-gather full 参数 → 执行 → reshard/free；backward 前必要时再 all-gather；算完 full gradient 后 reduce-scatter；optimizer 更新 local shard。
+- 若 forward 后 reshard，backward 要再 all-gather，总通信约 \(3(f-1)S/f\)；保留到 backward 可少一次 gather 但峰值高。
+
+**Q7：FSDP 通信 3S 从哪来？**
+
+- 一次 all-gather / reduce-scatter 每 rank 收发约 \((f-1)S/f\)；训练要 forward all-gather + backward all-gather + gradient reduce-scatter，合计约 3 次 → \(3S\)。
+- 对比 DDP 的 all-reduce 约 \(2S\)；FSDP 用更多/更细通信换显存随 \(f\) 线性下降。
+
+**Q8：FSDP 与 TP 怎么选？**
+
+- 模型能放单卡 → DDP；参数状态放不下 → FSDP（通信 3S，跨机友好）；单层本身放不下或 GEMM 太大 → TP（每层 4S，必须单机）。
+- 大规模：先满足容量，再组合 2D/3D——TP 节点内、FSDP/DP 跨节点。
+
+**Q9：3D 并行下梯度裁剪的顺序？**
+
+- 梯度先在各自并行组内归约（TP 层内 all-reduce、PP 反向、FSDP reduce-scatter），**全部归约完成后**在完整梯度上算全局 norm 再 clip，最后分发回各分片。
+- 本地裁剪再归约、或跨组顺序错误，会改变数学语义，是最常见的静默 bug。
+
+**Q10：Sequence parallelism 与 Context parallelism 的区别？**
+
+- **SP**：消除 TP group 内 replicated activations——在 LayerNorm/Dropout 等非 TP 算子区域沿 token 维切分，降低激活显存。
+- **CP**：让 attention 的 sequence/KV 本身跨设备（超长上下文），用 ring attention 让 K/V 块轮转、online softmax 合并。
+- SP 切「replicated activation」，CP 切「attention context 本身」。
+
+**Q11：什么时候用 offload / ZeRO-Infinity？**
+
+- 当 \(16P/f\) 仍超显存时，把 optimizer states/parameters/activations 按需卸载到 CPU/NVMe，用异步 prefetch 隐藏 PCIe/网络延迟。
+- 代价：CPU/NVMe 带宽成新瓶颈、故障恢复复杂、吞吐显著低于纯 GPU；是「能训」vs「训得快」的权衡，应报 time-to-quality 与 energy。
+
+**Q12：3D 并行的拓扑映射原则？**
+
+- TP/CP 每层、高频、依赖链短 → 放 NVLink/NVSwitch 最快域；PP P2P 可跨相邻节点；DP/FSDP 大粒度、低频 → 跨节点。
+- 一节点 8 GPU、64 GPU 时常见 `t=8, f=8`；但要检查单层能否在 `t<8` 放下、跨节点带宽是否承受 FSDP、heads/hidden/FFN 是否可整除。
+
+### 13.3 手撕要点（TP 切分与 PP 气泡）
+
+面试让「推导 TP 通信」或「算 PP bubble」时，按公式一步步写：
+
+```text
+TP（linear Y = XW，X:[M,K], W:[K,N]）
+  column-parallel: W_r:[K,N/t], Y_r = X W_r:[M,N/t]  -> 需完整时 all-gather
+  row-parallel:    W_r:[K/t,N], Y = sum_r(X_r W_r)    -> forward all-reduce
+  MLP 配对: W1 column-parallel + W2 row-parallel -> 中间不 all-gather
+
+PP bubble（GPipe，p stages，m microbatches）
+  利用率 U = m / (m+p-1)
+  bubble fraction = (p-1)/(m+p-1)
+  steady time ~ m * max_s(T_s)   （最慢 stage 决定）
+```
+
+**三个必踩坑**
+
+1. **TP 不是「不通信的切分」**：column/row 切反会导致每层 all-gather。
+2. **hidden 可整除 ≠ heads/KV-heads 可整除**：GQA/MQA 的 KV head 数可能小于 TP degree。
+3. **PP 的 m 不是越大越好**：microbatch 太小会崩 GEMM 效率，bubble 降了但 throughput 也降。
+
+### 13.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| TP 通信为什么随 tokens 增长？ | 传的是 activation（Th 元素），不是参数 |
+| FSDP 峰值为什么接近 DDP？ | unit 太大、未 reshard、prefetch 重叠导致多个 full 参数同时 materialize |
+| PP 的 stage 按层数切对吗？ | 不对，要按实测 per-layer time/memory 平衡 |
+| 为什么 TP 放节点内？ | 每层 4 次 all-reduce 在关键路径，需 NVLink 低延迟 |
+| 教学 FSDP 等于生产 FSDP 吗？ | 否，教学用 all-reduce+slice，非真正 reduce-scatter，性能不可外推 |
+| 2D 组合为什么可能 hang？ | process group 构造不一致导致 collective 顺序 mismatch |
+
+## 14. 小结
 
 TP 切宽度并高频通信 activation，PP 切深度并承受 bubble，FSDP 切参数状态并按模块 gather/scatter。二维并行的关键不是把公式相乘，而是把两类不同频率、不同依赖的通信放到合适互联上，并用局部 shape、生命周期和实测 timeline 验证。当状态仍超出显存时，offload 与 context parallelism 把边界进一步外推，但分别受限于卸载带宽与全量 attention 计算。
 
@@ -687,5 +785,5 @@ Parallelism Approach for Long Context Generative AI.” arXiv:2405.07719,
 - [CS336 Lecture 8 官方讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_08.pdf)
 - [CS336 Lecture 7 可执行讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_07.py)
 - [PyTorch FSDP](https://pytorch.org/docs/stable/fsdp.html)
-- [A2 Systems 官方题面](../assignments/spring2026/assignment2-systems/cs336_assignment2_systems.pdf)
-- 本仓库：[A2 FSDP/并行策略报告](../assignments/spring2026/assignment2-systems/report/writeup.pdf)
+- [A2 Systems 官方题面](../assignments/assignment2-systems/cs336_assignment2_systems.pdf)
+- 本仓库：[A2 FSDP/并行策略报告](../assignments/assignment2-systems/report/main.pdf)
