@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf"
   - "../experiments/topics/scaling-laws.md"
-  - "../assignments/spring2026/assignment3-scaling/"
+  - "../assignments/assignment3-scaling/"
 ---
 
 # Lecture 09 — Scaling Laws I：固定算力下如何分配模型与数据
@@ -391,43 +391,36 @@ optimizer/schedule、batch/sequence、seed、status、runtime、final/best loss�
 
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
-| 每档 winner 都在最小模型 | grid 边界 | 缺更小 \(N\) |
-| 每档 winner 都在最大模型 | grid 边界 | 缺更大 \(N\) |
+| 每档 winner 都在最小/最大模型 | grid 边界 | 缺更小/更大 \(N\) |
+| 最优 \(N\) 落在网格边界 | 实验点布局 | 边界 optimum 不可信，须扩网格 |
 | profile 不呈 U 形 | LR/steps/data | undertrained/不公平 recipe |
 | \(a+b\ne1\) 很多 | actual \(C,D\) | rounding/口径/fit 错 |
-| residual 有系统曲率 | regime/function | floor/幂律失配 |
+| residual 有系统曲率 / 拟合残差系统性偏大 | regime/function / log-space 加权 | floor/幂律失配、异方差未处理 |
 | exponent 对单点敏感 | tier 数/动态范围 | leverage 太高 |
+| IsoFLOP 最低点不稳定 | 离散 minimum 与 seed 方差 | 单 seed 噪声、未做 bootstrap |
+| 外推预测严重偏差 | 函数形式风险 | 幂律远离支撑集外推 |
 | wall-clock 与 FLOPs 排名不同 | utilization | shape/compile/communication |
 | loss 异常低 | contamination/eval | train-val 泄漏 |
 | 大模型 timeout | runtime estimate | max_runtime 太短 |
 | bootstrap interval 过窄 | 重采样层级 | 未重做 winner selection |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
-| 拟合残差系统性偏大 | log-space 与噪声加权 | 异方差未处理、未按 loss 方差加权 |
-| 最优 \(N\) 落在网格边界 | 实验点布局 | 边界 optimum 不可信，须扩网格 |
-| IsoFLOP 最低点不稳定 | 离散 minimum 与 seed 方差 | 单 seed 噪声、未做 bootstrap |
-| 外推预测严重偏差 | 函数形式风险 | 幂律远离支撑集外推 |
 | 各点之间不可比 | recipe/tokenizer 一致性 | optimizer、lr schedule、词表不一致 |
-| \(C\approx6ND\) 对不上 | embedding 与短序列修正 | \(l_v{\neq}d\) 模型、序列太短时近似失效 |
+| \(C\approx6ND\) 对不上 | embedding 与短序列修正 | \(l_v\ne d\) 模型、序列太短时近似失效 |
 
 ## 10. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 10.1 Construct validity
 - \(6ND\) 是 dense training 近似，不是 wall-clock 或 energy；
 - training/validation/downstream loss 不是同一指标；
 - non-embedding/total/active parameters 不可混用；
 - consumed tokens 不等于 unique/high-quality tokens。
 
-### Internal validity
+### 10.2 Internal validity
 - 不同规模超参/tuning budget 不等造成偏差；
 - winner selection、checkpoint selection 和 timeout 造成选择偏差；
 - rounding 后仍用 target compute；
 - eval noise/seed 未传播到 exponent。
 
-### External validity
+### 10.3 External validity
 - 一个 architecture/data/tokenizer 的指数不普适；
 - 小规模 regime 不保证延伸数百倍 compute；
 - synthetic/API proxy 不代表真实集群或数据；
@@ -436,27 +429,122 @@ optimizer/schedule、batch/sequence、seed、status、runtime、final/best loss�
 推荐结论应包含 observed range、target/observed ratio、confidence/sensitivity、boundary points
 和 recipe；避免把单一 exponent 写成普遍定律。
 
-## 面试要点速记
+## 11. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> Scaling laws 是 LLM 面试的「算法+统计」交叉题：面试官常从「\(C\approx6ND\) 哪来的」切入，
+> 追到「Kaplan vs Chinchilla 为什么结论相反」「IsoFLOP 怎么做」「N_opt 指数为什么和为 1」
+> 「最优解落在边界怎么办」。核心是把它当**资源配置工具**而非漂亮直线，别把经验指数当自然常数。
+> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：Kaplan 与 Chinchilla 的关键差异是什么？** 要点：Kaplan 用固定长度的
-   lr schedule，短训练的小模型被系统性欠训练，得出“参数优先”结论；Chinchilla
-   让 schedule 与训练 token 匹配，并用 isoFLOP 得到 \(N\propto D\) 近似线性
-   （**1:20** tokens/params）。
-2. **Q：isoFLOP 方法怎么做？** 要点：固定 \(C=6ND\) 枚举 (N,D) 组合，扫 N 找
-   loss 最低点；多条等预算曲线的最低点连线即 compute-optimal 轨迹。
-3. **Q：为什么拟合要在 log-space 且加权？** 要点：loss 噪声随规模下降
-   （异方差），log-space 才能跨数量级同量纲比较残差。
-4. **Q：最优解落在网格边界怎么办？** 要点：这是实验设计缺陷的证据，必须扩
-   网格重跑后才能下结论。
+### 11.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：scaling laws 用低成本小实验预测高成本训练的 compute-optimal \(N,D\) 分配，
+价值来自资源配置，不是拟合漂亮的直线。
 
-- \(C\approx6ND\)；Chinchilla 最优 N:D ≈ 1:20；联合幂律
-  \(L(N,D)=E+A/N^\alpha+B/D^\beta\)（α≈0.34、β≈0.28，Chinchilla 拟合值）。
+**必背数字与公式**
 
-## 11. 结论与本讲小结
+- \(C\approx6ND\)（forward `2ND` + backward `4ND`）。
+- 联合 loss law \(L(N,D)=E+A/N^\alpha+B/D^\beta\)，Chinchilla 拟合 \(\alpha\approx0.34,\ \beta\approx0.28\)。
+- 固定 \(C\) 求导得 \(N_{\mathrm{opt}}\propto C^{\beta/(\alpha+\beta)},\ D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)，两指数和为 1。
+- Chinchilla 最优 \(N:D\approx1:20\)（参数:tokens）。
+- 参数量 \(N\approx12Ld^2\)。
+
+**三句话答高频**
+
+1. Kaplan 短训练使小模型被系统性欠训练 → 得出「参数优先」；Chinchilla 让 schedule 匹配 token 数 → \(N\propto D\)（约 1:20）。
+2. IsoFLOP 固定 \(C\) 扫 \(N\) 找最低 loss，连线即 compute-optimal 轨迹。
+3. exponent 是经验参数，随架构/数据/优化器/scale 变化，不是自然常数。
+
+### 11.2 高频面试题与答题框架
+
+**Q1：\(C\approx6ND\) 怎么推导？什么时候失真？**
+
+- 每个 token：forward 一次 matmul `2N`；backward 对输入求梯度 `2N`、对权重求梯度 `2N`，合计 `6N`；训练 \(D\) tokens 得 \(6ND\)。
+- **失真**：忽略 embedding/norm/optimizer、attention 的 \(T^2\)、recomputation、padding、通信、低利用率，以及 MoE 的 active/total 差别。
+- 只适合同家族理论核算，不能替代 wall-clock。
+
+**Q2：Kaplan 与 Chinchilla 为什么结论相反？**
+
+- **Kaplan**：用固定长度 LR schedule，短训练的小模型被系统性欠训练，得出「更大模型、更少数据」的参数优先结论。
+- **Chinchilla**：让 LR schedule 与训练 token 数匹配，用更密集的 IsoFLOP 实验，得出参数与 tokens 近似等比例增长。
+- **本质**：Kaplan 的 confounder 是「欠训练」——不是模型不够好，是没训够。Porian 等进一步把差异归因到具体实验 recipe。
+
+**Q3：Chinchilla 的最优 \(N:D\) 比例？**
+
+- 约 **1:20**（参数量:tokens），即参数与 tokens 近似等比增长。
+- 例：一个 1B 模型应配约 20B tokens；与 Kaplan 的「模型更大、数据更少」形成对比。
+
+**Q4：IsoFLOP 方法怎么做？**
+
+- 固定几个 compute 预算 \(C_i\)，每档扫多个 \(N_{ij}\)，令 \(D_{ij}=C_i/(6N_{ij})\)。
+- 每档的 loss-\(N\) 曲线呈近似 U 形（\(N\) 太小容量不足、太大 undertrained），取离散最低点 \(N_{\mathrm{opt}}(C_i)\)。
+- 多档最低点连线，再拟合 \(N_{\mathrm{opt}}=aC^b\)，得到 compute-optimal 轨迹。
+
+**Q5：联合 loss law 怎么求 \(N_{\mathrm{opt}}\)？指数为什么和为 1？**
+
+- 代入 \(D=C/(6N)\) 到 \(L=E+A/N^\alpha+B/D^\beta\)，对 \(N\) 求导令零，得 \(N_{\mathrm{opt}}^{\alpha+\beta}=\frac{\alpha A}{\beta B}(\frac C6)^\beta\)。
+- 于是 \(N_{\mathrm{opt}}\propto C^{\beta/(\alpha+\beta)},\ D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)，两指数和为 1。
+- **为什么和为 1**：这是 \(C=6ND\) 约束的直接结果，是 sanity check，不是独立实验结论。
+
+**Q6：为什么拟合要在 log-space 且加权？**
+
+- loss 噪声随规模下降（heteroscedastic），log-space 让跨数量级的残差同量纲可比。
+- 简单 log-linear 回归的标准误会低估「选 minimum」带来的不确定性，需按 loss 方差加权或做 bootstrap。
+
+**Q7：最优解落在网格边界怎么办？**
+
+- 这是实验设计缺陷：只能报告 bound（\(N_{\mathrm{opt}}\le N_{\min}\) 或 \(\ge N_{\max}\)），不能当精确 optimum。
+- 把边界点当 optimum 会严重扭曲 exponent；必须向外扩网格重跑。
+
+**Q8：winner's curse 是什么？**
+
+- 每档从 noisy runs 选最小 loss，会系统偏向负噪声；候选越多、bias 越强。
+- 缓解：对 ridge 附近补 seeds、用独立 validation 确认、bootstrap 时重做「选 minimum」、报告 second-best 与 uncertainty。
+
+**Q9：\(\alpha,\beta\) 的含义？**
+
+- \(\alpha\) 大表示「增加参数」更快降低 model-limited excess loss；\(\beta\) 大表示「增加数据」更有效。
+- 它们不是模型能力常数，随 architecture/optimizer/data quality/tokenizer/scale 变化；\(E\) 也只是当前 domain 的 fitted floor，不一定是真实 Bayes entropy。
+
+**Q10：为什么不能只背 exponent？**
+
+- exponent 是「指定架构/数据/优化器/scale range 下的经验参数」，旧指数没有自动迁移性。
+- 研究重点应是数据质量、拟合诊断与外推风险；跨数据/硬件/尺度搬运指数（如本仓库 RTX 6000D proxy 与官方数据指数不同）是不可靠的。
+
+### 11.3 手撕要点（\(6ND\) 与 \(N_{\mathrm{opt}}\) 推导）
+
+面试让「推导 compute-optimal」时，按两条链写：
+
+```text
+1. C ≈ 6ND
+   每 token: forward 2N + backward(对 X) 2N + backward(对 W) 2N = 6N
+   训练 D tokens: C = 6ND
+
+2. 联合 law 求 N_opt
+   L(N,D) = E + A/N^α + B/D^β，D = C/(6N)
+   -> L(N|C) = E + A N^{-α} + B (6N/C)^β
+   -> dL/dN = -αA N^{-α-1} + βB(6/C)^β N^{β-1} = 0
+   -> N_opt^{α+β} = (αA/βB)(C/6)^β
+   -> N_opt ∝ C^{β/(α+β)}, D_opt ∝ C^{α/(α+β)}, 指数和 = 1
+```
+
+**三个必踩坑**
+
+1. **`L_∞+Ax^{-α}` 不能整体取 log 做线性回归**：加法项改变曲率，只能对幂律主项近似。
+2. **用 target \(C\) 而非 actual \(C\)**：rounding 后必须用实际 \(D\) 与实际 \(C=6ND\) 重算。
+3. **边界点当 optimum**：最低点在最小 \(N\) 时，结论是 \(N_{\mathrm{opt}}\le N_{\min}\)，不是等于。
+
+### 11.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| 高 \(R^2\) 保证外推准吗？ | 否，in-domain fit 无法衡量域外函数形式是否成立 |
+| tokens 等于 unique tokens 吗？ | 否，data-constrained 会重复 epochs，过度重复 diminishing return |
+| FLOPs-optimal 等于 wall-clock-optimal 吗？ | 否，利用率随 N/batch/shape 变，要分开拟合 |
+| \(a+b\ne1\) 是 bug 吗？ | 常是 rounding/口径/fit 错，但也可能是函数形式失配 |
+| 过滤后的 1B tokens 与随机 Web 1B 一样吗？ | 否，数据质量改变每 token 有效信息，不在同一 scaling surface |
+
+## 12. 结论与本讲小结
 
 \(C\approx6ND\) 把模型规模和数据预算连接起来，IsoFLOP 则把“固定算力如何分配”变成可实验的问题。可靠结论依赖内部最优点、统一口径和足够动态范围，而不只是一条双对数直线。Lecture 11 将把离散 envelope 扩展为联合 loss law，并重点处理 bootstrap、诊断与外推不确定性。
 
@@ -501,4 +589,4 @@ arXiv:2102.01293, 2021. https://arxiv.org/abs/2102.01293
 - Stanford CS336, [Lecture 9 — Scaling Laws](https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf).
 - [A3 官方导读与本地实现](../experiments/official/a3-scaling.md).
 - [Scaling Laws 主题导航](../experiments/topics/scaling-laws.md).
-- 本仓库：[A3 IsoFLOP 报告](../assignments/spring2026/assignment3-scaling/report/writeup.pdf).
+- 本仓库：[A3 IsoFLOP 报告](../assignments/assignment3-scaling/report/main.pdf).
