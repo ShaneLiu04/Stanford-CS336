@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_04.pdf"
-  - "../assignments/spring2026/assignment1-basics/"
+  - "../assignments/assignment1-basics/"
 ---
 
 # Lecture 04 — Attention Alternatives 与 Mixture of Experts：选择性计算的统一视角
@@ -654,14 +654,14 @@ Asymptotic notation 会隐藏常数、kernel shape 和通信。实际选择必�
 
 | 本讲概念 | 仓库基线位置 | 如何扩展 / 验证 |
 |---|---|---|
-| Full causal attention | `assignments/spring2026/assignment1-basics/cs336_basics/model.py`：`scaled_dot_product_attention` | 替换前先做输出/causal leakage baseline |
+| Full causal attention | `assignments/assignment1-basics/cs336_basics/model.py`：`scaled_dot_product_attention` | 替换前先做输出/causal leakage baseline |
 | MHA Q/K/V shape | 同文件：`CausalMultiHeadSelfAttention` | GQA 需拆 `num_heads` 与 `num_kv_heads` |
 | Dense FFN | 同文件：`SwiGLU` | MoE expert 可复用相同 FFN 接口 |
 | Transformer block | 同文件：`TransformerBlock` | 仅把部分层的 `ffn` 换成 routed module |
 | Resource accounting | `.../report/main.tex` 第 3.3、4.3 节 | 加入 active/total 参数、routing/通信成本 |
 | Shape tests | `.../tests/test_model.py`、`tests/adapters.py` | 扩展测试不要修改官方 adapter 契约 |
 | Training metrics | `.../cs336_basics/training.py` | 追加 expert load/drop/router entropy |
-| A2 systems 入口 | `assignments/spring2026/assignment2-systems/` | 区分 exact attention kernel 与架构近似 |
+| A2 systems 入口 | `assignments/assignment2-systems/` | 区分 exact attention kernel 与架构近似 |
 
 一个安全的自学扩展顺序：
 
@@ -707,27 +707,19 @@ Asymptotic notation 会隐藏常数、kernel shape 和通信。实际选择必�
 |---|---|---|
 | sparse attention 不加速 | profiler/kernel | dense mask、irregular gather |
 | linear attention NaN | denominator/state norm | feature map 非正、累计漂移 |
-| 长距 retrieval 失败 | connectivity/state capacity | window 不可达、状态饱和 |
+| 长距 retrieval 失败 / 长程回忆差 | connectivity/state capacity | window 不可达、状态饱和、核近似误差 |
 | GQA 显存未下降 | tensor storage/expand | 物理复制 K/V heads |
 | decode 慢但 prefill 快 | KV bytes/request | memory bandwidth / small GEMM |
-| router 迅速单 expert | token counts/entropy | positive feedback、aux loss 弱 |
-| MoE loss 正常但吞吐低 | expert batch/A2A | 小 GEMM、padding、straggler |
-| token 被静默丢弃 | capacity/drop rate | capacity factor 太低 |
-| balance loss 降、主 loss 升 | coefficient | 过度均匀抑制 specialization |
-| 多卡偶发 hang | all-to-all splits | rank 间 token-count metadata 不一致 |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
-| MoE 训练 loss 尖峰/崩溃 | aux loss 权重与 router 初始化 | 负载均衡约束过弱、router z-loss 缺失 |
-| MoE 推理不见加速 | expert 数与容量因子 | 容量溢出、all-to-all 未与计算 overlap |
-| expert 负载严重不均 | 路由分布与溢出率统计 | aux loss 系数不合适、token 分布漂移 |
-| linear attention 长程回忆差 | 状态维度与门控设计 | 核函数近似误差、状态容量不足 |
 | KV cache 显存过大 | head 分组数（MQA/GQA） | KV head 未压缩或未量化 |
 | attention 输出数值错 | causal mask 与 softmax 缩放 | mask 错位、\(1/\sqrt{d_k}\) 缺失 |
 | fused kernel 与参考不符 | online softmax 累计量 | 区分数值误差与实现错误（LSE 复用） |
 | 稀疏化后质量骤降 | 稀疏模式与任务匹配 | 局部窗口过小、模式对检索任务不适配 |
+| router 迅速单 expert / 训练 loss 尖峰 | token counts/entropy / aux loss | positive feedback、负载均衡约束过弱、router z-loss 缺失 |
+| expert 负载严重不均 | 路由分布与溢出率统计 | aux loss 系数不合适、token 分布漂移 |
+| MoE loss 正常但吞吐低 / 推理不见加速 | expert batch/A2A / 容量因子 | 小 GEMM、padding、straggler、容量溢出、未 overlap |
+| token 被静默丢弃 | capacity/drop rate | capacity factor 太低 |
+| balance loss 降、主 loss 升 | coefficient | 过度均匀抑制 specialization |
+| 多卡偶发 hang | all-to-all splits | rank 间 token-count metadata 不一致 |
 
 ## 15. 作业关联
 
@@ -742,7 +734,7 @@ Asymptotic notation 会隐藏常数、kernel shape 和通信。实际选择必�
 
 ## 16. 讨论：效度威胁与结论边界
 
-### 17.1 Construct validity
+### 16.1 Construct validity
 
 - theoretical sparsity 不等于 executed sparse FLOPs；
 - active parameters 不等于 model memory/optimizer state；
@@ -750,7 +742,7 @@ Asymptotic notation 会隐藏常数、kernel shape 和通信。实际选择必�
 - needle benchmark 不代表自然长文档建模；
 - router entropy 高不一定 load 平衡，token counts 均匀也不保证 expert specialization。
 
-### 17.2 Internal validity
+### 16.2 Internal validity
 
 - 方法若使用不同 parameter/FLOP/tuning budget，无法归因架构本身；
 - capacity drop、padding 和 reroute 若未记录，会静默改变 objective；
@@ -758,7 +750,7 @@ Asymptotic notation 会隐藏常数、kernel shape 和通信。实际选择必�
 - MoE 每 expert 实际 tokens 不同，等总 tokens 不等每参数训练充分；
 - checkpoint conversion 与 from-scratch training 不能直接混比。
 
-### 17.3 External validity
+### 16.3 External validity
 
 - synthetic retrieval、固定 context 的结论未必迁移到 code、dialogue 或 multimodal；
 - 单机 NVLink 结果不代表多节点 all-to-all；
@@ -766,34 +758,141 @@ Asymptotic notation 会隐藏常数、kernel shape 和通信。实际选择必�
 - 小模型 router behavior 未必外推到百 experts/billion parameters；
 - 当前实现成熟度不应被误解为算法上限。
 
-### 17.4 推荐的学术表述
+### 16.4 推荐的学术表述
 
 避免：“Linear attention 比 Transformer 更高效。”
 推荐：“在固定模型规模、序列分布与 GPU 上，该 linear-attention kernel 在 \(T\ge X\)
 取得 Y× training throughput，并以 Z 的 retrieval degradation 为代价；短序列与 decode
 regime 的结论不同。”
 
-## 面试要点速记
+## 17. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> 本讲是「高效注意力 + MoE」的面试重灾区：面试官常从「FlashAttention 为什么快」切入，追到
+> 「MQA/GQA 的 KV cache 显存」「MoE 的 total vs active 参数」「router collapse 怎么解决」。
+> 关键是区分 **exact 系统优化（改 IO 不改数学）** 与 **架构近似（改连接/状态）**，别把
+> 渐近复杂度当成实际速度。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：FlashAttention 到底快在哪？** 要点：不减少 FLOPs；tiling + online
-   softmax 把 HBM 读写从 O(N²) 降到 O(N)（IO-aware），显存同步降为 O(N)，
-   从而解锁长上下文。
-2. **Q：MQA/GQA 与 KV cache？** 要点：cache = 2·l·h_kv·d_h·seq·B·bytes；
-   GQA 把 h_kv 从 h 降到 h/g，容量与带宽同比例下降，质量损失小。
-3. **Q：MoE 如何解耦参数量与计算量？** 要点：参数 ∝ E·d²，每 token 只激活
-   top-k 专家；代价是全量参数显存与 all-to-all 通信；负载靠 aux loss +
-   容量因子约束。
-4. **Q：linear attention 牺牲了什么？** 要点：固定大小状态限制精确 recall；
-   门控/chunkwise（SSD 类）补回部分能力；检索型任务仍吃亏。
+### 17.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：attention alternatives 与 MoE 都在做 selective computation——前者稀疏/压缩
+「看多少历史」，后者稀疏「用多少参数」，都以近似、路由、状态管理与通信为代价。
 
-- KV cache 公式；FA 显存 O(N)；MoE aux loss 权重典型 0.01 量级、容量因子
-  1–1.5；DeepSeek 级细粒度专家 + 共享专家是当前主流配置。
+**必背数字与公式**
 
-## 17. 结论与本讲小结
+- KV cache（单 request）：\(M_{\rm KV}=2\,L\,T\,h_{kv}\,d_h\,s\)；GQA 缩减比 \(h_q/h_{kv}\)。
+- MoE：\(P_{\rm total}=P_s+EP_e\)，\(P_{\rm active/token}\approx P_s+kP_e\)（如 671B total / 37B active）。
+- capacity \(C=\lceil c\,\frac{Nk}{E}\rceil\)；balance loss \(\mathcal L=\alpha E\sum_e f_e P_e\)。
+- FlashAttention 仍是 \(O(T^2d)\) FLOPs，只把 HBM 读写降到 \(O(N)\)。
+- linear attention state \(S_t=S_{t-1}+\phi(k_t)v_t^\top\)，state 内存 \(O(rd_v)\)。
+
+**三句话答高频**
+
+1. FlashAttention 是 exact 优化（不减少 FLOPs，只减 IO）；local/linear/SSM 是架构近似（改连接或状态）。
+2. MQA/GQA 只优化 decode 的 KV cache 带宽与容量，不消除训练的 \(T^2\) 交互。
+3. MoE 用 total 参数换 active compute，代价是全量存储、负载均衡与 all-to-all 通信。
+
+### 17.2 高频面试题与答题框架
+
+**Q1：FlashAttention 快在哪？为什么不减少 FLOPs？**
+
+- **本质**：它是 exact systems optimization——数学结果与 full softmax attention 完全一致。
+- **为什么快**：tiling + online softmax 分块更新 row max 与归一化分母，避免把 \(T^2\) 的 score 矩阵写回 HBM；显存与 IO 从 \(O(T^2)\) 降到 \(O(N)\)。
+- **边界**：算术量仍是 \(O(T^2d)\)；训练 IO 改善了，但 decode 仍需读取历史 KV，不解决 decode 带宽问题。
+
+**Q2：MQA / GQA 解决什么？KV cache 显存怎么算？**
+
+- **解决**：decode 阶段 KV cache 的显存与带宽——让多个 query heads 共享 K/V，压缩 cache 容量。
+- **公式**：MHA 每层 `2BT·h_q·d_h` elements，GQA/MQA 降到 `2BT·h_kv·d_h`，缩减比 \(h_q/h_{kv}\)。
+- **代价**：K/V head 少可能略损质量；GQA 是 MHA 质量与 MQA 成本间的折中（Ainslie et al. 2023）。
+
+**Q3：具体算一下：一个 7B 模型在 8K 上下文下的 KV cache 显存？**
+
+- 设 `L=32, T=8192, h_q=32, d_h=128, bf16(s=2)`：
+- MHA（`h_kv=32`）：\(2\times32\times8192\times32\times128\times2\approx4.3\text{ GiB}\) / request。
+- GQA（`h_kv=8`）：约 `1.07 GiB`；MQA（`h_kv=1`）：约 `134 MiB`。
+- 结论：KV heads 数直接决定可并发 requests 数；GQA/MQA 是 serving capacity 的关键杠杆。
+
+**Q4：MoE 如何解耦「参数量」与「计算量」？**
+
+- **定义**：\(P_{\rm total}=P_s+EP_e\)（存储/optimizer 按 total），\(P_{\rm active}\approx P_s+kP_e\)（forward FLOPs 按 active）。
+- **例子**：`E=64, k=2` → expert 总参数是单 expert 的 64 倍，但每 token 只调用 2 个；DeepSeek-V3 671B total / 37B active。
+- **陷阱**：不能只报一个数——total 决定 checkpoint/优化器/存储，active 决定每 token FLOPs，两个都要给。
+
+**Q5：MoE 的 load balancing 怎么做？router collapse 是什么？**
+
+- **问题**：Top-\(k\) token-choice 让 token 自由选 expert，热门 expert 过载 → 正反馈「更多 token → 学更快 → 更被偏好」→ collapse。
+- **缓解**：auxiliary balance loss \(\alpha E\sum f_e P_e\)、capacity factor 截断、router z-loss、expert-choice routing、shared experts、DeepSeek-V3 的 auxiliary-loss-free bias。
+- **陷阱**：balance loss 过强会压制真实 specialization；负载均匀 ≠ expert 各司其职。
+
+**Q6：linear attention 的原理与代价？**
+
+- **原理**：把 softmax 相似度写成 kernel 内积 \(\phi(q)^\top\phi(k)\)，用结合律把 \((QK^\top)V\) 改写为 \(Q(K^\top V)\)，维护状态 \(S_t=S_{t-1}+\phi(k_t)v_t^\top\)，无需显式 \(T^2\)。
+- **复杂度**：每 token \(O(rd_v)\)，state 内存 \(O(rd_v)\) 不随上下文增长。
+- **代价**：固定状态压缩任意长历史，精确 retrieval 受损；并行 scan 若实现差，理论 \(O(T)\) 反而不如 fused \(O(T^2)\) 快。
+
+**Q7：SSM / Mamba 的核心思想？**
+
+- 连续 SSM \(\dot h=Ah+Bx, y=Ch\) 离散化得 \(h_t=\bar A h_{t-1}+\bar B x_t\)；固定 state 让 decode 上下文成本近常数。
+- Mamba 的关键：让 \(\bar A,\bar B,C\) 依赖输入（selective），配合高效 GPU scan kernel，兼顾并行训练与 recurrent 推理。
+- **代价**：固定状态是 compressed memory，精确 copy/retrieval 不如 attention 的 addressable memory。
+
+**Q8：稀疏注意力（sliding window）为什么不保证加速？**
+
+- sliding window 把计算降到 \(O(Twd)\)，但只有当 kernel 真正跳过 masked block 时才省算力。
+- 若构造 dense \(T\times T\) 再 mask 大部分位置，FLOPs/内存几乎没省；sparse gather 不规则还会引入 indexing/launch overhead。
+- 且单层 receptive field 只有 \(w\)，堆 \(L\) 层最远传播 \(L(w-1)\)，长程检索能力受限。
+
+**Q9：MoE 的通信开销（all-to-all）？**
+
+- expert parallelism 下，一次 MoE 层 = router → pack → all-to-all dispatch → expert GEMM → all-to-all combine。
+- 通信量 \(\sim Nkds\)（routed activation），往返各一次；实际延迟受拓扑、token 分布、消息碎片与 straggler 影响。
+- 最忙 expert 决定尾延迟；理论 expert FLOPs 与 dense 相同时，也可能因 per-expert 小 batch 降低 GEMM utilization。
+
+**Q10：token-choice 与 expert-choice routing 的区别？**
+
+- **token-choice**：每个 token 选 top-k expert，语义直观，但 expert load 无保证（需 capacity/aux loss 约束）。
+- **expert-choice**：每个 expert 选固定数量 token，负载天然均衡，但 token 可能被 0 个或多个 expert 选中。
+- 折中还有 batch-priority routing（容量不足优先保留高 router score 的 assignment）。
+
+### 17.3 手撕要点（KV cache 与 linear attention）
+
+面试常让「算 KV cache」或「写 linear attention 的状态更新」：
+
+```python
+# 1. KV cache 显存（字节）
+def kv_cache_bytes(L, T, h_kv, d_h, dtype_bytes):
+    return 2 * L * T * h_kv * d_h * dtype_bytes   # K 和 V 各一份
+
+# 2. linear attention 的 recurrent 更新
+import torch
+def linear_attn_step(S, z, phi_k, v):
+    S = S + phi_k.unsqueeze(-1) * v.unsqueeze(-2)  # [B,h,r,d_v] += 外积
+    z = z + phi_k                                  # [B,h,r] 归一化分母
+    return S, z
+def linear_attn_out(q, S, z, phi):
+    y = (phi(q) @ S) / (phi(q) @ z.unsqueeze(-1) + 1e-6)
+    return y
+```
+
+**三个必踩坑**
+
+1. **KV cache 别忘了乘 2**：K 和 V 各一份；bf16 时 `dtype_bytes=2`。
+2. **GQA 用 group 映射而非物理复制**：否则显存节省被物理复制抵消。
+3. **linear attention 的 denominator 会漂移**：监控 \(\|S\|\) 与 denominator quantiles，防止 NaN。
+
+### 17.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| FlashAttention 和 linear attention 一样吗？ | 否，FA 保持 exact \(T^2\) 算术，linear 改公式/状态 |
+| GQA 能加速训练吗？ | 否，主要降 decode KV cache 带宽，训练 FLOPs 改善小 |
+| MoE 报 671B 还是 37B？ | 两个都要报：total 决定存储/优化器，active 决定每 token FLOPs |
+| balance loss 越大越好吗？ | 否，过强压制 specialization，主任务受损 |
+| recurrent 状态能记住无限历史吗？ | 否，固定维状态必然有信息瓶颈 |
+| 稀疏 FLOPs 一定更快吗？ | 否，没有稀疏 kernel、irregular gather、小 GEMM 都会抵消 |
+| MoE 推理只付 active 权重吗？ | 否，所有 experts 需驻留显存或跨层/设备取权重 |
+
+## 18. 结论与本讲小结
 
 Full attention 的价值是动态、精确地访问历史，代价是长上下文的二次计算与线性 KV cache。
 Local/sparse attention 限制连接，linear/recurrent 方法压缩历史，hybrid 架构在质量与效率间折中。
