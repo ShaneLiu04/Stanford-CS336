@@ -16,7 +16,8 @@
 - **核心公式推导**：每个结论都带着假设与适用边界，而不是只给结果；
 - **Shape / 复杂度速查**：模型参数、attention/FFN FLOPs、显存账本可直接手算；
 - **易错点与反思**：高频追问点与常见错误，例如「为什么 loss/token 跨 tokenizer 不可比」；
-- **实现映射**：每个概念对应到本仓库某一作业的代码、测试与真实实验指标。
+- **实现映射**：每个概念对应到本仓库某一作业的代码、测试与真实实验指标；
+- **面试备考四层卡**：每讲附「一页速览卡 → 高频题与答题框架 → 手撕要点 → 追问与陷阱」，可直接当最后一遍过。
 
 复习时先看 [`notes/README.md`](notes/README.md) 的课程索引，用
 [`GLOSSARY.md`](notes/GLOSSARY.md) 背术语，按 [`READING-ROADMAP.md`](notes/READING-ROADMAP.md)
@@ -26,7 +27,7 @@
 
 ## 面试知识地图
 
-17 讲按面试主题归为 9 大模块，每块标注对应的讲次与作业实践。
+17 讲按面试主题归为 11 大模块，每块标注对应的讲次与作业实践。
 
 | 面试模块 | 核心考点 | 讲次 | 作业实践 |
 | --- | --- | --- | --- |
@@ -40,7 +41,7 @@
 | 推理与评估 | prefill/decode、KV cache、speculative decoding、contamination | [L10](notes/lecture-10-inference.md) [L12](notes/lecture-12-evaluation.md) | A3/A5 评测 |
 | 数据工程 | Common Crawl、过滤、MinHash/LSH 去重、数据配比 | [L13](notes/lecture-13-data-sources.md) [L14](notes/lecture-14-data-filtering-dedup.md) | A4 过滤/去重 |
 | 对齐与 RL | SFT、RLHF、DPO、GRPO 系列、RLVR | [L15](notes/lecture-15-sft-rlhf.md) [L16](notes/lecture-16-rlvr.md) | A5 GRPO |
-| 多模态 | 视觉 tokenization、projector、cross-attention、grounding | [L17](notes/lecture-17-multimodal-alignment.md) | 扩展 |
+| 多模态 | ViT patch、CLIP InfoNCE、projector / Q-Former / cross-attention、三阶段对齐、幻觉诊断 | [L17](notes/lecture-17-multimodal-alignment.md) | 扩展 |
 
 ---
 
@@ -102,7 +103,21 @@
 | reward hacking 是什么？ | policy 优化 proxy reward 而非真实目标；需 KL 正则、多维度 reward 缓解 | [L15](notes/lecture-15-sft-rlhf.md) |
 | GRPO 相比 PPO 的区别？ | 去掉 value/critic，用同 prompt 一组 rollout 的相对 reward 构造 advantage | [L16](notes/lecture-16-rlvr.md) |
 | Dr.GRPO / RFT / MaxRL 的差别？ | 不同 baseline 与 normalization（去 bias、positive-only、mean baseline） | [L16](notes/lecture-16-rlvr.md) |
+| GSPO 解决什么？ | token 级 ratio 在长序列上方差过大，改用 response 内平均 log-ratio 的序列级 ratio 并 clip | [L16](notes/lecture-16-rlvr.md) |
+| outcome vs process verifier？ | outcome 只看最终产物、鲁棒但信号稀疏；process 逐步打分、信号密集但需步级标注 | [L16](notes/lecture-16-rlvr.md) |
 | alignment tax 是什么？ | 对齐后基础能力或某些 benchmark 下降的代价 | [GLOSSARY](notes/GLOSSARY.md) |
+
+### 多模态（L17）
+
+| 问题 | 答案要点 | 笔记 |
+| --- | --- | --- |
+| 三种连接结构怎么选？ | linear projector 最简（LLaVA）；Q-Former/resampler 用 learned queries 压缩；cross-attention 按需读视觉（Flamingo）；VQ 统一 token 支持生成 | [L17](notes/lecture-17-multimodal-alignment.md) |
+| 视觉 token 数怎么算？ | `N_img=(H/P)(W/P)`，随分辨率二次增长；全拼接 attention 为 `O((N_text+N_img)²)` | [L17](notes/lecture-17-multimodal-alignment.md) |
+| CLIP 的 InfoNCE 做什么？ | batch 内对比学习，让匹配 image-text 相似度高于负对，建立可迁移的对齐表示空间 | [L17](notes/lecture-17-multimodal-alignment.md) |
+| 多模态对齐分几阶段？ | 表示对齐（caption/InfoNCE）→ 指令微调（response-only）→ 偏好与安全对齐 | [L17](notes/lecture-17-multimodal-alignment.md) |
+| Flamingo 的 gate 为什么接近零初始化？ | gated cross-attention 从零开始，避免接入新模态破坏原语言能力 | [L17](notes/lecture-17-multimodal-alignment.md) |
+| 多模态幻觉怎么诊断？ | 用 counterfactual image pairs、遮挡、属性交换验证输出随证据变化，而非「回答合理」 | [L17](notes/lecture-17-multimodal-alignment.md) |
+| 图内 prompt injection 怎么防？ | 图中 OCR 文本是不可信数据，需显式建模系统/用户/图像三级信任边界 | [L17](notes/lecture-17-multimodal-alignment.md) |
 
 ---
 
@@ -120,11 +135,14 @@
 | KV cache / token | `2 × L × n_kv_heads × d_head × bytes` | BF16 时 `bytes=2` |
 | arithmetic intensity | `FLOPs / bytes` | 与峰值算力/带宽比较定 bound |
 | MFU | 实测 FLOPs / 硬件峰值 FLOPs | 衡量 GPU 利用率 |
+| 视觉 patch 数 | `N_img = (H/P)(W/P)` | 随分辨率二次增长 |
+| 多模态 attention 成本 | 全拼接 `O((N_text+N_img)²)`，cross-attention `O(N_text·N_img)` | projector 与 cross-attention 的取舍 |
 
 完整推导与边界条件见 [L2](notes/lecture-02-pytorch-accounting.md)（FLOPs/显存）、
 [L3](notes/lecture-03-architectures-hyperparameters.md)（参数量）、
 [L9](notes/lecture-09-scaling-laws-i.md)（`C≈6ND`）、
-[L10](notes/lecture-10-inference.md)（KV cache）。
+[L10](notes/lecture-10-inference.md)（KV cache）、
+[L17](notes/lecture-17-multimodal-alignment.md)（视觉 token 成本）。
 
 ---
 
@@ -149,7 +167,8 @@
 3. [L6](notes/lecture-06-kernels-triton.md) FlashAttention 为什么减少 IO；
 4. [L9](notes/lecture-09-scaling-laws-i.md) `C≈6ND` 与 compute-optimal；
 5. [L14](notes/lecture-14-data-filtering-dedup.md) 过滤+去重流水线；
-6. [L16](notes/lecture-16-rlvr.md) GRPO 与 verifiable reward。
+6. [L16](notes/lecture-16-rlvr.md) GRPO 与 verifiable reward；
+7. [L17](notes/lecture-17-multimodal-alignment.md) 三种连接结构与幻觉诊断（时间允许时）。
 
 每讲复习闭环（来自 [READING-ROADMAP](notes/READING-ROADMAP.md)）：不看笔记写 5 个关键词 → 手推一个公式 →
 写关键 shape/通信量 → 在本仓库找一个测试/图验证 → 给一个反例/失效边界。
