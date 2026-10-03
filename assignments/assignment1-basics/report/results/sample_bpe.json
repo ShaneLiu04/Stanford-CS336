@@ -1,0 +1,15 @@
+{
+  "status": "measured",
+  "dataset": "tests/fixtures/tinystories_sample_5M.txt",
+  "corpus_bytes": 5242880,
+  "vocab_size": 1000,
+  "merge_count": 743,
+  "profiled_bpe_seconds": 23.030157099943608,
+  "peak_python_mib": 26.699118614196777,
+  "longest_non_special_token": " unexpected",
+  "longest_non_special_token_bytes": 11,
+  "encoded_tokens": 1654416,
+  "bytes_per_token": 3.169021576193654,
+  "encode_tokens_per_second": 38390.12190865434,
+  "notes": "BPE timing includes tracemalloc overhead; do not compare it with the unprofiled speed test."
+}

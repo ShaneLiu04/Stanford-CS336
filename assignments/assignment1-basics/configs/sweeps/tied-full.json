@@ -1,0 +1,3 @@
+[
+  {"name": "tied-small-init-full", "overrides": {"batch_size": 32, "max_steps": 40000, "warmup_steps": 500, "max_lr": 0.002, "min_lr": 0.0002, "eval_interval": 200, "tie_embeddings": true, "tied_embedding_init_std": 0.02, "save_checkpoints": true, "checkpoint_interval": 10000, "seed": 42}}
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "baseline-seed-42",
+    "overrides": {
+      "max_steps": 40000,
+      "warmup_steps": 500,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "checkpoint_interval": 10000,
+      "save_checkpoints": true,
+      "seed": 42
+    }
+  },
+  {
+    "name": "baseline-seed-123",
+    "overrides": {
+      "max_steps": 40000,
+      "warmup_steps": 500,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "checkpoint_interval": 10000,
+      "save_checkpoints": true,
+      "seed": 123
+    }
+  },
+  {
+    "name": "baseline-seed-2026",
+    "overrides": {
+      "max_steps": 40000,
+      "warmup_steps": 500,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "checkpoint_interval": 10000,
+      "save_checkpoints": true,
+      "seed": 2026
+    }
+  }
+]

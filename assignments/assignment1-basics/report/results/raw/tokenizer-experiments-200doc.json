@@ -1,0 +1,4046 @@
+{
+  "tinystories": {
+    "tinystories_10k": {
+      "documents": 200,
+      "source_bytes": 161393,
+      "tokens": 39558,
+      "bytes_per_token": 4.079907983214521,
+      "bytes_per_second": 1193134.9259509093,
+      "estimated_pile_hours": 192.07104048523644,
+      "per_document": [
+        {
+          "bytes": 860,
+          "tokens": 222,
+          "bytes_per_token": 3.873873873873874
+        },
+        {
+          "bytes": 553,
+          "tokens": 131,
+          "bytes_per_token": 4.221374045801527
+        },
+        {
+          "bytes": 677,
+          "tokens": 179,
+          "bytes_per_token": 3.782122905027933
+        },
+        {
+          "bytes": 988,
+          "tokens": 245,
+          "bytes_per_token": 4.03265306122449
+        },
+        {
+          "bytes": 700,
+          "tokens": 176,
+          "bytes_per_token": 3.977272727272727
+        },
+        {
+          "bytes": 606,
+          "tokens": 153,
+          "bytes_per_token": 3.9607843137254903
+        },
+        {
+          "bytes": 797,
+          "tokens": 194,
+          "bytes_per_token": 4.108247422680412
+        },
+        {
+          "bytes": 987,
+          "tokens": 223,
+          "bytes_per_token": 4.426008968609866
+        },
+        {
+          "bytes": 651,
+          "tokens": 167,
+          "bytes_per_token": 3.8982035928143715
+        },
+        {
+          "bytes": 1581,
+          "tokens": 413,
+          "bytes_per_token": 3.828087167070218
+        },
+        {
+          "bytes": 628,
+          "tokens": 156,
+          "bytes_per_token": 4.0256410256410255
+        },
+        {
+          "bytes": 916,
+          "tokens": 216,
+          "bytes_per_token": 4.2407407407407405
+        },
+        {
+          "bytes": 775,
+          "tokens": 191,
+          "bytes_per_token": 4.057591623036649
+        },
+        {
+          "bytes": 731,
+          "tokens": 190,
+          "bytes_per_token": 3.8473684210526318
+        },
+        {
+          "bytes": 712,
+          "tokens": 176,
+          "bytes_per_token": 4.045454545454546
+        },
+        {
+          "bytes": 744,
+          "tokens": 181,
+          "bytes_per_token": 4.110497237569061
+        },
+        {
+          "bytes": 620,
+          "tokens": 144,
+          "bytes_per_token": 4.305555555555555
+        },
+        {
+          "bytes": 828,
+          "tokens": 203,
+          "bytes_per_token": 4.078817733990148
+        },
+        {
+          "bytes": 787,
+          "tokens": 208,
+          "bytes_per_token": 3.7836538461538463
+        },
+        {
+          "bytes": 671,
+          "tokens": 163,
+          "bytes_per_token": 4.116564417177914
+        },
+        {
+          "bytes": 914,
+          "tokens": 217,
+          "bytes_per_token": 4.211981566820277
+        },
+        {
+          "bytes": 806,
+          "tokens": 202,
+          "bytes_per_token": 3.99009900990099
+        },
+        {
+          "bytes": 800,
+          "tokens": 201,
+          "bytes_per_token": 3.9800995024875623
+        },
+        {
+          "bytes": 903,
+          "tokens": 223,
+          "bytes_per_token": 4.04932735426009
+        },
+        {
+          "bytes": 573,
+          "tokens": 139,
+          "bytes_per_token": 4.122302158273381
+        },
+        {
+          "bytes": 992,
+          "tokens": 235,
+          "bytes_per_token": 4.221276595744681
+        },
+        {
+          "bytes": 768,
+          "tokens": 182,
+          "bytes_per_token": 4.21978021978022
+        },
+        {
+          "bytes": 866,
+          "tokens": 193,
+          "bytes_per_token": 4.487046632124352
+        },
+        {
+          "bytes": 713,
+          "tokens": 168,
+          "bytes_per_token": 4.244047619047619
+        },
+        {
+          "bytes": 730,
+          "tokens": 191,
+          "bytes_per_token": 3.8219895287958114
+        },
+        {
+          "bytes": 610,
+          "tokens": 147,
+          "bytes_per_token": 4.149659863945578
+        },
+        {
+          "bytes": 875,
+          "tokens": 206,
+          "bytes_per_token": 4.247572815533981
+        },
+        {
+          "bytes": 958,
+          "tokens": 241,
+          "bytes_per_token": 3.975103734439834
+        },
+        {
+          "bytes": 485,
+          "tokens": 122,
+          "bytes_per_token": 3.9754098360655736
+        },
+        {
+          "bytes": 1065,
+          "tokens": 252,
+          "bytes_per_token": 4.226190476190476
+        },
+        {
+          "bytes": 597,
+          "tokens": 135,
+          "bytes_per_token": 4.4222222222222225
+        },
+        {
+          "bytes": 690,
+          "tokens": 163,
+          "bytes_per_token": 4.233128834355829
+        },
+        {
+          "bytes": 771,
+          "tokens": 184,
+          "bytes_per_token": 4.190217391304348
+        },
+        {
+          "bytes": 738,
+          "tokens": 167,
+          "bytes_per_token": 4.419161676646707
+        },
+        {
+          "bytes": 783,
+          "tokens": 197,
+          "bytes_per_token": 3.9746192893401013
+        },
+        {
+          "bytes": 656,
+          "tokens": 170,
+          "bytes_per_token": 3.8588235294117648
+        },
+        {
+          "bytes": 801,
+          "tokens": 180,
+          "bytes_per_token": 4.45
+        },
+        {
+          "bytes": 562,
+          "tokens": 150,
+          "bytes_per_token": 3.7466666666666666
+        },
+        {
+          "bytes": 542,
+          "tokens": 137,
+          "bytes_per_token": 3.9562043795620436
+        },
+        {
+          "bytes": 694,
+          "tokens": 187,
+          "bytes_per_token": 3.7112299465240643
+        },
+        {
+          "bytes": 811,
+          "tokens": 194,
+          "bytes_per_token": 4.180412371134021
+        },
+        {
+          "bytes": 921,
+          "tokens": 209,
+          "bytes_per_token": 4.4066985645933014
+        },
+        {
+          "bytes": 606,
+          "tokens": 156,
+          "bytes_per_token": 3.8846153846153846
+        },
+        {
+          "bytes": 562,
+          "tokens": 122,
+          "bytes_per_token": 4.60655737704918
+        },
+        {
+          "bytes": 664,
+          "tokens": 164,
+          "bytes_per_token": 4.048780487804878
+        },
+        {
+          "bytes": 852,
+          "tokens": 204,
+          "bytes_per_token": 4.176470588235294
+        },
+        {
+          "bytes": 753,
+          "tokens": 191,
+          "bytes_per_token": 3.9424083769633507
+        },
+        {
+          "bytes": 1221,
+          "tokens": 307,
+          "bytes_per_token": 3.977198697068404
+        },
+        {
+          "bytes": 766,
+          "tokens": 190,
+          "bytes_per_token": 4.031578947368421
+        },
+        {
+          "bytes": 733,
+          "tokens": 177,
+          "bytes_per_token": 4.141242937853107
+        },
+        {
+          "bytes": 760,
+          "tokens": 182,
+          "bytes_per_token": 4.175824175824176
+        },
+        {
+          "bytes": 461,
+          "tokens": 118,
+          "bytes_per_token": 3.906779661016949
+        },
+        {
+          "bytes": 724,
+          "tokens": 181,
+          "bytes_per_token": 4.0
+        },
+        {
+          "bytes": 625,
+          "tokens": 150,
+          "bytes_per_token": 4.166666666666667
+        },
+        {
+          "bytes": 722,
+          "tokens": 170,
+          "bytes_per_token": 4.247058823529412
+        },
+        {
+          "bytes": 750,
+          "tokens": 181,
+          "bytes_per_token": 4.143646408839779
+        },
+        {
+          "bytes": 825,
+          "tokens": 201,
+          "bytes_per_token": 4.104477611940299
+        },
+        {
+          "bytes": 560,
+          "tokens": 137,
+          "bytes_per_token": 4.087591240875913
+        },
+        {
+          "bytes": 800,
+          "tokens": 188,
+          "bytes_per_token": 4.25531914893617
+        },
+        {
+          "bytes": 1912,
+          "tokens": 487,
+          "bytes_per_token": 3.9260780287474333
+        },
+        {
+          "bytes": 606,
+          "tokens": 149,
+          "bytes_per_token": 4.067114093959732
+        },
+        {
+          "bytes": 865,
+          "tokens": 199,
+          "bytes_per_token": 4.346733668341709
+        },
+        {
+          "bytes": 861,
+          "tokens": 203,
+          "bytes_per_token": 4.241379310344827
+        },
+        {
+          "bytes": 744,
+          "tokens": 190,
+          "bytes_per_token": 3.9157894736842107
+        },
+        {
+          "bytes": 731,
+          "tokens": 170,
+          "bytes_per_token": 4.3
+        },
+        {
+          "bytes": 2108,
+          "tokens": 524,
+          "bytes_per_token": 4.022900763358779
+        },
+        {
+          "bytes": 781,
+          "tokens": 175,
+          "bytes_per_token": 4.462857142857143
+        },
+        {
+          "bytes": 1240,
+          "tokens": 324,
+          "bytes_per_token": 3.8271604938271606
+        },
+        {
+          "bytes": 634,
+          "tokens": 152,
+          "bytes_per_token": 4.171052631578948
+        },
+        {
+          "bytes": 667,
+          "tokens": 163,
+          "bytes_per_token": 4.0920245398773005
+        },
+        {
+          "bytes": 543,
+          "tokens": 136,
+          "bytes_per_token": 3.9926470588235294
+        },
+        {
+          "bytes": 752,
+          "tokens": 181,
+          "bytes_per_token": 4.154696132596685
+        },
+        {
+          "bytes": 1152,
+          "tokens": 281,
+          "bytes_per_token": 4.099644128113879
+        },
+        {
+          "bytes": 812,
+          "tokens": 187,
+          "bytes_per_token": 4.342245989304812
+        },
+        {
+          "bytes": 573,
+          "tokens": 144,
+          "bytes_per_token": 3.9791666666666665
+        },
+        {
+          "bytes": 706,
+          "tokens": 176,
+          "bytes_per_token": 4.011363636363637
+        },
+        {
+          "bytes": 613,
+          "tokens": 152,
+          "bytes_per_token": 4.032894736842105
+        },
+        {
+          "bytes": 514,
+          "tokens": 130,
+          "bytes_per_token": 3.953846153846154
+        },
+        {
+          "bytes": 974,
+          "tokens": 244,
+          "bytes_per_token": 3.9918032786885247
+        },
+        {
+          "bytes": 649,
+          "tokens": 149,
+          "bytes_per_token": 4.355704697986577
+        },
+        {
+          "bytes": 645,
+          "tokens": 157,
+          "bytes_per_token": 4.10828025477707
+        },
+        {
+          "bytes": 1040,
+          "tokens": 248,
+          "bytes_per_token": 4.193548387096774
+        },
+        {
+          "bytes": 942,
+          "tokens": 222,
+          "bytes_per_token": 4.243243243243243
+        },
+        {
+          "bytes": 658,
+          "tokens": 161,
+          "bytes_per_token": 4.086956521739131
+        },
+        {
+          "bytes": 555,
+          "tokens": 135,
+          "bytes_per_token": 4.111111111111111
+        },
+        {
+          "bytes": 589,
+          "tokens": 149,
+          "bytes_per_token": 3.953020134228188
+        },
+        {
+          "bytes": 551,
+          "tokens": 146,
+          "bytes_per_token": 3.7739726027397262
+        },
+        {
+          "bytes": 869,
+          "tokens": 215,
+          "bytes_per_token": 4.0418604651162795
+        },
+        {
+          "bytes": 795,
+          "tokens": 190,
+          "bytes_per_token": 4.184210526315789
+        },
+        {
+          "bytes": 909,
+          "tokens": 209,
+          "bytes_per_token": 4.349282296650718
+        },
+        {
+          "bytes": 778,
+          "tokens": 197,
+          "bytes_per_token": 3.949238578680203
+        },
+        {
+          "bytes": 1782,
+          "tokens": 429,
+          "bytes_per_token": 4.153846153846154
+        },
+        {
+          "bytes": 846,
+          "tokens": 205,
+          "bytes_per_token": 4.126829268292683
+        },
+        {
+          "bytes": 554,
+          "tokens": 135,
+          "bytes_per_token": 4.103703703703704
+        },
+        {
+          "bytes": 652,
+          "tokens": 172,
+          "bytes_per_token": 3.7906976744186047
+        },
+        {
+          "bytes": 754,
+          "tokens": 191,
+          "bytes_per_token": 3.9476439790575917
+        },
+        {
+          "bytes": 650,
+          "tokens": 155,
+          "bytes_per_token": 4.193548387096774
+        },
+        {
+          "bytes": 523,
+          "tokens": 129,
+          "bytes_per_token": 4.054263565891473
+        },
+        {
+          "bytes": 828,
+          "tokens": 205,
+          "bytes_per_token": 4.0390243902439025
+        },
+        {
+          "bytes": 540,
+          "tokens": 124,
+          "bytes_per_token": 4.354838709677419
+        },
+        {
+          "bytes": 751,
+          "tokens": 177,
+          "bytes_per_token": 4.242937853107344
+        },
+        {
+          "bytes": 733,
+          "tokens": 174,
+          "bytes_per_token": 4.212643678160919
+        },
+        {
+          "bytes": 865,
+          "tokens": 205,
+          "bytes_per_token": 4.219512195121951
+        },
+        {
+          "bytes": 2796,
+          "tokens": 673,
+          "bytes_per_token": 4.154531946508173
+        },
+        {
+          "bytes": 704,
+          "tokens": 173,
+          "bytes_per_token": 4.069364161849711
+        },
+        {
+          "bytes": 845,
+          "tokens": 204,
+          "bytes_per_token": 4.142156862745098
+        },
+        {
+          "bytes": 1180,
+          "tokens": 328,
+          "bytes_per_token": 3.597560975609756
+        },
+        {
+          "bytes": 580,
+          "tokens": 152,
+          "bytes_per_token": 3.8157894736842106
+        },
+        {
+          "bytes": 598,
+          "tokens": 142,
+          "bytes_per_token": 4.211267605633803
+        },
+        {
+          "bytes": 485,
+          "tokens": 111,
+          "bytes_per_token": 4.36936936936937
+        },
+        {
+          "bytes": 856,
+          "tokens": 211,
+          "bytes_per_token": 4.056872037914692
+        },
+        {
+          "bytes": 561,
+          "tokens": 133,
+          "bytes_per_token": 4.2180451127819545
+        },
+        {
+          "bytes": 1019,
+          "tokens": 248,
+          "bytes_per_token": 4.108870967741935
+        },
+        {
+          "bytes": 691,
+          "tokens": 170,
+          "bytes_per_token": 4.064705882352941
+        },
+        {
+          "bytes": 700,
+          "tokens": 180,
+          "bytes_per_token": 3.888888888888889
+        },
+        {
+          "bytes": 1100,
+          "tokens": 252,
+          "bytes_per_token": 4.365079365079365
+        },
+        {
+          "bytes": 618,
+          "tokens": 156,
+          "bytes_per_token": 3.9615384615384617
+        },
+        {
+          "bytes": 564,
+          "tokens": 136,
+          "bytes_per_token": 4.147058823529412
+        },
+        {
+          "bytes": 768,
+          "tokens": 183,
+          "bytes_per_token": 4.19672131147541
+        },
+        {
+          "bytes": 821,
+          "tokens": 190,
+          "bytes_per_token": 4.321052631578947
+        },
+        {
+          "bytes": 744,
+          "tokens": 169,
+          "bytes_per_token": 4.402366863905326
+        },
+        {
+          "bytes": 891,
+          "tokens": 228,
+          "bytes_per_token": 3.9078947368421053
+        },
+        {
+          "bytes": 856,
+          "tokens": 211,
+          "bytes_per_token": 4.056872037914692
+        },
+        {
+          "bytes": 722,
+          "tokens": 174,
+          "bytes_per_token": 4.149425287356322
+        },
+        {
+          "bytes": 743,
+          "tokens": 178,
+          "bytes_per_token": 4.174157303370786
+        },
+        {
+          "bytes": 1436,
+          "tokens": 342,
+          "bytes_per_token": 4.1988304093567255
+        },
+        {
+          "bytes": 865,
+          "tokens": 221,
+          "bytes_per_token": 3.914027149321267
+        },
+        {
+          "bytes": 799,
+          "tokens": 183,
+          "bytes_per_token": 4.366120218579235
+        },
+        {
+          "bytes": 660,
+          "tokens": 172,
+          "bytes_per_token": 3.8372093023255816
+        },
+        {
+          "bytes": 899,
+          "tokens": 224,
+          "bytes_per_token": 4.013392857142857
+        },
+        {
+          "bytes": 943,
+          "tokens": 224,
+          "bytes_per_token": 4.209821428571429
+        },
+        {
+          "bytes": 743,
+          "tokens": 188,
+          "bytes_per_token": 3.952127659574468
+        },
+        {
+          "bytes": 709,
+          "tokens": 163,
+          "bytes_per_token": 4.3496932515337425
+        },
+        {
+          "bytes": 786,
+          "tokens": 189,
+          "bytes_per_token": 4.158730158730159
+        },
+        {
+          "bytes": 442,
+          "tokens": 124,
+          "bytes_per_token": 3.564516129032258
+        },
+        {
+          "bytes": 774,
+          "tokens": 184,
+          "bytes_per_token": 4.206521739130435
+        },
+        {
+          "bytes": 1163,
+          "tokens": 292,
+          "bytes_per_token": 3.982876712328767
+        },
+        {
+          "bytes": 965,
+          "tokens": 229,
+          "bytes_per_token": 4.213973799126638
+        },
+        {
+          "bytes": 810,
+          "tokens": 204,
+          "bytes_per_token": 3.9705882352941178
+        },
+        {
+          "bytes": 998,
+          "tokens": 250,
+          "bytes_per_token": 3.992
+        },
+        {
+          "bytes": 724,
+          "tokens": 171,
+          "bytes_per_token": 4.233918128654971
+        },
+        {
+          "bytes": 562,
+          "tokens": 143,
+          "bytes_per_token": 3.93006993006993
+        },
+        {
+          "bytes": 549,
+          "tokens": 134,
+          "bytes_per_token": 4.097014925373134
+        },
+        {
+          "bytes": 1357,
+          "tokens": 335,
+          "bytes_per_token": 4.050746268656717
+        },
+        {
+          "bytes": 874,
+          "tokens": 216,
+          "bytes_per_token": 4.046296296296297
+        },
+        {
+          "bytes": 841,
+          "tokens": 199,
+          "bytes_per_token": 4.226130653266332
+        },
+        {
+          "bytes": 475,
+          "tokens": 123,
+          "bytes_per_token": 3.861788617886179
+        },
+        {
+          "bytes": 1061,
+          "tokens": 264,
+          "bytes_per_token": 4.018939393939394
+        },
+        {
+          "bytes": 656,
+          "tokens": 173,
+          "bytes_per_token": 3.791907514450867
+        },
+        {
+          "bytes": 594,
+          "tokens": 135,
+          "bytes_per_token": 4.4
+        },
+        {
+          "bytes": 724,
+          "tokens": 172,
+          "bytes_per_token": 4.209302325581396
+        },
+        {
+          "bytes": 628,
+          "tokens": 146,
+          "bytes_per_token": 4.301369863013699
+        },
+        {
+          "bytes": 614,
+          "tokens": 147,
+          "bytes_per_token": 4.1768707482993195
+        },
+        {
+          "bytes": 405,
+          "tokens": 96,
+          "bytes_per_token": 4.21875
+        },
+        {
+          "bytes": 665,
+          "tokens": 165,
+          "bytes_per_token": 4.03030303030303
+        },
+        {
+          "bytes": 765,
+          "tokens": 181,
+          "bytes_per_token": 4.226519337016574
+        },
+        {
+          "bytes": 524,
+          "tokens": 131,
+          "bytes_per_token": 4.0
+        },
+        {
+          "bytes": 863,
+          "tokens": 192,
+          "bytes_per_token": 4.494791666666667
+        },
+        {
+          "bytes": 1497,
+          "tokens": 339,
+          "bytes_per_token": 4.415929203539823
+        },
+        {
+          "bytes": 588,
+          "tokens": 142,
+          "bytes_per_token": 4.140845070422535
+        },
+        {
+          "bytes": 1054,
+          "tokens": 241,
+          "bytes_per_token": 4.373443983402489
+        },
+        {
+          "bytes": 668,
+          "tokens": 180,
+          "bytes_per_token": 3.7111111111111112
+        },
+        {
+          "bytes": 741,
+          "tokens": 177,
+          "bytes_per_token": 4.186440677966102
+        },
+        {
+          "bytes": 646,
+          "tokens": 158,
+          "bytes_per_token": 4.0886075949367084
+        },
+        {
+          "bytes": 764,
+          "tokens": 183,
+          "bytes_per_token": 4.174863387978142
+        },
+        {
+          "bytes": 569,
+          "tokens": 150,
+          "bytes_per_token": 3.7933333333333334
+        },
+        {
+          "bytes": 635,
+          "tokens": 153,
+          "bytes_per_token": 4.150326797385621
+        },
+        {
+          "bytes": 946,
+          "tokens": 222,
+          "bytes_per_token": 4.261261261261262
+        },
+        {
+          "bytes": 694,
+          "tokens": 161,
+          "bytes_per_token": 4.3105590062111805
+        },
+        {
+          "bytes": 1837,
+          "tokens": 480,
+          "bytes_per_token": 3.8270833333333334
+        },
+        {
+          "bytes": 598,
+          "tokens": 150,
+          "bytes_per_token": 3.986666666666667
+        },
+        {
+          "bytes": 1072,
+          "tokens": 261,
+          "bytes_per_token": 4.10727969348659
+        },
+        {
+          "bytes": 771,
+          "tokens": 179,
+          "bytes_per_token": 4.307262569832402
+        },
+        {
+          "bytes": 646,
+          "tokens": 160,
+          "bytes_per_token": 4.0375
+        },
+        {
+          "bytes": 1690,
+          "tokens": 424,
+          "bytes_per_token": 3.9858490566037736
+        },
+        {
+          "bytes": 1415,
+          "tokens": 357,
+          "bytes_per_token": 3.9635854341736696
+        },
+        {
+          "bytes": 627,
+          "tokens": 161,
+          "bytes_per_token": 3.8944099378881987
+        },
+        {
+          "bytes": 702,
+          "tokens": 168,
+          "bytes_per_token": 4.178571428571429
+        },
+        {
+          "bytes": 596,
+          "tokens": 150,
+          "bytes_per_token": 3.973333333333333
+        },
+        {
+          "bytes": 699,
+          "tokens": 169,
+          "bytes_per_token": 4.136094674556213
+        },
+        {
+          "bytes": 1505,
+          "tokens": 405,
+          "bytes_per_token": 3.7160493827160495
+        },
+        {
+          "bytes": 1112,
+          "tokens": 259,
+          "bytes_per_token": 4.293436293436294
+        },
+        {
+          "bytes": 636,
+          "tokens": 163,
+          "bytes_per_token": 3.901840490797546
+        },
+        {
+          "bytes": 1104,
+          "tokens": 305,
+          "bytes_per_token": 3.619672131147541
+        },
+        {
+          "bytes": 594,
+          "tokens": 148,
+          "bytes_per_token": 4.013513513513513
+        },
+        {
+          "bytes": 549,
+          "tokens": 130,
+          "bytes_per_token": 4.223076923076923
+        },
+        {
+          "bytes": 738,
+          "tokens": 165,
+          "bytes_per_token": 4.472727272727273
+        },
+        {
+          "bytes": 690,
+          "tokens": 179,
+          "bytes_per_token": 3.8547486033519553
+        },
+        {
+          "bytes": 864,
+          "tokens": 204,
+          "bytes_per_token": 4.235294117647059
+        },
+        {
+          "bytes": 626,
+          "tokens": 155,
+          "bytes_per_token": 4.038709677419355
+        },
+        {
+          "bytes": 577,
+          "tokens": 143,
+          "bytes_per_token": 4.034965034965035
+        },
+        {
+          "bytes": 911,
+          "tokens": 241,
+          "bytes_per_token": 3.780082987551867
+        },
+        {
+          "bytes": 753,
+          "tokens": 197,
+          "bytes_per_token": 3.8223350253807107
+        },
+        {
+          "bytes": 642,
+          "tokens": 165,
+          "bytes_per_token": 3.890909090909091
+        },
+        {
+          "bytes": 856,
+          "tokens": 232,
+          "bytes_per_token": 3.689655172413793
+        }
+      ]
+    },
+    "owt_32k": {
+      "documents": 200,
+      "source_bytes": 161393,
+      "tokens": 40666,
+      "bytes_per_token": 3.9687453892686766,
+      "bytes_per_second": 1187085.4313486863,
+      "estimated_pile_hours": 193.04985185969554,
+      "per_document": [
+        {
+          "bytes": 860,
+          "tokens": 222,
+          "bytes_per_token": 3.873873873873874
+        },
+        {
+          "bytes": 553,
+          "tokens": 141,
+          "bytes_per_token": 3.921985815602837
+        },
+        {
+          "bytes": 677,
+          "tokens": 186,
+          "bytes_per_token": 3.639784946236559
+        },
+        {
+          "bytes": 988,
+          "tokens": 254,
+          "bytes_per_token": 3.8897637795275593
+        },
+        {
+          "bytes": 700,
+          "tokens": 178,
+          "bytes_per_token": 3.932584269662921
+        },
+        {
+          "bytes": 606,
+          "tokens": 157,
+          "bytes_per_token": 3.859872611464968
+        },
+        {
+          "bytes": 797,
+          "tokens": 204,
+          "bytes_per_token": 3.906862745098039
+        },
+        {
+          "bytes": 987,
+          "tokens": 218,
+          "bytes_per_token": 4.527522935779817
+        },
+        {
+          "bytes": 651,
+          "tokens": 174,
+          "bytes_per_token": 3.7413793103448274
+        },
+        {
+          "bytes": 1581,
+          "tokens": 448,
+          "bytes_per_token": 3.529017857142857
+        },
+        {
+          "bytes": 628,
+          "tokens": 159,
+          "bytes_per_token": 3.949685534591195
+        },
+        {
+          "bytes": 916,
+          "tokens": 238,
+          "bytes_per_token": 3.8487394957983194
+        },
+        {
+          "bytes": 775,
+          "tokens": 196,
+          "bytes_per_token": 3.954081632653061
+        },
+        {
+          "bytes": 731,
+          "tokens": 191,
+          "bytes_per_token": 3.8272251308900525
+        },
+        {
+          "bytes": 712,
+          "tokens": 182,
+          "bytes_per_token": 3.912087912087912
+        },
+        {
+          "bytes": 744,
+          "tokens": 181,
+          "bytes_per_token": 4.110497237569061
+        },
+        {
+          "bytes": 620,
+          "tokens": 153,
+          "bytes_per_token": 4.052287581699346
+        },
+        {
+          "bytes": 828,
+          "tokens": 203,
+          "bytes_per_token": 4.078817733990148
+        },
+        {
+          "bytes": 787,
+          "tokens": 208,
+          "bytes_per_token": 3.7836538461538463
+        },
+        {
+          "bytes": 671,
+          "tokens": 188,
+          "bytes_per_token": 3.5691489361702127
+        },
+        {
+          "bytes": 914,
+          "tokens": 223,
+          "bytes_per_token": 4.098654708520179
+        },
+        {
+          "bytes": 806,
+          "tokens": 203,
+          "bytes_per_token": 3.9704433497536944
+        },
+        {
+          "bytes": 800,
+          "tokens": 202,
+          "bytes_per_token": 3.9603960396039604
+        },
+        {
+          "bytes": 903,
+          "tokens": 226,
+          "bytes_per_token": 3.995575221238938
+        },
+        {
+          "bytes": 573,
+          "tokens": 143,
+          "bytes_per_token": 4.006993006993007
+        },
+        {
+          "bytes": 992,
+          "tokens": 241,
+          "bytes_per_token": 4.1161825726141075
+        },
+        {
+          "bytes": 768,
+          "tokens": 182,
+          "bytes_per_token": 4.21978021978022
+        },
+        {
+          "bytes": 866,
+          "tokens": 208,
+          "bytes_per_token": 4.163461538461538
+        },
+        {
+          "bytes": 713,
+          "tokens": 177,
+          "bytes_per_token": 4.028248587570621
+        },
+        {
+          "bytes": 730,
+          "tokens": 191,
+          "bytes_per_token": 3.8219895287958114
+        },
+        {
+          "bytes": 610,
+          "tokens": 147,
+          "bytes_per_token": 4.149659863945578
+        },
+        {
+          "bytes": 875,
+          "tokens": 217,
+          "bytes_per_token": 4.032258064516129
+        },
+        {
+          "bytes": 958,
+          "tokens": 264,
+          "bytes_per_token": 3.628787878787879
+        },
+        {
+          "bytes": 485,
+          "tokens": 122,
+          "bytes_per_token": 3.9754098360655736
+        },
+        {
+          "bytes": 1065,
+          "tokens": 254,
+          "bytes_per_token": 4.192913385826771
+        },
+        {
+          "bytes": 597,
+          "tokens": 136,
+          "bytes_per_token": 4.389705882352941
+        },
+        {
+          "bytes": 690,
+          "tokens": 169,
+          "bytes_per_token": 4.0828402366863905
+        },
+        {
+          "bytes": 771,
+          "tokens": 182,
+          "bytes_per_token": 4.236263736263736
+        },
+        {
+          "bytes": 738,
+          "tokens": 167,
+          "bytes_per_token": 4.419161676646707
+        },
+        {
+          "bytes": 783,
+          "tokens": 202,
+          "bytes_per_token": 3.876237623762376
+        },
+        {
+          "bytes": 656,
+          "tokens": 170,
+          "bytes_per_token": 3.8588235294117648
+        },
+        {
+          "bytes": 801,
+          "tokens": 181,
+          "bytes_per_token": 4.425414364640884
+        },
+        {
+          "bytes": 562,
+          "tokens": 150,
+          "bytes_per_token": 3.7466666666666666
+        },
+        {
+          "bytes": 542,
+          "tokens": 137,
+          "bytes_per_token": 3.9562043795620436
+        },
+        {
+          "bytes": 694,
+          "tokens": 190,
+          "bytes_per_token": 3.6526315789473682
+        },
+        {
+          "bytes": 811,
+          "tokens": 201,
+          "bytes_per_token": 4.034825870646766
+        },
+        {
+          "bytes": 921,
+          "tokens": 209,
+          "bytes_per_token": 4.4066985645933014
+        },
+        {
+          "bytes": 606,
+          "tokens": 158,
+          "bytes_per_token": 3.8354430379746836
+        },
+        {
+          "bytes": 562,
+          "tokens": 133,
+          "bytes_per_token": 4.225563909774436
+        },
+        {
+          "bytes": 664,
+          "tokens": 172,
+          "bytes_per_token": 3.86046511627907
+        },
+        {
+          "bytes": 852,
+          "tokens": 205,
+          "bytes_per_token": 4.15609756097561
+        },
+        {
+          "bytes": 753,
+          "tokens": 202,
+          "bytes_per_token": 3.727722772277228
+        },
+        {
+          "bytes": 1221,
+          "tokens": 315,
+          "bytes_per_token": 3.876190476190476
+        },
+        {
+          "bytes": 766,
+          "tokens": 194,
+          "bytes_per_token": 3.948453608247423
+        },
+        {
+          "bytes": 733,
+          "tokens": 193,
+          "bytes_per_token": 3.7979274611398965
+        },
+        {
+          "bytes": 760,
+          "tokens": 183,
+          "bytes_per_token": 4.1530054644808745
+        },
+        {
+          "bytes": 461,
+          "tokens": 121,
+          "bytes_per_token": 3.809917355371901
+        },
+        {
+          "bytes": 724,
+          "tokens": 181,
+          "bytes_per_token": 4.0
+        },
+        {
+          "bytes": 625,
+          "tokens": 151,
+          "bytes_per_token": 4.139072847682119
+        },
+        {
+          "bytes": 722,
+          "tokens": 177,
+          "bytes_per_token": 4.0790960451977405
+        },
+        {
+          "bytes": 750,
+          "tokens": 183,
+          "bytes_per_token": 4.098360655737705
+        },
+        {
+          "bytes": 825,
+          "tokens": 203,
+          "bytes_per_token": 4.064039408866995
+        },
+        {
+          "bytes": 560,
+          "tokens": 137,
+          "bytes_per_token": 4.087591240875913
+        },
+        {
+          "bytes": 800,
+          "tokens": 192,
+          "bytes_per_token": 4.166666666666667
+        },
+        {
+          "bytes": 1912,
+          "tokens": 505,
+          "bytes_per_token": 3.786138613861386
+        },
+        {
+          "bytes": 606,
+          "tokens": 150,
+          "bytes_per_token": 4.04
+        },
+        {
+          "bytes": 865,
+          "tokens": 201,
+          "bytes_per_token": 4.303482587064677
+        },
+        {
+          "bytes": 861,
+          "tokens": 204,
+          "bytes_per_token": 4.220588235294118
+        },
+        {
+          "bytes": 744,
+          "tokens": 190,
+          "bytes_per_token": 3.9157894736842107
+        },
+        {
+          "bytes": 731,
+          "tokens": 179,
+          "bytes_per_token": 4.083798882681564
+        },
+        {
+          "bytes": 2108,
+          "tokens": 541,
+          "bytes_per_token": 3.8964879852125693
+        },
+        {
+          "bytes": 781,
+          "tokens": 176,
+          "bytes_per_token": 4.4375
+        },
+        {
+          "bytes": 1240,
+          "tokens": 354,
+          "bytes_per_token": 3.5028248587570623
+        },
+        {
+          "bytes": 634,
+          "tokens": 160,
+          "bytes_per_token": 3.9625
+        },
+        {
+          "bytes": 667,
+          "tokens": 164,
+          "bytes_per_token": 4.067073170731708
+        },
+        {
+          "bytes": 543,
+          "tokens": 140,
+          "bytes_per_token": 3.8785714285714286
+        },
+        {
+          "bytes": 752,
+          "tokens": 182,
+          "bytes_per_token": 4.131868131868132
+        },
+        {
+          "bytes": 1152,
+          "tokens": 293,
+          "bytes_per_token": 3.931740614334471
+        },
+        {
+          "bytes": 812,
+          "tokens": 194,
+          "bytes_per_token": 4.185567010309279
+        },
+        {
+          "bytes": 573,
+          "tokens": 144,
+          "bytes_per_token": 3.9791666666666665
+        },
+        {
+          "bytes": 706,
+          "tokens": 177,
+          "bytes_per_token": 3.9887005649717513
+        },
+        {
+          "bytes": 613,
+          "tokens": 153,
+          "bytes_per_token": 4.006535947712418
+        },
+        {
+          "bytes": 514,
+          "tokens": 131,
+          "bytes_per_token": 3.9236641221374047
+        },
+        {
+          "bytes": 974,
+          "tokens": 245,
+          "bytes_per_token": 3.975510204081633
+        },
+        {
+          "bytes": 649,
+          "tokens": 150,
+          "bytes_per_token": 4.326666666666667
+        },
+        {
+          "bytes": 645,
+          "tokens": 159,
+          "bytes_per_token": 4.056603773584905
+        },
+        {
+          "bytes": 1040,
+          "tokens": 261,
+          "bytes_per_token": 3.9846743295019156
+        },
+        {
+          "bytes": 942,
+          "tokens": 222,
+          "bytes_per_token": 4.243243243243243
+        },
+        {
+          "bytes": 658,
+          "tokens": 167,
+          "bytes_per_token": 3.940119760479042
+        },
+        {
+          "bytes": 555,
+          "tokens": 135,
+          "bytes_per_token": 4.111111111111111
+        },
+        {
+          "bytes": 589,
+          "tokens": 157,
+          "bytes_per_token": 3.751592356687898
+        },
+        {
+          "bytes": 551,
+          "tokens": 143,
+          "bytes_per_token": 3.8531468531468533
+        },
+        {
+          "bytes": 869,
+          "tokens": 218,
+          "bytes_per_token": 3.9862385321100917
+        },
+        {
+          "bytes": 795,
+          "tokens": 191,
+          "bytes_per_token": 4.162303664921466
+        },
+        {
+          "bytes": 909,
+          "tokens": 211,
+          "bytes_per_token": 4.308056872037914
+        },
+        {
+          "bytes": 778,
+          "tokens": 197,
+          "bytes_per_token": 3.949238578680203
+        },
+        {
+          "bytes": 1782,
+          "tokens": 431,
+          "bytes_per_token": 4.134570765661253
+        },
+        {
+          "bytes": 846,
+          "tokens": 207,
+          "bytes_per_token": 4.086956521739131
+        },
+        {
+          "bytes": 554,
+          "tokens": 135,
+          "bytes_per_token": 4.103703703703704
+        },
+        {
+          "bytes": 652,
+          "tokens": 164,
+          "bytes_per_token": 3.975609756097561
+        },
+        {
+          "bytes": 754,
+          "tokens": 192,
+          "bytes_per_token": 3.9270833333333335
+        },
+        {
+          "bytes": 650,
+          "tokens": 158,
+          "bytes_per_token": 4.113924050632911
+        },
+        {
+          "bytes": 523,
+          "tokens": 129,
+          "bytes_per_token": 4.054263565891473
+        },
+        {
+          "bytes": 828,
+          "tokens": 205,
+          "bytes_per_token": 4.0390243902439025
+        },
+        {
+          "bytes": 540,
+          "tokens": 136,
+          "bytes_per_token": 3.9705882352941178
+        },
+        {
+          "bytes": 751,
+          "tokens": 178,
+          "bytes_per_token": 4.219101123595506
+        },
+        {
+          "bytes": 733,
+          "tokens": 186,
+          "bytes_per_token": 3.9408602150537635
+        },
+        {
+          "bytes": 865,
+          "tokens": 225,
+          "bytes_per_token": 3.8444444444444446
+        },
+        {
+          "bytes": 2796,
+          "tokens": 690,
+          "bytes_per_token": 4.052173913043478
+        },
+        {
+          "bytes": 704,
+          "tokens": 173,
+          "bytes_per_token": 4.069364161849711
+        },
+        {
+          "bytes": 845,
+          "tokens": 204,
+          "bytes_per_token": 4.142156862745098
+        },
+        {
+          "bytes": 1180,
+          "tokens": 351,
+          "bytes_per_token": 3.3618233618233617
+        },
+        {
+          "bytes": 580,
+          "tokens": 155,
+          "bytes_per_token": 3.7419354838709675
+        },
+        {
+          "bytes": 598,
+          "tokens": 151,
+          "bytes_per_token": 3.9602649006622515
+        },
+        {
+          "bytes": 485,
+          "tokens": 116,
+          "bytes_per_token": 4.181034482758621
+        },
+        {
+          "bytes": 856,
+          "tokens": 207,
+          "bytes_per_token": 4.1352657004830915
+        },
+        {
+          "bytes": 561,
+          "tokens": 139,
+          "bytes_per_token": 4.0359712230215825
+        },
+        {
+          "bytes": 1019,
+          "tokens": 262,
+          "bytes_per_token": 3.8893129770992365
+        },
+        {
+          "bytes": 691,
+          "tokens": 174,
+          "bytes_per_token": 3.971264367816092
+        },
+        {
+          "bytes": 700,
+          "tokens": 181,
+          "bytes_per_token": 3.867403314917127
+        },
+        {
+          "bytes": 1100,
+          "tokens": 260,
+          "bytes_per_token": 4.230769230769231
+        },
+        {
+          "bytes": 618,
+          "tokens": 156,
+          "bytes_per_token": 3.9615384615384617
+        },
+        {
+          "bytes": 564,
+          "tokens": 141,
+          "bytes_per_token": 4.0
+        },
+        {
+          "bytes": 768,
+          "tokens": 183,
+          "bytes_per_token": 4.19672131147541
+        },
+        {
+          "bytes": 821,
+          "tokens": 197,
+          "bytes_per_token": 4.16751269035533
+        },
+        {
+          "bytes": 744,
+          "tokens": 178,
+          "bytes_per_token": 4.179775280898877
+        },
+        {
+          "bytes": 891,
+          "tokens": 232,
+          "bytes_per_token": 3.8405172413793105
+        },
+        {
+          "bytes": 856,
+          "tokens": 230,
+          "bytes_per_token": 3.7217391304347824
+        },
+        {
+          "bytes": 722,
+          "tokens": 174,
+          "bytes_per_token": 4.149425287356322
+        },
+        {
+          "bytes": 743,
+          "tokens": 178,
+          "bytes_per_token": 4.174157303370786
+        },
+        {
+          "bytes": 1436,
+          "tokens": 352,
+          "bytes_per_token": 4.079545454545454
+        },
+        {
+          "bytes": 865,
+          "tokens": 224,
+          "bytes_per_token": 3.861607142857143
+        },
+        {
+          "bytes": 799,
+          "tokens": 186,
+          "bytes_per_token": 4.295698924731183
+        },
+        {
+          "bytes": 660,
+          "tokens": 172,
+          "bytes_per_token": 3.8372093023255816
+        },
+        {
+          "bytes": 899,
+          "tokens": 228,
+          "bytes_per_token": 3.942982456140351
+        },
+        {
+          "bytes": 943,
+          "tokens": 231,
+          "bytes_per_token": 4.082251082251083
+        },
+        {
+          "bytes": 743,
+          "tokens": 188,
+          "bytes_per_token": 3.952127659574468
+        },
+        {
+          "bytes": 709,
+          "tokens": 166,
+          "bytes_per_token": 4.271084337349397
+        },
+        {
+          "bytes": 786,
+          "tokens": 194,
+          "bytes_per_token": 4.051546391752577
+        },
+        {
+          "bytes": 442,
+          "tokens": 128,
+          "bytes_per_token": 3.453125
+        },
+        {
+          "bytes": 774,
+          "tokens": 187,
+          "bytes_per_token": 4.13903743315508
+        },
+        {
+          "bytes": 1163,
+          "tokens": 293,
+          "bytes_per_token": 3.969283276450512
+        },
+        {
+          "bytes": 965,
+          "tokens": 255,
+          "bytes_per_token": 3.784313725490196
+        },
+        {
+          "bytes": 810,
+          "tokens": 213,
+          "bytes_per_token": 3.8028169014084505
+        },
+        {
+          "bytes": 998,
+          "tokens": 253,
+          "bytes_per_token": 3.9446640316205532
+        },
+        {
+          "bytes": 724,
+          "tokens": 178,
+          "bytes_per_token": 4.067415730337078
+        },
+        {
+          "bytes": 562,
+          "tokens": 144,
+          "bytes_per_token": 3.9027777777777777
+        },
+        {
+          "bytes": 549,
+          "tokens": 134,
+          "bytes_per_token": 4.097014925373134
+        },
+        {
+          "bytes": 1357,
+          "tokens": 340,
+          "bytes_per_token": 3.9911764705882353
+        },
+        {
+          "bytes": 874,
+          "tokens": 217,
+          "bytes_per_token": 4.027649769585254
+        },
+        {
+          "bytes": 841,
+          "tokens": 212,
+          "bytes_per_token": 3.9669811320754715
+        },
+        {
+          "bytes": 475,
+          "tokens": 127,
+          "bytes_per_token": 3.7401574803149606
+        },
+        {
+          "bytes": 1061,
+          "tokens": 272,
+          "bytes_per_token": 3.900735294117647
+        },
+        {
+          "bytes": 656,
+          "tokens": 173,
+          "bytes_per_token": 3.791907514450867
+        },
+        {
+          "bytes": 594,
+          "tokens": 135,
+          "bytes_per_token": 4.4
+        },
+        {
+          "bytes": 724,
+          "tokens": 176,
+          "bytes_per_token": 4.113636363636363
+        },
+        {
+          "bytes": 628,
+          "tokens": 160,
+          "bytes_per_token": 3.925
+        },
+        {
+          "bytes": 614,
+          "tokens": 155,
+          "bytes_per_token": 3.9612903225806453
+        },
+        {
+          "bytes": 405,
+          "tokens": 110,
+          "bytes_per_token": 3.6818181818181817
+        },
+        {
+          "bytes": 665,
+          "tokens": 166,
+          "bytes_per_token": 4.006024096385542
+        },
+        {
+          "bytes": 765,
+          "tokens": 192,
+          "bytes_per_token": 3.984375
+        },
+        {
+          "bytes": 524,
+          "tokens": 138,
+          "bytes_per_token": 3.7971014492753623
+        },
+        {
+          "bytes": 863,
+          "tokens": 205,
+          "bytes_per_token": 4.209756097560976
+        },
+        {
+          "bytes": 1497,
+          "tokens": 344,
+          "bytes_per_token": 4.351744186046512
+        },
+        {
+          "bytes": 588,
+          "tokens": 144,
+          "bytes_per_token": 4.083333333333333
+        },
+        {
+          "bytes": 1054,
+          "tokens": 253,
+          "bytes_per_token": 4.16600790513834
+        },
+        {
+          "bytes": 668,
+          "tokens": 181,
+          "bytes_per_token": 3.6906077348066297
+        },
+        {
+          "bytes": 741,
+          "tokens": 183,
+          "bytes_per_token": 4.049180327868853
+        },
+        {
+          "bytes": 646,
+          "tokens": 171,
+          "bytes_per_token": 3.7777777777777777
+        },
+        {
+          "bytes": 764,
+          "tokens": 185,
+          "bytes_per_token": 4.129729729729729
+        },
+        {
+          "bytes": 569,
+          "tokens": 151,
+          "bytes_per_token": 3.7682119205298013
+        },
+        {
+          "bytes": 635,
+          "tokens": 156,
+          "bytes_per_token": 4.07051282051282
+        },
+        {
+          "bytes": 946,
+          "tokens": 234,
+          "bytes_per_token": 4.042735042735043
+        },
+        {
+          "bytes": 694,
+          "tokens": 172,
+          "bytes_per_token": 4.034883720930233
+        },
+        {
+          "bytes": 1837,
+          "tokens": 492,
+          "bytes_per_token": 3.733739837398374
+        },
+        {
+          "bytes": 598,
+          "tokens": 157,
+          "bytes_per_token": 3.8089171974522293
+        },
+        {
+          "bytes": 1072,
+          "tokens": 274,
+          "bytes_per_token": 3.9124087591240877
+        },
+        {
+          "bytes": 771,
+          "tokens": 181,
+          "bytes_per_token": 4.259668508287293
+        },
+        {
+          "bytes": 646,
+          "tokens": 162,
+          "bytes_per_token": 3.9876543209876543
+        },
+        {
+          "bytes": 1690,
+          "tokens": 428,
+          "bytes_per_token": 3.9485981308411215
+        },
+        {
+          "bytes": 1415,
+          "tokens": 372,
+          "bytes_per_token": 3.803763440860215
+        },
+        {
+          "bytes": 627,
+          "tokens": 171,
+          "bytes_per_token": 3.6666666666666665
+        },
+        {
+          "bytes": 702,
+          "tokens": 182,
+          "bytes_per_token": 3.857142857142857
+        },
+        {
+          "bytes": 596,
+          "tokens": 156,
+          "bytes_per_token": 3.8205128205128207
+        },
+        {
+          "bytes": 699,
+          "tokens": 169,
+          "bytes_per_token": 4.136094674556213
+        },
+        {
+          "bytes": 1505,
+          "tokens": 417,
+          "bytes_per_token": 3.6091127098321345
+        },
+        {
+          "bytes": 1112,
+          "tokens": 276,
+          "bytes_per_token": 4.028985507246377
+        },
+        {
+          "bytes": 636,
+          "tokens": 169,
+          "bytes_per_token": 3.7633136094674557
+        },
+        {
+          "bytes": 1104,
+          "tokens": 323,
+          "bytes_per_token": 3.417956656346749
+        },
+        {
+          "bytes": 594,
+          "tokens": 152,
+          "bytes_per_token": 3.9078947368421053
+        },
+        {
+          "bytes": 549,
+          "tokens": 136,
+          "bytes_per_token": 4.036764705882353
+        },
+        {
+          "bytes": 738,
+          "tokens": 177,
+          "bytes_per_token": 4.169491525423729
+        },
+        {
+          "bytes": 690,
+          "tokens": 185,
+          "bytes_per_token": 3.72972972972973
+        },
+        {
+          "bytes": 864,
+          "tokens": 215,
+          "bytes_per_token": 4.018604651162791
+        },
+        {
+          "bytes": 626,
+          "tokens": 160,
+          "bytes_per_token": 3.9125
+        },
+        {
+          "bytes": 577,
+          "tokens": 143,
+          "bytes_per_token": 4.034965034965035
+        },
+        {
+          "bytes": 911,
+          "tokens": 241,
+          "bytes_per_token": 3.780082987551867
+        },
+        {
+          "bytes": 753,
+          "tokens": 206,
+          "bytes_per_token": 3.6553398058252426
+        },
+        {
+          "bytes": 642,
+          "tokens": 165,
+          "bytes_per_token": 3.890909090909091
+        },
+        {
+          "bytes": 856,
+          "tokens": 232,
+          "bytes_per_token": 3.689655172413793
+        }
+      ]
+    }
+  },
+  "owt": {
+    "tinystories_10k": {
+      "documents": 200,
+      "source_bytes": 1013416,
+      "tokens": 315273,
+      "bytes_per_token": 3.2144078306737334,
+      "bytes_per_second": 1032692.2852797096,
+      "estimated_pile_hours": 221.91186080623794,
+      "per_document": [
+        {
+          "bytes": 7488,
+          "tokens": 2198,
+          "bytes_per_token": 3.4067333939945406
+        },
+        {
+          "bytes": 1605,
+          "tokens": 493,
+          "bytes_per_token": 3.255578093306288
+        },
+        {
+          "bytes": 1874,
+          "tokens": 585,
+          "bytes_per_token": 3.2034188034188036
+        },
+        {
+          "bytes": 1172,
+          "tokens": 328,
+          "bytes_per_token": 3.573170731707317
+        },
+        {
+          "bytes": 1416,
+          "tokens": 509,
+          "bytes_per_token": 2.781925343811395
+        },
+        {
+          "bytes": 2207,
+          "tokens": 628,
+          "bytes_per_token": 3.5143312101910826
+        },
+        {
+          "bytes": 3303,
+          "tokens": 958,
+          "bytes_per_token": 3.4478079331941545
+        },
+        {
+          "bytes": 2329,
+          "tokens": 713,
+          "bytes_per_token": 3.2664796633941093
+        },
+        {
+          "bytes": 3740,
+          "tokens": 1141,
+          "bytes_per_token": 3.277826468010517
+        },
+        {
+          "bytes": 11912,
+          "tokens": 3505,
+          "bytes_per_token": 3.398573466476462
+        },
+        {
+          "bytes": 7620,
+          "tokens": 2372,
+          "bytes_per_token": 3.2124789207419897
+        },
+        {
+          "bytes": 10256,
+          "tokens": 2950,
+          "bytes_per_token": 3.4766101694915252
+        },
+        {
+          "bytes": 3013,
+          "tokens": 1247,
+          "bytes_per_token": 2.416198877305533
+        },
+        {
+          "bytes": 1020,
+          "tokens": 287,
+          "bytes_per_token": 3.554006968641115
+        },
+        {
+          "bytes": 1879,
+          "tokens": 622,
+          "bytes_per_token": 3.0209003215434085
+        },
+        {
+          "bytes": 25504,
+          "tokens": 7240,
+          "bytes_per_token": 3.5226519337016575
+        },
+        {
+          "bytes": 2539,
+          "tokens": 759,
+          "bytes_per_token": 3.345191040843215
+        },
+        {
+          "bytes": 11907,
+          "tokens": 3573,
+          "bytes_per_token": 3.332493702770781
+        },
+        {
+          "bytes": 2661,
+          "tokens": 734,
+          "bytes_per_token": 3.6253405994550407
+        },
+        {
+          "bytes": 8204,
+          "tokens": 2602,
+          "bytes_per_token": 3.1529592621060725
+        },
+        {
+          "bytes": 1444,
+          "tokens": 519,
+          "bytes_per_token": 2.7822736030828517
+        },
+        {
+          "bytes": 1662,
+          "tokens": 516,
+          "bytes_per_token": 3.2209302325581395
+        },
+        {
+          "bytes": 11346,
+          "tokens": 3344,
+          "bytes_per_token": 3.3929425837320575
+        },
+        {
+          "bytes": 1418,
+          "tokens": 484,
+          "bytes_per_token": 2.9297520661157024
+        },
+        {
+          "bytes": 1039,
+          "tokens": 362,
+          "bytes_per_token": 2.8701657458563536
+        },
+        {
+          "bytes": 6220,
+          "tokens": 1893,
+          "bytes_per_token": 3.2857897517168517
+        },
+        {
+          "bytes": 2505,
+          "tokens": 1705,
+          "bytes_per_token": 1.469208211143695
+        },
+        {
+          "bytes": 3180,
+          "tokens": 841,
+          "bytes_per_token": 3.7812128418549347
+        },
+        {
+          "bytes": 899,
+          "tokens": 281,
+          "bytes_per_token": 3.199288256227758
+        },
+        {
+          "bytes": 3669,
+          "tokens": 1180,
+          "bytes_per_token": 3.109322033898305
+        },
+        {
+          "bytes": 2389,
+          "tokens": 762,
+          "bytes_per_token": 3.1351706036745406
+        },
+        {
+          "bytes": 17376,
+          "tokens": 5400,
+          "bytes_per_token": 3.2177777777777776
+        },
+        {
+          "bytes": 9980,
+          "tokens": 3495,
+          "bytes_per_token": 2.855507868383405
+        },
+        {
+          "bytes": 1424,
+          "tokens": 408,
+          "bytes_per_token": 3.4901960784313726
+        },
+        {
+          "bytes": 3199,
+          "tokens": 957,
+          "bytes_per_token": 3.3427377220480667
+        },
+        {
+          "bytes": 2660,
+          "tokens": 941,
+          "bytes_per_token": 2.826780021253985
+        },
+        {
+          "bytes": 7577,
+          "tokens": 2167,
+          "bytes_per_token": 3.496538994000923
+        },
+        {
+          "bytes": 4476,
+          "tokens": 1280,
+          "bytes_per_token": 3.496875
+        },
+        {
+          "bytes": 1053,
+          "tokens": 339,
+          "bytes_per_token": 3.106194690265487
+        },
+        {
+          "bytes": 4788,
+          "tokens": 1413,
+          "bytes_per_token": 3.388535031847134
+        },
+        {
+          "bytes": 1514,
+          "tokens": 503,
+          "bytes_per_token": 3.0099403578528827
+        },
+        {
+          "bytes": 875,
+          "tokens": 283,
+          "bytes_per_token": 3.091872791519435
+        },
+        {
+          "bytes": 3780,
+          "tokens": 1151,
+          "bytes_per_token": 3.2841007819287578
+        },
+        {
+          "bytes": 4017,
+          "tokens": 1193,
+          "bytes_per_token": 3.3671416596814754
+        },
+        {
+          "bytes": 1662,
+          "tokens": 541,
+          "bytes_per_token": 3.0720887245841033
+        },
+        {
+          "bytes": 1065,
+          "tokens": 347,
+          "bytes_per_token": 3.069164265129683
+        },
+        {
+          "bytes": 4428,
+          "tokens": 1263,
+          "bytes_per_token": 3.505938242280285
+        },
+        {
+          "bytes": 3805,
+          "tokens": 1076,
+          "bytes_per_token": 3.5362453531598512
+        },
+        {
+          "bytes": 2667,
+          "tokens": 801,
+          "bytes_per_token": 3.3295880149812733
+        },
+        {
+          "bytes": 5211,
+          "tokens": 1756,
+          "bytes_per_token": 2.96753986332574
+        },
+        {
+          "bytes": 13138,
+          "tokens": 4009,
+          "bytes_per_token": 3.2771264654527315
+        },
+        {
+          "bytes": 3188,
+          "tokens": 991,
+          "bytes_per_token": 3.2169525731584256
+        },
+        {
+          "bytes": 3870,
+          "tokens": 1208,
+          "bytes_per_token": 3.2036423841059603
+        },
+        {
+          "bytes": 4722,
+          "tokens": 1499,
+          "bytes_per_token": 3.1501000667111407
+        },
+        {
+          "bytes": 2115,
+          "tokens": 605,
+          "bytes_per_token": 3.4958677685950414
+        },
+        {
+          "bytes": 5097,
+          "tokens": 1510,
+          "bytes_per_token": 3.375496688741722
+        },
+        {
+          "bytes": 4962,
+          "tokens": 1572,
+          "bytes_per_token": 3.1564885496183206
+        },
+        {
+          "bytes": 3473,
+          "tokens": 1092,
+          "bytes_per_token": 3.18040293040293
+        },
+        {
+          "bytes": 8131,
+          "tokens": 2634,
+          "bytes_per_token": 3.0869400151860287
+        },
+        {
+          "bytes": 1150,
+          "tokens": 356,
+          "bytes_per_token": 3.230337078651685
+        },
+        {
+          "bytes": 1290,
+          "tokens": 396,
+          "bytes_per_token": 3.257575757575758
+        },
+        {
+          "bytes": 1571,
+          "tokens": 433,
+          "bytes_per_token": 3.628175519630485
+        },
+        {
+          "bytes": 2641,
+          "tokens": 781,
+          "bytes_per_token": 3.381562099871959
+        },
+        {
+          "bytes": 3839,
+          "tokens": 1181,
+          "bytes_per_token": 3.2506350550381033
+        },
+        {
+          "bytes": 1279,
+          "tokens": 383,
+          "bytes_per_token": 3.339425587467363
+        },
+        {
+          "bytes": 5045,
+          "tokens": 1440,
+          "bytes_per_token": 3.5034722222222223
+        },
+        {
+          "bytes": 2906,
+          "tokens": 875,
+          "bytes_per_token": 3.321142857142857
+        },
+        {
+          "bytes": 3560,
+          "tokens": 1056,
+          "bytes_per_token": 3.371212121212121
+        },
+        {
+          "bytes": 1204,
+          "tokens": 373,
+          "bytes_per_token": 3.227882037533512
+        },
+        {
+          "bytes": 2136,
+          "tokens": 608,
+          "bytes_per_token": 3.513157894736842
+        },
+        {
+          "bytes": 1277,
+          "tokens": 372,
+          "bytes_per_token": 3.432795698924731
+        },
+        {
+          "bytes": 1688,
+          "tokens": 564,
+          "bytes_per_token": 2.99290780141844
+        },
+        {
+          "bytes": 4816,
+          "tokens": 1425,
+          "bytes_per_token": 3.3796491228070176
+        },
+        {
+          "bytes": 10450,
+          "tokens": 2975,
+          "bytes_per_token": 3.5126050420168067
+        },
+        {
+          "bytes": 81406,
+          "tokens": 24567,
+          "bytes_per_token": 3.313632108112509
+        },
+        {
+          "bytes": 1044,
+          "tokens": 302,
+          "bytes_per_token": 3.456953642384106
+        },
+        {
+          "bytes": 1146,
+          "tokens": 316,
+          "bytes_per_token": 3.6265822784810124
+        },
+        {
+          "bytes": 2366,
+          "tokens": 730,
+          "bytes_per_token": 3.241095890410959
+        },
+        {
+          "bytes": 2569,
+          "tokens": 886,
+          "bytes_per_token": 2.899548532731377
+        },
+        {
+          "bytes": 1864,
+          "tokens": 611,
+          "bytes_per_token": 3.050736497545008
+        },
+        {
+          "bytes": 952,
+          "tokens": 257,
+          "bytes_per_token": 3.7042801556420235
+        },
+        {
+          "bytes": 14544,
+          "tokens": 4435,
+          "bytes_per_token": 3.279368658399098
+        },
+        {
+          "bytes": 3910,
+          "tokens": 1397,
+          "bytes_per_token": 2.798854688618468
+        },
+        {
+          "bytes": 1181,
+          "tokens": 372,
+          "bytes_per_token": 3.174731182795699
+        },
+        {
+          "bytes": 26879,
+          "tokens": 8966,
+          "bytes_per_token": 2.997880883337051
+        },
+        {
+          "bytes": 3343,
+          "tokens": 1000,
+          "bytes_per_token": 3.343
+        },
+        {
+          "bytes": 4590,
+          "tokens": 1376,
+          "bytes_per_token": 3.3357558139534884
+        },
+        {
+          "bytes": 1318,
+          "tokens": 408,
+          "bytes_per_token": 3.230392156862745
+        },
+        {
+          "bytes": 14460,
+          "tokens": 4207,
+          "bytes_per_token": 3.437128595198479
+        },
+        {
+          "bytes": 3250,
+          "tokens": 1054,
+          "bytes_per_token": 3.0834914611005693
+        },
+        {
+          "bytes": 6236,
+          "tokens": 1799,
+          "bytes_per_token": 3.4663702056698167
+        },
+        {
+          "bytes": 14575,
+          "tokens": 6188,
+          "bytes_per_token": 2.355365223012282
+        },
+        {
+          "bytes": 3132,
+          "tokens": 938,
+          "bytes_per_token": 3.3390191897654584
+        },
+        {
+          "bytes": 1167,
+          "tokens": 356,
+          "bytes_per_token": 3.2780898876404496
+        },
+        {
+          "bytes": 3730,
+          "tokens": 1343,
+          "bytes_per_token": 2.7773641102010425
+        },
+        {
+          "bytes": 1084,
+          "tokens": 335,
+          "bytes_per_token": 3.235820895522388
+        },
+        {
+          "bytes": 3769,
+          "tokens": 1365,
+          "bytes_per_token": 2.761172161172161
+        },
+        {
+          "bytes": 4552,
+          "tokens": 1432,
+          "bytes_per_token": 3.17877094972067
+        },
+        {
+          "bytes": 1902,
+          "tokens": 501,
+          "bytes_per_token": 3.7964071856287425
+        },
+        {
+          "bytes": 6289,
+          "tokens": 1840,
+          "bytes_per_token": 3.4179347826086954
+        },
+        {
+          "bytes": 3923,
+          "tokens": 1230,
+          "bytes_per_token": 3.189430894308943
+        },
+        {
+          "bytes": 9095,
+          "tokens": 3257,
+          "bytes_per_token": 2.7924470371507524
+        },
+        {
+          "bytes": 1562,
+          "tokens": 476,
+          "bytes_per_token": 3.2815126050420167
+        },
+        {
+          "bytes": 2206,
+          "tokens": 724,
+          "bytes_per_token": 3.046961325966851
+        },
+        {
+          "bytes": 4758,
+          "tokens": 1435,
+          "bytes_per_token": 3.315679442508711
+        },
+        {
+          "bytes": 3130,
+          "tokens": 942,
+          "bytes_per_token": 3.3227176220806793
+        },
+        {
+          "bytes": 6997,
+          "tokens": 2598,
+          "bytes_per_token": 2.693225558121632
+        },
+        {
+          "bytes": 1135,
+          "tokens": 328,
+          "bytes_per_token": 3.4603658536585367
+        },
+        {
+          "bytes": 1084,
+          "tokens": 339,
+          "bytes_per_token": 3.1976401179941
+        },
+        {
+          "bytes": 5390,
+          "tokens": 1415,
+          "bytes_per_token": 3.8091872791519434
+        },
+        {
+          "bytes": 1301,
+          "tokens": 388,
+          "bytes_per_token": 3.3530927835051547
+        },
+        {
+          "bytes": 8809,
+          "tokens": 2795,
+          "bytes_per_token": 3.1516994633273705
+        },
+        {
+          "bytes": 1798,
+          "tokens": 500,
+          "bytes_per_token": 3.596
+        },
+        {
+          "bytes": 8224,
+          "tokens": 2516,
+          "bytes_per_token": 3.268680445151033
+        },
+        {
+          "bytes": 6637,
+          "tokens": 2046,
+          "bytes_per_token": 3.2438905180840663
+        },
+        {
+          "bytes": 5126,
+          "tokens": 1545,
+          "bytes_per_token": 3.317799352750809
+        },
+        {
+          "bytes": 12578,
+          "tokens": 3304,
+          "bytes_per_token": 3.806900726392252
+        },
+        {
+          "bytes": 1602,
+          "tokens": 502,
+          "bytes_per_token": 3.191235059760956
+        },
+        {
+          "bytes": 4804,
+          "tokens": 1457,
+          "bytes_per_token": 3.297185998627316
+        },
+        {
+          "bytes": 1731,
+          "tokens": 521,
+          "bytes_per_token": 3.322456813819578
+        },
+        {
+          "bytes": 7268,
+          "tokens": 2288,
+          "bytes_per_token": 3.1765734265734267
+        },
+        {
+          "bytes": 1870,
+          "tokens": 690,
+          "bytes_per_token": 2.710144927536232
+        },
+        {
+          "bytes": 935,
+          "tokens": 303,
+          "bytes_per_token": 3.0858085808580857
+        },
+        {
+          "bytes": 1690,
+          "tokens": 539,
+          "bytes_per_token": 3.1354359925788495
+        },
+        {
+          "bytes": 992,
+          "tokens": 307,
+          "bytes_per_token": 3.231270358306189
+        },
+        {
+          "bytes": 16311,
+          "tokens": 4406,
+          "bytes_per_token": 3.7019972764412166
+        },
+        {
+          "bytes": 840,
+          "tokens": 260,
+          "bytes_per_token": 3.230769230769231
+        },
+        {
+          "bytes": 1313,
+          "tokens": 373,
+          "bytes_per_token": 3.520107238605898
+        },
+        {
+          "bytes": 2170,
+          "tokens": 603,
+          "bytes_per_token": 3.5986733001658373
+        },
+        {
+          "bytes": 2166,
+          "tokens": 665,
+          "bytes_per_token": 3.257142857142857
+        },
+        {
+          "bytes": 1084,
+          "tokens": 366,
+          "bytes_per_token": 2.9617486338797816
+        },
+        {
+          "bytes": 1450,
+          "tokens": 550,
+          "bytes_per_token": 2.6363636363636362
+        },
+        {
+          "bytes": 5050,
+          "tokens": 1544,
+          "bytes_per_token": 3.2707253886010363
+        },
+        {
+          "bytes": 2544,
+          "tokens": 783,
+          "bytes_per_token": 3.2490421455938696
+        },
+        {
+          "bytes": 2329,
+          "tokens": 740,
+          "bytes_per_token": 3.1472972972972975
+        },
+        {
+          "bytes": 4225,
+          "tokens": 1107,
+          "bytes_per_token": 3.816621499548329
+        },
+        {
+          "bytes": 1956,
+          "tokens": 632,
+          "bytes_per_token": 3.0949367088607596
+        },
+        {
+          "bytes": 1528,
+          "tokens": 481,
+          "bytes_per_token": 3.176715176715177
+        },
+        {
+          "bytes": 3188,
+          "tokens": 858,
+          "bytes_per_token": 3.7156177156177157
+        },
+        {
+          "bytes": 4324,
+          "tokens": 1248,
+          "bytes_per_token": 3.46474358974359
+        },
+        {
+          "bytes": 13110,
+          "tokens": 3769,
+          "bytes_per_token": 3.478376227115946
+        },
+        {
+          "bytes": 9743,
+          "tokens": 2912,
+          "bytes_per_token": 3.3458104395604398
+        },
+        {
+          "bytes": 934,
+          "tokens": 270,
+          "bytes_per_token": 3.4592592592592593
+        },
+        {
+          "bytes": 3412,
+          "tokens": 985,
+          "bytes_per_token": 3.4639593908629442
+        },
+        {
+          "bytes": 1784,
+          "tokens": 532,
+          "bytes_per_token": 3.3533834586466167
+        },
+        {
+          "bytes": 4753,
+          "tokens": 1448,
+          "bytes_per_token": 3.282458563535912
+        },
+        {
+          "bytes": 2330,
+          "tokens": 805,
+          "bytes_per_token": 2.8944099378881987
+        },
+        {
+          "bytes": 676,
+          "tokens": 201,
+          "bytes_per_token": 3.36318407960199
+        },
+        {
+          "bytes": 8334,
+          "tokens": 2517,
+          "bytes_per_token": 3.311084624553039
+        },
+        {
+          "bytes": 3387,
+          "tokens": 1138,
+          "bytes_per_token": 2.976274165202109
+        },
+        {
+          "bytes": 9507,
+          "tokens": 2726,
+          "bytes_per_token": 3.487527512839325
+        },
+        {
+          "bytes": 8491,
+          "tokens": 2541,
+          "bytes_per_token": 3.3415977961432506
+        },
+        {
+          "bytes": 6693,
+          "tokens": 2486,
+          "bytes_per_token": 2.6922767497988738
+        },
+        {
+          "bytes": 4380,
+          "tokens": 1530,
+          "bytes_per_token": 2.8627450980392157
+        },
+        {
+          "bytes": 16117,
+          "tokens": 5729,
+          "bytes_per_token": 2.8132309303543375
+        },
+        {
+          "bytes": 1141,
+          "tokens": 371,
+          "bytes_per_token": 3.0754716981132075
+        },
+        {
+          "bytes": 4803,
+          "tokens": 1546,
+          "bytes_per_token": 3.106727037516171
+        },
+        {
+          "bytes": 1927,
+          "tokens": 651,
+          "bytes_per_token": 2.9600614439324118
+        },
+        {
+          "bytes": 1769,
+          "tokens": 525,
+          "bytes_per_token": 3.3695238095238094
+        },
+        {
+          "bytes": 14871,
+          "tokens": 4401,
+          "bytes_per_token": 3.3790047716428084
+        },
+        {
+          "bytes": 3502,
+          "tokens": 1070,
+          "bytes_per_token": 3.2728971962616824
+        },
+        {
+          "bytes": 2937,
+          "tokens": 855,
+          "bytes_per_token": 3.4350877192982456
+        },
+        {
+          "bytes": 4146,
+          "tokens": 1228,
+          "bytes_per_token": 3.3762214983713354
+        },
+        {
+          "bytes": 4877,
+          "tokens": 1421,
+          "bytes_per_token": 3.4320900774102743
+        },
+        {
+          "bytes": 905,
+          "tokens": 277,
+          "bytes_per_token": 3.267148014440433
+        },
+        {
+          "bytes": 2635,
+          "tokens": 1676,
+          "bytes_per_token": 1.5721957040572792
+        },
+        {
+          "bytes": 7341,
+          "tokens": 2136,
+          "bytes_per_token": 3.436797752808989
+        },
+        {
+          "bytes": 3213,
+          "tokens": 871,
+          "bytes_per_token": 3.6888633754305395
+        },
+        {
+          "bytes": 3755,
+          "tokens": 1006,
+          "bytes_per_token": 3.7326043737574555
+        },
+        {
+          "bytes": 3723,
+          "tokens": 1123,
+          "bytes_per_token": 3.315227070347284
+        },
+        {
+          "bytes": 10118,
+          "tokens": 2975,
+          "bytes_per_token": 3.4010084033613444
+        },
+        {
+          "bytes": 11486,
+          "tokens": 3504,
+          "bytes_per_token": 3.27796803652968
+        },
+        {
+          "bytes": 5846,
+          "tokens": 2577,
+          "bytes_per_token": 2.2685292976329063
+        },
+        {
+          "bytes": 3239,
+          "tokens": 1135,
+          "bytes_per_token": 2.8537444933920706
+        },
+        {
+          "bytes": 7238,
+          "tokens": 3079,
+          "bytes_per_token": 2.350763234816499
+        },
+        {
+          "bytes": 3984,
+          "tokens": 1324,
+          "bytes_per_token": 3.009063444108761
+        },
+        {
+          "bytes": 13219,
+          "tokens": 4193,
+          "bytes_per_token": 3.1526353446219892
+        },
+        {
+          "bytes": 5724,
+          "tokens": 1608,
+          "bytes_per_token": 3.5597014925373136
+        },
+        {
+          "bytes": 3478,
+          "tokens": 1238,
+          "bytes_per_token": 2.8093699515347335
+        },
+        {
+          "bytes": 2623,
+          "tokens": 812,
+          "bytes_per_token": 3.230295566502463
+        },
+        {
+          "bytes": 5164,
+          "tokens": 1515,
+          "bytes_per_token": 3.408580858085809
+        },
+        {
+          "bytes": 5450,
+          "tokens": 1767,
+          "bytes_per_token": 3.084323712507074
+        },
+        {
+          "bytes": 1261,
+          "tokens": 395,
+          "bytes_per_token": 3.1924050632911394
+        },
+        {
+          "bytes": 4941,
+          "tokens": 1356,
+          "bytes_per_token": 3.643805309734513
+        },
+        {
+          "bytes": 1602,
+          "tokens": 444,
+          "bytes_per_token": 3.608108108108108
+        },
+        {
+          "bytes": 5745,
+          "tokens": 1879,
+          "bytes_per_token": 3.05747738158595
+        },
+        {
+          "bytes": 2589,
+          "tokens": 957,
+          "bytes_per_token": 2.7053291536050157
+        },
+        {
+          "bytes": 11453,
+          "tokens": 3273,
+          "bytes_per_token": 3.4992361747632144
+        },
+        {
+          "bytes": 2290,
+          "tokens": 599,
+          "bytes_per_token": 3.8230383973288813
+        },
+        {
+          "bytes": 6672,
+          "tokens": 1912,
+          "bytes_per_token": 3.489539748953975
+        },
+        {
+          "bytes": 17471,
+          "tokens": 4880,
+          "bytes_per_token": 3.580122950819672
+        },
+        {
+          "bytes": 10431,
+          "tokens": 4113,
+          "bytes_per_token": 2.536105032822757
+        },
+        {
+          "bytes": 833,
+          "tokens": 267,
+          "bytes_per_token": 3.1198501872659175
+        },
+        {
+          "bytes": 1047,
+          "tokens": 319,
+          "bytes_per_token": 3.282131661442006
+        },
+        {
+          "bytes": 11050,
+          "tokens": 3239,
+          "bytes_per_token": 3.411546773695585
+        },
+        {
+          "bytes": 3221,
+          "tokens": 929,
+          "bytes_per_token": 3.4671689989235737
+        },
+        {
+          "bytes": 3826,
+          "tokens": 972,
+          "bytes_per_token": 3.9362139917695473
+        },
+        {
+          "bytes": 947,
+          "tokens": 245,
+          "bytes_per_token": 3.8653061224489798
+        },
+        {
+          "bytes": 1485,
+          "tokens": 523,
+          "bytes_per_token": 2.8393881453154877
+        },
+        {
+          "bytes": 4881,
+          "tokens": 1473,
+          "bytes_per_token": 3.3136456211812626
+        }
+      ]
+    },
+    "owt_32k": {
+      "documents": 200,
+      "source_bytes": 1013416,
+      "tokens": 231259,
+      "bytes_per_token": 4.382168910182955,
+      "bytes_per_second": 974835.1819380185,
+      "estimated_pile_hours": 235.08247436358675,
+      "per_document": [
+        {
+          "bytes": 7488,
+          "tokens": 1579,
+          "bytes_per_token": 4.742241925269158
+        },
+        {
+          "bytes": 1605,
+          "tokens": 360,
+          "bytes_per_token": 4.458333333333333
+        },
+        {
+          "bytes": 1874,
+          "tokens": 374,
+          "bytes_per_token": 5.010695187165775
+        },
+        {
+          "bytes": 1172,
+          "tokens": 270,
+          "bytes_per_token": 4.340740740740741
+        },
+        {
+          "bytes": 1416,
+          "tokens": 354,
+          "bytes_per_token": 4.0
+        },
+        {
+          "bytes": 2207,
+          "tokens": 475,
+          "bytes_per_token": 4.646315789473684
+        },
+        {
+          "bytes": 3303,
+          "tokens": 683,
+          "bytes_per_token": 4.8360175695461205
+        },
+        {
+          "bytes": 2329,
+          "tokens": 537,
+          "bytes_per_token": 4.337057728119181
+        },
+        {
+          "bytes": 3740,
+          "tokens": 748,
+          "bytes_per_token": 5.0
+        },
+        {
+          "bytes": 11912,
+          "tokens": 2679,
+          "bytes_per_token": 4.446435237028742
+        },
+        {
+          "bytes": 7620,
+          "tokens": 1806,
+          "bytes_per_token": 4.219269102990033
+        },
+        {
+          "bytes": 10256,
+          "tokens": 2396,
+          "bytes_per_token": 4.280467445742905
+        },
+        {
+          "bytes": 3013,
+          "tokens": 757,
+          "bytes_per_token": 3.9801849405548215
+        },
+        {
+          "bytes": 1020,
+          "tokens": 236,
+          "bytes_per_token": 4.322033898305085
+        },
+        {
+          "bytes": 1879,
+          "tokens": 389,
+          "bytes_per_token": 4.830334190231363
+        },
+        {
+          "bytes": 25504,
+          "tokens": 5791,
+          "bytes_per_token": 4.404075289241927
+        },
+        {
+          "bytes": 2539,
+          "tokens": 521,
+          "bytes_per_token": 4.873320537428023
+        },
+        {
+          "bytes": 11907,
+          "tokens": 2324,
+          "bytes_per_token": 5.123493975903615
+        },
+        {
+          "bytes": 2661,
+          "tokens": 558,
+          "bytes_per_token": 4.768817204301075
+        },
+        {
+          "bytes": 8204,
+          "tokens": 1796,
+          "bytes_per_token": 4.567928730512249
+        },
+        {
+          "bytes": 1444,
+          "tokens": 338,
+          "bytes_per_token": 4.272189349112426
+        },
+        {
+          "bytes": 1662,
+          "tokens": 338,
+          "bytes_per_token": 4.9171597633136095
+        },
+        {
+          "bytes": 11346,
+          "tokens": 2752,
+          "bytes_per_token": 4.12281976744186
+        },
+        {
+          "bytes": 1418,
+          "tokens": 349,
+          "bytes_per_token": 4.063037249283668
+        },
+        {
+          "bytes": 1039,
+          "tokens": 255,
+          "bytes_per_token": 4.074509803921568
+        },
+        {
+          "bytes": 6220,
+          "tokens": 1526,
+          "bytes_per_token": 4.076015727391874
+        },
+        {
+          "bytes": 2505,
+          "tokens": 1269,
+          "bytes_per_token": 1.9739952718676124
+        },
+        {
+          "bytes": 3180,
+          "tokens": 727,
+          "bytes_per_token": 4.37414030261348
+        },
+        {
+          "bytes": 899,
+          "tokens": 203,
+          "bytes_per_token": 4.428571428571429
+        },
+        {
+          "bytes": 3669,
+          "tokens": 778,
+          "bytes_per_token": 4.715938303341902
+        },
+        {
+          "bytes": 2389,
+          "tokens": 530,
+          "bytes_per_token": 4.507547169811321
+        },
+        {
+          "bytes": 17376,
+          "tokens": 3637,
+          "bytes_per_token": 4.7775639263128955
+        },
+        {
+          "bytes": 9980,
+          "tokens": 2343,
+          "bytes_per_token": 4.259496372172428
+        },
+        {
+          "bytes": 1424,
+          "tokens": 289,
+          "bytes_per_token": 4.927335640138408
+        },
+        {
+          "bytes": 3199,
+          "tokens": 688,
+          "bytes_per_token": 4.649709302325581
+        },
+        {
+          "bytes": 2660,
+          "tokens": 754,
+          "bytes_per_token": 3.5278514588859418
+        },
+        {
+          "bytes": 7577,
+          "tokens": 1613,
+          "bytes_per_token": 4.697458152510849
+        },
+        {
+          "bytes": 4476,
+          "tokens": 897,
+          "bytes_per_token": 4.989966555183947
+        },
+        {
+          "bytes": 1053,
+          "tokens": 250,
+          "bytes_per_token": 4.212
+        },
+        {
+          "bytes": 4788,
+          "tokens": 1083,
+          "bytes_per_token": 4.421052631578948
+        },
+        {
+          "bytes": 1514,
+          "tokens": 334,
+          "bytes_per_token": 4.532934131736527
+        },
+        {
+          "bytes": 875,
+          "tokens": 222,
+          "bytes_per_token": 3.9414414414414414
+        },
+        {
+          "bytes": 3780,
+          "tokens": 904,
+          "bytes_per_token": 4.18141592920354
+        },
+        {
+          "bytes": 4017,
+          "tokens": 835,
+          "bytes_per_token": 4.810778443113772
+        },
+        {
+          "bytes": 1662,
+          "tokens": 408,
+          "bytes_per_token": 4.073529411764706
+        },
+        {
+          "bytes": 1065,
+          "tokens": 237,
+          "bytes_per_token": 4.493670886075949
+        },
+        {
+          "bytes": 4428,
+          "tokens": 1065,
+          "bytes_per_token": 4.157746478873239
+        },
+        {
+          "bytes": 3805,
+          "tokens": 829,
+          "bytes_per_token": 4.589867310012063
+        },
+        {
+          "bytes": 2667,
+          "tokens": 593,
+          "bytes_per_token": 4.497470489038786
+        },
+        {
+          "bytes": 5211,
+          "tokens": 1106,
+          "bytes_per_token": 4.711573236889692
+        },
+        {
+          "bytes": 13138,
+          "tokens": 2876,
+          "bytes_per_token": 4.568150208623088
+        },
+        {
+          "bytes": 3188,
+          "tokens": 696,
+          "bytes_per_token": 4.580459770114943
+        },
+        {
+          "bytes": 3870,
+          "tokens": 925,
+          "bytes_per_token": 4.183783783783784
+        },
+        {
+          "bytes": 4722,
+          "tokens": 1131,
+          "bytes_per_token": 4.175066312997347
+        },
+        {
+          "bytes": 2115,
+          "tokens": 471,
+          "bytes_per_token": 4.490445859872612
+        },
+        {
+          "bytes": 5097,
+          "tokens": 1167,
+          "bytes_per_token": 4.367609254498714
+        },
+        {
+          "bytes": 4962,
+          "tokens": 1125,
+          "bytes_per_token": 4.410666666666667
+        },
+        {
+          "bytes": 3473,
+          "tokens": 741,
+          "bytes_per_token": 4.6869095816464235
+        },
+        {
+          "bytes": 8131,
+          "tokens": 1772,
+          "bytes_per_token": 4.5886004514672685
+        },
+        {
+          "bytes": 1150,
+          "tokens": 285,
+          "bytes_per_token": 4.035087719298246
+        },
+        {
+          "bytes": 1290,
+          "tokens": 307,
+          "bytes_per_token": 4.201954397394137
+        },
+        {
+          "bytes": 1571,
+          "tokens": 338,
+          "bytes_per_token": 4.64792899408284
+        },
+        {
+          "bytes": 2641,
+          "tokens": 543,
+          "bytes_per_token": 4.863720073664825
+        },
+        {
+          "bytes": 3839,
+          "tokens": 785,
+          "bytes_per_token": 4.890445859872611
+        },
+        {
+          "bytes": 1279,
+          "tokens": 295,
+          "bytes_per_token": 4.335593220338983
+        },
+        {
+          "bytes": 5045,
+          "tokens": 1140,
+          "bytes_per_token": 4.425438596491228
+        },
+        {
+          "bytes": 2906,
+          "tokens": 652,
+          "bytes_per_token": 4.457055214723926
+        },
+        {
+          "bytes": 3560,
+          "tokens": 736,
+          "bytes_per_token": 4.836956521739131
+        },
+        {
+          "bytes": 1204,
+          "tokens": 277,
+          "bytes_per_token": 4.346570397111913
+        },
+        {
+          "bytes": 2136,
+          "tokens": 477,
+          "bytes_per_token": 4.477987421383648
+        },
+        {
+          "bytes": 1277,
+          "tokens": 245,
+          "bytes_per_token": 5.2122448979591836
+        },
+        {
+          "bytes": 1688,
+          "tokens": 335,
+          "bytes_per_token": 5.038805970149253
+        },
+        {
+          "bytes": 4816,
+          "tokens": 980,
+          "bytes_per_token": 4.914285714285715
+        },
+        {
+          "bytes": 10450,
+          "tokens": 2465,
+          "bytes_per_token": 4.239350912778905
+        },
+        {
+          "bytes": 81406,
+          "tokens": 17234,
+          "bytes_per_token": 4.72356968782639
+        },
+        {
+          "bytes": 1044,
+          "tokens": 222,
+          "bytes_per_token": 4.702702702702703
+        },
+        {
+          "bytes": 1146,
+          "tokens": 264,
+          "bytes_per_token": 4.340909090909091
+        },
+        {
+          "bytes": 2366,
+          "tokens": 474,
+          "bytes_per_token": 4.991561181434599
+        },
+        {
+          "bytes": 2569,
+          "tokens": 678,
+          "bytes_per_token": 3.7890855457227137
+        },
+        {
+          "bytes": 1864,
+          "tokens": 395,
+          "bytes_per_token": 4.718987341772152
+        },
+        {
+          "bytes": 952,
+          "tokens": 190,
+          "bytes_per_token": 5.010526315789473
+        },
+        {
+          "bytes": 14544,
+          "tokens": 3633,
+          "bytes_per_token": 4.003303055326176
+        },
+        {
+          "bytes": 3910,
+          "tokens": 972,
+          "bytes_per_token": 4.022633744855967
+        },
+        {
+          "bytes": 1181,
+          "tokens": 270,
+          "bytes_per_token": 4.374074074074074
+        },
+        {
+          "bytes": 26879,
+          "tokens": 6727,
+          "bytes_per_token": 3.9956890144195034
+        },
+        {
+          "bytes": 3343,
+          "tokens": 764,
+          "bytes_per_token": 4.37565445026178
+        },
+        {
+          "bytes": 4590,
+          "tokens": 1051,
+          "bytes_per_token": 4.3672692673644145
+        },
+        {
+          "bytes": 1318,
+          "tokens": 298,
+          "bytes_per_token": 4.422818791946309
+        },
+        {
+          "bytes": 14460,
+          "tokens": 3050,
+          "bytes_per_token": 4.740983606557377
+        },
+        {
+          "bytes": 3250,
+          "tokens": 755,
+          "bytes_per_token": 4.304635761589404
+        },
+        {
+          "bytes": 6236,
+          "tokens": 1422,
+          "bytes_per_token": 4.385372714486638
+        },
+        {
+          "bytes": 14575,
+          "tokens": 4145,
+          "bytes_per_token": 3.5162846803377565
+        },
+        {
+          "bytes": 3132,
+          "tokens": 700,
+          "bytes_per_token": 4.474285714285714
+        },
+        {
+          "bytes": 1167,
+          "tokens": 251,
+          "bytes_per_token": 4.649402390438247
+        },
+        {
+          "bytes": 3730,
+          "tokens": 989,
+          "bytes_per_token": 3.7714863498483315
+        },
+        {
+          "bytes": 1084,
+          "tokens": 219,
+          "bytes_per_token": 4.949771689497717
+        },
+        {
+          "bytes": 3769,
+          "tokens": 867,
+          "bytes_per_token": 4.34717416378316
+        },
+        {
+          "bytes": 4552,
+          "tokens": 943,
+          "bytes_per_token": 4.827147401908801
+        },
+        {
+          "bytes": 1902,
+          "tokens": 439,
+          "bytes_per_token": 4.332574031890661
+        },
+        {
+          "bytes": 6289,
+          "tokens": 1424,
+          "bytes_per_token": 4.416432584269663
+        },
+        {
+          "bytes": 3923,
+          "tokens": 816,
+          "bytes_per_token": 4.807598039215686
+        },
+        {
+          "bytes": 9095,
+          "tokens": 2331,
+          "bytes_per_token": 3.901758901758902
+        },
+        {
+          "bytes": 1562,
+          "tokens": 345,
+          "bytes_per_token": 4.527536231884058
+        },
+        {
+          "bytes": 2206,
+          "tokens": 484,
+          "bytes_per_token": 4.5578512396694215
+        },
+        {
+          "bytes": 4758,
+          "tokens": 1031,
+          "bytes_per_token": 4.614936954413191
+        },
+        {
+          "bytes": 3130,
+          "tokens": 753,
+          "bytes_per_token": 4.156706507304117
+        },
+        {
+          "bytes": 6997,
+          "tokens": 1783,
+          "bytes_per_token": 3.924284913067863
+        },
+        {
+          "bytes": 1135,
+          "tokens": 233,
+          "bytes_per_token": 4.871244635193133
+        },
+        {
+          "bytes": 1084,
+          "tokens": 250,
+          "bytes_per_token": 4.336
+        },
+        {
+          "bytes": 5390,
+          "tokens": 1133,
+          "bytes_per_token": 4.757281553398058
+        },
+        {
+          "bytes": 1301,
+          "tokens": 283,
+          "bytes_per_token": 4.597173144876325
+        },
+        {
+          "bytes": 8809,
+          "tokens": 2046,
+          "bytes_per_token": 4.305474095796677
+        },
+        {
+          "bytes": 1798,
+          "tokens": 394,
+          "bytes_per_token": 4.563451776649746
+        },
+        {
+          "bytes": 8224,
+          "tokens": 1870,
+          "bytes_per_token": 4.397860962566845
+        },
+        {
+          "bytes": 6637,
+          "tokens": 1352,
+          "bytes_per_token": 4.909023668639053
+        },
+        {
+          "bytes": 5126,
+          "tokens": 1251,
+          "bytes_per_token": 4.097521982414069
+        },
+        {
+          "bytes": 12578,
+          "tokens": 2970,
+          "bytes_per_token": 4.235016835016835
+        },
+        {
+          "bytes": 1602,
+          "tokens": 341,
+          "bytes_per_token": 4.697947214076247
+        },
+        {
+          "bytes": 4804,
+          "tokens": 968,
+          "bytes_per_token": 4.962809917355372
+        },
+        {
+          "bytes": 1731,
+          "tokens": 379,
+          "bytes_per_token": 4.567282321899736
+        },
+        {
+          "bytes": 7268,
+          "tokens": 1510,
+          "bytes_per_token": 4.813245033112583
+        },
+        {
+          "bytes": 1870,
+          "tokens": 513,
+          "bytes_per_token": 3.645224171539961
+        },
+        {
+          "bytes": 935,
+          "tokens": 229,
+          "bytes_per_token": 4.08296943231441
+        },
+        {
+          "bytes": 1690,
+          "tokens": 416,
+          "bytes_per_token": 4.0625
+        },
+        {
+          "bytes": 992,
+          "tokens": 211,
+          "bytes_per_token": 4.701421800947867
+        },
+        {
+          "bytes": 16311,
+          "tokens": 3846,
+          "bytes_per_token": 4.241029641185648
+        },
+        {
+          "bytes": 840,
+          "tokens": 197,
+          "bytes_per_token": 4.2639593908629445
+        },
+        {
+          "bytes": 1313,
+          "tokens": 303,
+          "bytes_per_token": 4.333333333333333
+        },
+        {
+          "bytes": 2170,
+          "tokens": 466,
+          "bytes_per_token": 4.656652360515022
+        },
+        {
+          "bytes": 2166,
+          "tokens": 505,
+          "bytes_per_token": 4.289108910891089
+        },
+        {
+          "bytes": 1084,
+          "tokens": 233,
+          "bytes_per_token": 4.652360515021459
+        },
+        {
+          "bytes": 1450,
+          "tokens": 420,
+          "bytes_per_token": 3.4523809523809526
+        },
+        {
+          "bytes": 5050,
+          "tokens": 1198,
+          "bytes_per_token": 4.215358931552587
+        },
+        {
+          "bytes": 2544,
+          "tokens": 543,
+          "bytes_per_token": 4.685082872928176
+        },
+        {
+          "bytes": 2329,
+          "tokens": 468,
+          "bytes_per_token": 4.976495726495727
+        },
+        {
+          "bytes": 4225,
+          "tokens": 935,
+          "bytes_per_token": 4.518716577540107
+        },
+        {
+          "bytes": 1956,
+          "tokens": 445,
+          "bytes_per_token": 4.395505617977528
+        },
+        {
+          "bytes": 1528,
+          "tokens": 393,
+          "bytes_per_token": 3.8880407124681935
+        },
+        {
+          "bytes": 3188,
+          "tokens": 704,
+          "bytes_per_token": 4.528409090909091
+        },
+        {
+          "bytes": 4324,
+          "tokens": 999,
+          "bytes_per_token": 4.328328328328328
+        },
+        {
+          "bytes": 13110,
+          "tokens": 2859,
+          "bytes_per_token": 4.585519412381951
+        },
+        {
+          "bytes": 9743,
+          "tokens": 2189,
+          "bytes_per_token": 4.450890817724988
+        },
+        {
+          "bytes": 934,
+          "tokens": 183,
+          "bytes_per_token": 5.103825136612022
+        },
+        {
+          "bytes": 3412,
+          "tokens": 825,
+          "bytes_per_token": 4.135757575757576
+        },
+        {
+          "bytes": 1784,
+          "tokens": 390,
+          "bytes_per_token": 4.574358974358974
+        },
+        {
+          "bytes": 4753,
+          "tokens": 1097,
+          "bytes_per_token": 4.332725615314494
+        },
+        {
+          "bytes": 2330,
+          "tokens": 527,
+          "bytes_per_token": 4.421252371916508
+        },
+        {
+          "bytes": 676,
+          "tokens": 173,
+          "bytes_per_token": 3.907514450867052
+        },
+        {
+          "bytes": 8334,
+          "tokens": 1601,
+          "bytes_per_token": 5.205496564647095
+        },
+        {
+          "bytes": 3387,
+          "tokens": 764,
+          "bytes_per_token": 4.433246073298429
+        },
+        {
+          "bytes": 9507,
+          "tokens": 2230,
+          "bytes_per_token": 4.263228699551569
+        },
+        {
+          "bytes": 8491,
+          "tokens": 1785,
+          "bytes_per_token": 4.756862745098039
+        },
+        {
+          "bytes": 6693,
+          "tokens": 1868,
+          "bytes_per_token": 3.5829764453961457
+        },
+        {
+          "bytes": 4380,
+          "tokens": 937,
+          "bytes_per_token": 4.674493062966915
+        },
+        {
+          "bytes": 16117,
+          "tokens": 4048,
+          "bytes_per_token": 3.98147233201581
+        },
+        {
+          "bytes": 1141,
+          "tokens": 242,
+          "bytes_per_token": 4.714876033057851
+        },
+        {
+          "bytes": 4803,
+          "tokens": 1020,
+          "bytes_per_token": 4.708823529411765
+        },
+        {
+          "bytes": 1927,
+          "tokens": 440,
+          "bytes_per_token": 4.379545454545455
+        },
+        {
+          "bytes": 1769,
+          "tokens": 405,
+          "bytes_per_token": 4.367901234567901
+        },
+        {
+          "bytes": 14871,
+          "tokens": 3300,
+          "bytes_per_token": 4.506363636363637
+        },
+        {
+          "bytes": 3502,
+          "tokens": 729,
+          "bytes_per_token": 4.803840877914952
+        },
+        {
+          "bytes": 2937,
+          "tokens": 702,
+          "bytes_per_token": 4.183760683760684
+        },
+        {
+          "bytes": 4146,
+          "tokens": 939,
+          "bytes_per_token": 4.415335463258786
+        },
+        {
+          "bytes": 4877,
+          "tokens": 1219,
+          "bytes_per_token": 4.000820344544708
+        },
+        {
+          "bytes": 905,
+          "tokens": 204,
+          "bytes_per_token": 4.436274509803922
+        },
+        {
+          "bytes": 2635,
+          "tokens": 1012,
+          "bytes_per_token": 2.6037549407114624
+        },
+        {
+          "bytes": 7341,
+          "tokens": 1484,
+          "bytes_per_token": 4.946765498652291
+        },
+        {
+          "bytes": 3213,
+          "tokens": 746,
+          "bytes_per_token": 4.306970509383378
+        },
+        {
+          "bytes": 3755,
+          "tokens": 805,
+          "bytes_per_token": 4.6645962732919255
+        },
+        {
+          "bytes": 3723,
+          "tokens": 836,
+          "bytes_per_token": 4.45334928229665
+        },
+        {
+          "bytes": 10118,
+          "tokens": 2233,
+          "bytes_per_token": 4.531124048365427
+        },
+        {
+          "bytes": 11486,
+          "tokens": 3008,
+          "bytes_per_token": 3.8184840425531914
+        },
+        {
+          "bytes": 5846,
+          "tokens": 1575,
+          "bytes_per_token": 3.711746031746032
+        },
+        {
+          "bytes": 3239,
+          "tokens": 725,
+          "bytes_per_token": 4.467586206896551
+        },
+        {
+          "bytes": 7238,
+          "tokens": 2150,
+          "bytes_per_token": 3.3665116279069767
+        },
+        {
+          "bytes": 3984,
+          "tokens": 815,
+          "bytes_per_token": 4.888343558282209
+        },
+        {
+          "bytes": 13219,
+          "tokens": 2803,
+          "bytes_per_token": 4.716018551551909
+        },
+        {
+          "bytes": 5724,
+          "tokens": 1055,
+          "bytes_per_token": 5.425592417061611
+        },
+        {
+          "bytes": 3478,
+          "tokens": 860,
+          "bytes_per_token": 4.044186046511628
+        },
+        {
+          "bytes": 2623,
+          "tokens": 567,
+          "bytes_per_token": 4.62610229276896
+        },
+        {
+          "bytes": 5164,
+          "tokens": 1128,
+          "bytes_per_token": 4.578014184397163
+        },
+        {
+          "bytes": 5450,
+          "tokens": 1204,
+          "bytes_per_token": 4.526578073089701
+        },
+        {
+          "bytes": 1261,
+          "tokens": 285,
+          "bytes_per_token": 4.424561403508772
+        },
+        {
+          "bytes": 4941,
+          "tokens": 1122,
+          "bytes_per_token": 4.403743315508021
+        },
+        {
+          "bytes": 1602,
+          "tokens": 387,
+          "bytes_per_token": 4.1395348837209305
+        },
+        {
+          "bytes": 5745,
+          "tokens": 1185,
+          "bytes_per_token": 4.848101265822785
+        },
+        {
+          "bytes": 2589,
+          "tokens": 618,
+          "bytes_per_token": 4.189320388349515
+        },
+        {
+          "bytes": 11453,
+          "tokens": 2666,
+          "bytes_per_token": 4.2959489872468115
+        },
+        {
+          "bytes": 2290,
+          "tokens": 497,
+          "bytes_per_token": 4.607645875251509
+        },
+        {
+          "bytes": 6672,
+          "tokens": 1508,
+          "bytes_per_token": 4.424403183023872
+        },
+        {
+          "bytes": 17471,
+          "tokens": 4168,
+          "bytes_per_token": 4.191698656429942
+        },
+        {
+          "bytes": 10431,
+          "tokens": 2684,
+          "bytes_per_token": 3.8863636363636362
+        },
+        {
+          "bytes": 833,
+          "tokens": 181,
+          "bytes_per_token": 4.602209944751381
+        },
+        {
+          "bytes": 1047,
+          "tokens": 221,
+          "bytes_per_token": 4.737556561085973
+        },
+        {
+          "bytes": 11050,
+          "tokens": 2483,
+          "bytes_per_token": 4.450261780104712
+        },
+        {
+          "bytes": 3221,
+          "tokens": 696,
+          "bytes_per_token": 4.627873563218391
+        },
+        {
+          "bytes": 3826,
+          "tokens": 839,
+          "bytes_per_token": 4.560190703218117
+        },
+        {
+          "bytes": 947,
+          "tokens": 220,
+          "bytes_per_token": 4.304545454545455
+        },
+        {
+          "bytes": 1485,
+          "tokens": 354,
+          "bytes_per_token": 4.194915254237288
+        },
+        {
+          "bytes": 4881,
+          "tokens": 991,
+          "bytes_per_token": 4.925327951564077
+        }
+      ]
+    }
+  }
+}

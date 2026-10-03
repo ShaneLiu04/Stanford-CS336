@@ -1,0 +1,5 @@
+[
+  {"name": "batch-128-x2", "overrides": {"batch_size": 128, "gradient_accumulation_steps": 2, "max_steps": 5000, "warmup_steps": 150, "max_lr": 0.0055, "min_lr": 0.00055, "eval_interval": 100, "save_checkpoints": true, "checkpoint_interval": 5000}},
+  {"name": "batch-64-x4", "overrides": {"batch_size": 64, "gradient_accumulation_steps": 4, "max_steps": 5000, "warmup_steps": 150, "max_lr": 0.0055, "min_lr": 0.00055, "eval_interval": 100, "save_checkpoints": true, "checkpoint_interval": 5000}},
+  {"name": "batch-32-x8", "overrides": {"batch_size": 32, "gradient_accumulation_steps": 8, "max_steps": 5000, "warmup_steps": 150, "max_lr": 0.0055, "min_lr": 0.00055, "eval_interval": 100, "save_checkpoints": true, "checkpoint_interval": 5000}}
+]

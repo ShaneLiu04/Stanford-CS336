@@ -1,0 +1,32 @@
+[
+  {
+    "name": "baseline",
+    "overrides": {"max_steps": 4883, "max_lr": 0.002, "min_lr": 0.0002}
+  },
+  {
+    "name": "no-rmsnorm-base-lr",
+    "overrides": {"max_steps": 4883, "remove_rmsnorm": true, "max_lr": 0.002, "min_lr": 0.0002}
+  },
+  {
+    "name": "no-rmsnorm-retuned",
+    "overrides": {"max_steps": 4883, "remove_rmsnorm": true, "max_lr": 0.0005, "min_lr": 0.00005}
+  },
+  {
+    "name": "post-norm",
+    "overrides": {"max_steps": 4883, "use_post_norm": true, "max_lr": 0.001, "min_lr": 0.0001}
+  },
+  {
+    "name": "no-rope",
+    "overrides": {"max_steps": 4883, "rope_theta": null, "max_lr": 0.002, "min_lr": 0.0002}
+  },
+  {
+    "name": "silu-ffn",
+    "overrides": {
+      "max_steps": 4883,
+      "ffn_type": "silu",
+      "d_ff": 2048,
+      "max_lr": 0.002,
+      "min_lr": 0.0002
+    }
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "actual-batch-1",
+    "overrides": {"batch_size": 1, "max_steps": 300, "max_lr": 0.00035, "min_lr": 0.000035}
+  },
+  {
+    "name": "actual-batch-8",
+    "overrides": {"batch_size": 8, "max_steps": 300, "max_lr": 0.001, "min_lr": 0.0001}
+  },
+  {
+    "name": "actual-batch-16",
+    "overrides": {"batch_size": 16, "max_steps": 300, "max_lr": 0.0014, "min_lr": 0.00014}
+  },
+  {
+    "name": "actual-batch-32",
+    "overrides": {"batch_size": 32, "max_steps": 300, "max_lr": 0.002, "min_lr": 0.0002}
+  },
+  {
+    "name": "actual-batch-64",
+    "overrides": {"batch_size": 64, "max_steps": 300, "max_lr": 0.0028, "min_lr": 0.00028}
+  },
+  {
+    "name": "actual-batch-128",
+    "overrides": {"batch_size": 128, "max_steps": 300, "max_lr": 0.004, "min_lr": 0.0004}
+  },
+  {
+    "name": "edge-lr-1e-2",
+    "overrides": {"batch_size": 32, "max_steps": 500, "max_lr": 0.01, "min_lr": 0.001}
+  },
+  {
+    "name": "edge-lr-3e-2",
+    "overrides": {"batch_size": 32, "max_steps": 500, "max_lr": 0.03, "min_lr": 0.003}
+  },
+  {
+    "name": "edge-lr-1e-1",
+    "overrides": {"batch_size": 32, "max_steps": 500, "max_lr": 0.1, "min_lr": 0.01}
+  }
+]

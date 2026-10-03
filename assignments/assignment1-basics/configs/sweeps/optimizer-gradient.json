@@ -1,0 +1,9 @@
+[
+  {"name": "clip-0.5", "overrides": {"max_grad_norm": 0.5, "eval_interval": 50, "save_checkpoints": false}},
+  {"name": "clip-2.0", "overrides": {"max_grad_norm": 2.0, "eval_interval": 50, "save_checkpoints": false}},
+  {"name": "clip-effectively-off", "overrides": {"max_grad_norm": 1000.0, "eval_interval": 50, "save_checkpoints": false}},
+  {"name": "weight-decay-0", "overrides": {"weight_decay": 0.0, "eval_interval": 50, "save_checkpoints": false}},
+  {"name": "beta2-0.99", "overrides": {"beta2": 0.99, "eval_interval": 50, "save_checkpoints": false}},
+  {"name": "high-lr-clip-0.5", "overrides": {"max_steps": 500, "max_lr": 0.03, "min_lr": 0.003, "max_grad_norm": 0.5, "eval_interval": 25, "save_checkpoints": false}},
+  {"name": "high-lr-clip-1.0", "overrides": {"max_steps": 500, "max_lr": 0.03, "min_lr": 0.003, "max_grad_norm": 1.0, "eval_interval": 25, "save_checkpoints": false}}
+]

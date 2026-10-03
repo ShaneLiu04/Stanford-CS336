@@ -1,0 +1,22 @@
+{
+  "000-batch-128-x2": {
+    "samples": 10,
+    "mean_generated_tokens": 119.8,
+    "mean_trigram_repetition_rate": 0.04957808967709959
+  },
+  "000-batch-512-sqrt-lr": {
+    "samples": 10,
+    "mean_generated_tokens": 104.7,
+    "mean_trigram_repetition_rate": 0.050084042237953916
+  },
+  "000-tied-small-init-full": {
+    "samples": 10,
+    "mean_generated_tokens": 114.9,
+    "mean_trigram_repetition_rate": 0.0330914164844736
+  },
+  "001-batch-512-linear-lr": {
+    "samples": 10,
+    "mean_generated_tokens": 126.6,
+    "mean_trigram_repetition_rate": 0.05120729082593489
+  }
+}

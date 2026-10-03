@@ -1,0 +1,7 @@
+[
+  {"name": "lr-1e-3", "overrides": {"max_lr": 0.001, "min_lr": 0.0001}},
+  {"name": "lr-1.5e-3", "overrides": {"max_lr": 0.0015, "min_lr": 0.00015}},
+  {"name": "lr-2e-3", "overrides": {"max_lr": 0.002, "min_lr": 0.0002}},
+  {"name": "lr-3e-3", "overrides": {"max_lr": 0.003, "min_lr": 0.0003}},
+  {"name": "lr-5e-3", "overrides": {"max_lr": 0.005, "min_lr": 0.0005}}
+]

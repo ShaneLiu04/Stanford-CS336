@@ -1,0 +1,16 @@
+[
+  {
+    "name": "batch-128-full",
+    "overrides": {
+      "batch_size": 128,
+      "gradient_accumulation_steps": 1,
+      "max_steps": 10000,
+      "warmup_steps": 250,
+      "max_lr": 0.004,
+      "min_lr": 0.0004,
+      "eval_interval": 100,
+      "save_checkpoints": false,
+      "seed": 42
+    }
+  }
+]

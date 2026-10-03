@@ -1,0 +1,2 @@
+run,best_val_loss,best_step,tokens_seen,elapsed_seconds,last_tokens_per_second,peak_memory_mib
+owt-final,4.1155284404754635,36750,301064192,3120.744124347344,100243.30741425048,5700.42919921875

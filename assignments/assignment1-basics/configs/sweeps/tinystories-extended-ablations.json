@@ -1,0 +1,36 @@
+[
+  {
+    "name": "post-norm-full",
+    "overrides": {
+      "max_steps": 40000,
+      "warmup_steps": 500,
+      "max_lr": 0.001,
+      "min_lr": 0.0001,
+      "use_post_norm": true,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "no-rope-full",
+    "overrides": {
+      "max_steps": 40000,
+      "warmup_steps": 500,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "rope_theta": null,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "silu-ffn-full",
+    "overrides": {
+      "max_steps": 40000,
+      "warmup_steps": 500,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "ffn_type": "silu",
+      "d_ff": 2048,
+      "save_checkpoints": false
+    }
+  }
+]

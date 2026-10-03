@@ -1,0 +1,38 @@
+{
+  "tinystories": {
+    "tinystories_10k": {
+      "documents": 10,
+      "source_bytes": 7667,
+      "tokens": 1889,
+      "bytes_per_token": 4.058761249338274,
+      "bytes_per_second": 386986.4075022421,
+      "estimated_pile_hours": 592.1827284472231
+    },
+    "owt_32k": {
+      "documents": 10,
+      "source_bytes": 7667,
+      "tokens": 1941,
+      "bytes_per_token": 3.950025759917568,
+      "bytes_per_second": 316224.8413109059,
+      "estimated_pile_hours": 724.6953329683375
+    }
+  },
+  "owt": {
+    "tinystories_10k": {
+      "documents": 10,
+      "source_bytes": 27798,
+      "tokens": 8990,
+      "bytes_per_token": 3.09210233592881,
+      "bytes_per_second": 321896.1471414405,
+      "estimated_pile_hours": 711.9273365082289
+    },
+    "owt_32k": {
+      "documents": 10,
+      "source_bytes": 27798,
+      "tokens": 6232,
+      "bytes_per_token": 4.4605263157894735,
+      "bytes_per_second": 322262.2544605405,
+      "estimated_pile_hours": 711.1185486190008
+    }
+  }
+}

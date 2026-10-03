@@ -1,0 +1,13 @@
+[
+  {"name": "baseline-seed42", "overrides": {"seed": 42}},
+  {"name": "baseline-seed43", "overrides": {"seed": 43}},
+  {"name": "baseline-seed44", "overrides": {"seed": 44}},
+  {"name": "lr-1e-4", "overrides": {"max_lr": 0.0001, "min_lr": 0.00001}},
+  {"name": "lr-6e-4", "overrides": {"max_lr": 0.0006, "min_lr": 0.00006}},
+  {"name": "effective-batch-16", "overrides": {"batch_size": 16}},
+  {"name": "effective-batch-64", "overrides": {"batch_size": 32, "gradient_accumulation_steps": 2}},
+  {"name": "no-rmsnorm", "overrides": {"remove_rmsnorm": true}},
+  {"name": "post-norm", "overrides": {"use_post_norm": true}},
+  {"name": "no-rope", "overrides": {"rope_theta": null}},
+  {"name": "silu", "overrides": {"ffn_type": "silu"}}
+]

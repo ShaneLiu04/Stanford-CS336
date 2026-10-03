@@ -1,0 +1,4 @@
+[
+  {"name": "batch-512-sqrt-lr", "overrides": {"batch_size": 512, "max_steps": 2500, "warmup_steps": 125, "max_lr": 0.0079, "min_lr": 0.00079, "eval_interval": 50, "save_checkpoints": true, "checkpoint_interval": 2500, "seed": 42}},
+  {"name": "batch-512-linear-lr", "overrides": {"batch_size": 512, "max_steps": 2500, "warmup_steps": 125, "max_lr": 0.011, "min_lr": 0.0011, "eval_interval": 50, "save_checkpoints": true, "checkpoint_interval": 2500, "seed": 42}}
+]

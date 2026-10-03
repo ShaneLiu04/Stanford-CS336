@@ -1,0 +1,4 @@
+[
+  {"name": "tied-small-init-seed-123", "overrides": {"batch_size": 32, "max_steps": 40000, "warmup_steps": 500, "max_lr": 0.002, "min_lr": 0.0002, "eval_interval": 200, "tie_embeddings": true, "tied_embedding_init_std": 0.02, "save_checkpoints": false, "seed": 123}},
+  {"name": "tied-small-init-seed-2026", "overrides": {"batch_size": 32, "max_steps": 40000, "warmup_steps": 500, "max_lr": 0.002, "min_lr": 0.0002, "eval_interval": 200, "tie_embeddings": true, "tied_embedding_init_std": 0.02, "save_checkpoints": false, "seed": 2026}}
+]

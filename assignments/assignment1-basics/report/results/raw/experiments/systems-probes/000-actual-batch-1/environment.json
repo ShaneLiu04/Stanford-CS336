@@ -1,0 +1,9 @@
+{
+  "python": "3.12.14",
+  "pytorch": "2.11.0+cu130",
+  "platform": "Linux-5.15.0-78-generic-x86_64-with-glibc2.35",
+  "cuda_available": true,
+  "cuda_version": "13.0",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 4080 SUPER"
+}

@@ -1,0 +1,29 @@
+[
+  {"name": "lr-1e-4", "overrides": {"max_lr": 0.0001, "min_lr": 0.00001}},
+  {"name": "lr-2e-4", "overrides": {"max_lr": 0.0002, "min_lr": 0.00002}},
+  {"name": "lr-3e-4", "overrides": {"max_lr": 0.0003, "min_lr": 0.00003}},
+  {"name": "lr-5e-4", "overrides": {"max_lr": 0.0005, "min_lr": 0.00005}},
+  {"name": "lr-1e-3", "overrides": {"max_lr": 0.001, "min_lr": 0.0001}},
+  {
+    "name": "batch-8",
+    "overrides": {"batch_size": 8, "max_steps": 4883, "max_lr": 0.00015, "min_lr": 0.000015}
+  },
+  {
+    "name": "batch-16",
+    "overrides": {"batch_size": 16, "max_steps": 2442, "max_lr": 0.0002, "min_lr": 0.00002}
+  },
+  {
+    "name": "batch-32",
+    "overrides": {"batch_size": 32, "max_steps": 1221, "max_lr": 0.0003, "min_lr": 0.00003}
+  },
+  {
+    "name": "batch-64",
+    "overrides": {
+      "batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "max_steps": 611,
+      "max_lr": 0.0004,
+      "min_lr": 0.00004
+    }
+  }
+]

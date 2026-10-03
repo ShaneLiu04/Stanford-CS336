@@ -1,0 +1,4 @@
+[
+  {"name": "batch-512-seed-123", "overrides": {"batch_size": 512, "max_steps": 2500, "warmup_steps": 125, "max_lr": 0.011, "min_lr": 0.0011, "eval_interval": 50, "save_checkpoints": false, "seed": 123}},
+  {"name": "batch-512-seed-2026", "overrides": {"batch_size": 512, "max_steps": 2500, "warmup_steps": 125, "max_lr": 0.011, "min_lr": 0.0011, "eval_interval": 50, "save_checkpoints": false, "seed": 2026}}
+]

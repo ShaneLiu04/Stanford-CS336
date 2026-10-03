@@ -1,0 +1,5 @@
+device=NVIDIA GeForce RTX 4080 SUPER
+{"step": 0, "train_loss": 5.143399238586426, "val_loss": 5.182712078094482, "lr": 0.0, "elapsed_seconds": 0.5652342233806849, "tokens_seen": 256}
+{"step": 1, "train_loss": 5.177389144897461, "val_loss": 5.177206516265869, "lr": 0.0003, "elapsed_seconds": 0.6042685750871897, "tokens_seen": 512}
+{"step": 2, "train_loss": 5.228531360626221, "val_loss": 5.185035705566406, "lr": 0.00016499999999999997, "elapsed_seconds": 0.6540929190814495, "tokens_seen": 768}
+{'steps': 3, 'best_val_loss': 5.177206516265869, 'elapsed_seconds': 0.6603782288730145, 'tokens_seen': 768}

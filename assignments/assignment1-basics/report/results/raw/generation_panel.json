@@ -1,0 +1,386 @@
+{
+  "records": [
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 0.7,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a boy named Tim. Tim loved to run and play outside. One day, Tim found a big, shiny gem. He was very happy. He showed the gem to his friend, Sam.\n\"Look, Sam! I found a gem!\" said Tim. Sam looked at the gem and said, \"Wow! That's so cool!\"\nTim and Sam decided to take the gem to a place called a marriage. They asked their moms and dads to come. The moms and dads said, \"Yes, you can have the gem.\"\nOn the day of the marriage, Tim and Sam put the gem on the",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.023809523809523836,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 0.7,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. The dragon was lost and sad. Lily wanted to help the dragon. She asked the dragon, \"What can we do?\" The dragon replied, \"I need to find my family.\"\nLily and the dragon looked for the dragon's family. They asked people if they knew where the dragon's family was. Finally, they found the dragon's family. The dragon was so happy! He thanked Lily and the princess for their help.\nThe dragon was very thankful to Lily for helping him. He said, \"Thank you, Lily. You are a very good friend.\" Lily felt happy that she could help the dragon. From that",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.0714285714285714,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 0.7,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn more. He asked his friend, the big cat, \"How do I learn to read?\"\nThe big cat said, \"You can read to me, but you must learn to read.\" The little robot was very happy and started to read. But then, something unexpected happened. The big cat took off a mask and said, \"I am a magic cat! I can help you read to me.\"\nThe little robot was very surprised. He never thought a cat would be a magic cat. But the magic cat was very kind and wanted to help. The magic cat gave the little robot a big, shiny sticker. The little",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.04761904761904767,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 0.7,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were very sleepy. They had so much fun playing with their toys. They forgot about their toy trucks and their toys. They were happy to be friends again.\n",
+      "generated_tokens": 33,
+      "trigram_repetition_rate": 0.06451612903225812,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 0.7,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox was staring at it. The fox wanted to touch the moon, so he started to climb up the tree.\nThe fox got to the top, but the moon was still too far away. Then, the fox realized he was too close to the sun. He felt scared and wished he could touch the moon.\nThe fox thought he could not reach the moon, but he was brave. He climbed back down the tree and went back to his home. He was happy and safe. From that day on, the fox knew that even when things were scary, he could always find a way to reach them.\n",
+      "generated_tokens": 124,
+      "trigram_repetition_rate": 0.040983606557377095,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 1.0,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a boy named Tim. Tim loved to run fast. One day, he was running so fast that he tripped and fell. His knee was hurt. Tim felt sad for his friend.\nHis mom saw him and wanted to help. She said, \"Tim, let's have a drink of water.\" Tim was happy and followed his mom to the store. They went in together to find some water. Tim's mom was good at walking, so she could catch many. Tim's knee got a little better, and he was ready to run.\nAfter a while, Tim's mom took him to the store. They",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.03968253968253965,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 1.0,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. The dragon was hurt and sad. Lily took care of the dragon and made it feel better. The dragon said, \"Thank you, Lily. You are a good friend.\" The dragon was happy and it hugged Lily back. The dragon and Lily became best friends.\n",
+      "generated_tokens": 55,
+      "trigram_repetition_rate": 0.05660377358490565,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 1.0,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn more. He asked his friend, the big train, \"How does this radio make you want to learn?\" The big train said, \"I don't know, but I like to listen to my stories.\"\nThe little robot practiced every day. He listened to the big train and the people who lived in the town. They were happy and played with the little robot every day. The little robot learned more and more about the world. And they lived happily ever after.\n",
+      "generated_tokens": 96,
+      "trigram_repetition_rate": 0.021276595744680882,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 1.0,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were in their room looking for a new place to play. They saw a big box in the corner of their room. They ran to the box and opened it. They saw a hanger with many colors. They wondered what it was for.\n\"Let's play with the hanger!\" Tom said.\n\"Or a hat!\" Mia said.\n\"Let's dress up with the hanger!\" Tom said.\nThey took the hanger out of the box and put it on the floor. They ran to the hanger and tied it to the door. They turned it and came back. They wanted to show it to their mom.\nBut",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.13492063492063489,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-512-sqrt-lr",
+      "temperature": 1.0,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox was pushing himself. So every night it stood up and, before long, Jack brought it down to his garage.\nJack's friends were very impressed by how soft his chair was. They told him that it was good to join the moon, but he had to do it once.\nEvery night, Jack and his friends would jog together to the moon. Jack was always so jolly with his chair as he left the woods. And now, he loved to jog and dive and explore!\n",
+      "generated_tokens": 99,
+      "trigram_repetition_rate": 0.0,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 0.7,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a boy named Tim. Tim loved to run and play outside. One day, Tim found a big, shiny mineral. He was very happy.\nTim showed the mineral to his friend, Sam. Sam said, \"Wow, that's a big mineral! Let's play with it.\" They played with the mineral all day. They threw it, rolled it, and even tried to make it into a boat.\nAs they played, Tim's mom called him. She said, \"Time to come inside, boys!\" Tim and Sam put the mineral back in the box. They knew they had to be good friends and",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.007936507936507908,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 0.7,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. The dragon was sad because it could not fly. Lily wanted to help the dragon. She said, \"Don't be sad, dragon. I will help you fly.\"\nLily asked her mom for help. Her mom tried to make the dragon fly. They put the dragon on a big rock. The dragon tried to fly, but it was still too heavy. Lily and her mom were sad.\nThe next day, Lily's mom told her that she could not fly. But Lily was happy. She still wanted to help the dragon. Her mom said, \"Lily, if you help the dragon, I will help you.\"",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.09523809523809523,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 0.7,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn how to fix things. He asked his friend, the wise old owl, to teach him how to fix things.\nThe wise old owl listened to the little robot. He told the little robot to stand on his back legs and use his arms to push the buttons. The little robot tried to use his arms to fix the buttons, but he couldn't.\nThe little robot was sad. He wanted to learn how to fix his toy car. The wise old owl saw the little robot was sad. The owl told the little robot to try again. This time, the little robot tried to fix the toy car. He was happy and",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.17460317460317465,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 0.7,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were out in the garden. They saw a big pile of leaves and some sticks. They decided to make a fort with the leaves. They worked hard and had fun.\nBut then they heard a loud noise. It was a real dragon. The dragon was angry and hungry. It saw the leaves and sticks and fire. It thought they were food. It came closer and closer.\nTom and Mia were scared. They knew they had to escape. They grabbed their bucket and their shovel. They ran away from the dragon. They hid under a tree.\nThe dragon saw them. It was hungry and angry. It wanted to eat",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.007936507936507908,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 0.7,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox was not looking. The moon was sad because the fox did not give up. The moon wanted to help the fox.\nThe moon said, \"I will find a way to help you. Then you will not be lonely.\" The fox thought about it and said, \"You are right, moon. I am not lonely anymore.\"\nThe moon went on a journey. It met a bird, a squirrel, and a squirrel. They all worked together to help the fox find his way back to the tree. The fox was happy, and the moon was happy too. They became best friends forever.\n",
+      "generated_tokens": 122,
+      "trigram_repetition_rate": 0.04166666666666663,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 1.0,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a boy named Tim. Tim loved to stretch his arms and legs every day. He also loved to play with his toy cars. One day, he was playing with his toy car and had a big fall.\nTim started to cry. His mom heard him and came outside. She told him to relax and not play with the toy car near the fall. She went outside to help him feel better. Tim's mom was good at using the toy car from the fall. Tim's mom put a band-aid on his knee to help it heal.\nAfter a few days, Tim's knee felt better. He learned",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.03968253968253965,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 1.0,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. The dragon was hurt and sad. Lily wanted to help the dragon, so she asked, \"Why are you hurt, little dragon?\" The dragon said, \"I hurt my wing. I can't fly to the other dragons.\"\nLily wanted to help the dragon. She thought for a moment and then said, \"Don't worry, I will help you heal your wing. Then you can fly and be with the other dragons.\" The dragon was very happy. It thanked Lily and they became good friends.\nBut one day, the dragon hurt its wing. It could not fly well. Lily was sad for her friend. They",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.05555555555555558,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 1.0,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn more. He asked his friend, the wise owl, \"How do I know I grow up?\" The owl said, \"When you grow up, you will be the brightest lemon tree in the forest.\"\nThe little boy was very happy. He had learned many things from the wise owl. Every day, he would eat apples, bananas, and carrots. The owl liked to help him grow big and strong.\nOne day, he found a beautiful red apple. The wise owl showed it to the little boy. \"Look at this apple! It has a red color. It smells good,\" said the wise owl.\nThe little",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.03968253968253965,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 1.0,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were out in the park. They saw a big pile of leaves and some birds. They decided to march with the leaves as they ran. They made loud noises as they moved the leaves from the leaves.\nSuddenly, they saw a big, furry dog running towards them. The dog was brown and furry and had a collar. It was the dog's owner. He was looking for Max and looking for his owner.\n\"Hey, dog!\" Tom shouted, seeing the dog. \"We are out of the leaves!\"\nThe dog stopped barking and ran to Tom and Mia. He wagged his tail and licked their faces. He was",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.015873015873015928,
+      "tie_embeddings": false
+    },
+    {
+      "run": "001-batch-512-linear-lr",
+      "temperature": 1.0,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox planted it. \nThe fox was scared, but he tried his best. He brought it down to his garage and was about to eat it when he heard a soft voice.\n\"It is not safe to eat its oat,\" the voice said. \nThe fox looked up and saw a tiny mouse. The mouse said, \"I'm sorry, I wanted to be friends. I won't eat your oat.\" \nThe fox was very happy to find someone so wise, and they became friends. From that day on, the fox decided to be nice and never be scared of new things.\n",
+      "generated_tokens": 120,
+      "trigram_repetition_rate": 0.03389830508474578,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 0.7,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a boy named Tim. Tim loved to run and play outside. One day, Tim found a big stick. He wanted to show his friends the stick.\nTim went to his friend, Sam, and said, \"Look at my stick. I found a big stick. Let's play with it.\" Sam was excited and said, \"Yes, let's play!\" They played with the stick, running and laughing.\nBut then, Tim tripped and fell. The stick broke into many pieces. Tim started to cry. Sam felt bad and said, \"I'm sorry, Tim. We should be more careful.\" They",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.05555555555555558,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 0.7,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. The dragon was sad because it lost its toy. Lily wanted to help the dragon. She said, \"Don't be sad, dragon. I will help you find your toy.\"\nThey looked and looked, and finally, they found the dragon's toy under a bush. The dragon was so happy! Lily said, \"Thank you, dragon, for helping me.\" The dragon smiled and said, \"You're welcome. Remember, I am a prince.\"\nLily and the dragon became good friends. They played together every day. The dragon was not sad anymore. It had a new friend, and Lily was happy to have a",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.04761904761904767,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 0.7,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn more. He asked his friend, the big dog, \"How do I learn to run fast?\" The big dog said, \"You need to practice every day. Then you can run fast.\"\nThe little robot practiced every day. He ran fast and ran fast. He wanted to be the fastest and faster. One day, he saw a little girl. She was sad. The big dog stopped running and asked, \"Why are you sad?\" The little robot said, \"I want to run fast like you, but I am too small.\"\nThe big dog thought for a moment. Then, he had an idea. He asked",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.04761904761904767,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 0.7,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were in their room. They were bored and sad. They wanted to have fun, but they did not know how to get the sun off. They looked at the calendar on the wall, but it was too high. They saw a big window with a bright light on the front. They had an idea.\nThey ran to the window and opened it. They threw the ball at the window and watched it fall. They hoped they would catch it. But the window was too high and too fast. They could not get it back.\nThey tried to get the ball, but they could not. They tried to jump, but they",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.04761904761904767,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 0.7,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox said, \"Let's do something nice for the moon, it will come back.\"\nThe moon agreed, and together they went to the sky. The fox waved goodbye to the moon and said, \"Thank you for the nice night!\" \nThe moon smiled and said, \"You're welcome! We can be friends forever!\" \nAnd so, the fox and the moon stayed friends forever.\n",
+      "generated_tokens": 80,
+      "trigram_repetition_rate": 0.038461538461538436,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 1.0,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a rabbit named Bob. Bob loved to stretch his big body all day long. One day, while he was stretching, he saw a bird with a feather in its beak. The bird tried to take Bob's feather, but Bob did not want to give it to the bird.\nBob began to worry about the feather. He thought it was not fair to give the feather to the bird. But then, a squirrel named Sue saw Bob and the bird with the feather. Sue wanted to help Bob. She thought of a plan to take the feather away from Bob.\nSue brought Bob some of her own toys. Bob",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.023809523809523836,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 1.0,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. \"This is my dragon,\" said Lily. The dragon looked sad. Lily wanted to help the dragon. \"Don't be sad, Mr. Dragon,\" said Lily. \"We can be friends and play together.\" The dragon was happy and let Lily play with him.\nThe princess and the dragon became best friends. They played together every day. They laughed and had fun. The dragon was never sad or alone again. And from that day on, Lily and the dragon were the best of friends.\n",
+      "generated_tokens": 103,
+      "trigram_repetition_rate": 0.04950495049504955,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 1.0,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn more. He asked his friend, the yellow butterfly, \"How do I learn this country?\"\nThe yellow butterfly said, \"Let's make a plan to turn the dark cloud into a castle.\"\nSo the two robots started their plan. They found a big stick and used it to make the shield more colorful. The yellow butterfly helped the soldiers to turn around and become a beautiful castle. The flowers grew big and pretty, and they were happy.\nNow, the little yellow robot and his friends play with the green butterfly every day. They have lots of fun and help others, and the yellow butterfly can stay very colorful.\n",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.007936507936507908,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 1.0,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were in their room playing. They were bored. They wanted to do something new. They looked around the room. They saw the bookshelf. They had a question.\n\"What is stronger?\" Tom asked.\n\"Fifferent means greedy and mean,\" Mia said.\nThey pointed at the bookshelf. They were angry and bored. They saw a book with pictures of animals. They thought it was cool.\n\"Can we read this book?\" Tom asked.\n\"No, it is too big. It is too loud and angry,\" Mia said.\nThey turned around. They saw a man in the living room.",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.13492063492063489,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-batch-128-x2",
+      "temperature": 1.0,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox said, \"Let's do something crazy fun!\" They thought a second, and then it changed. Suddenly, the fox got up and said, \"Remember what is on the moon? I can climb to the moon!\"\nThe bird thought for a moment and said, \"The moon looks very silly. Let's do something else and I will mind it!\"\nSo the fox and the bird spent the rest of the day playing in the moon, exploring new places and having fun. The star continued to twinkle in the sky and the bird flew above. They were the best of friends!\n",
+      "generated_tokens": 119,
+      "trigram_repetition_rate": 0.042735042735042694,
+      "tie_embeddings": false
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 0.7,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a boy named Tim. Tim loved to travel and play outside. One day, Tim found a filthy toy in his yard. It was a small car that he had never seen before.\nTim picked up the car and started to play with it. He pushed it around and made it go fast. Then, he made the car go on the road. Tim was having so much fun!\nBut then, the car hit a big tree and broke. Tim was very sad. He knew he should have been more careful with the car. The car was not fun anymore. Tim learned that he should be more careful with his",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.015873015873015928,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 0.7,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. The dragon was hurt and sad. Lily wanted to help the dragon. She said, \"Don't worry, dragon. I will help you.\" Lily took the dragon to her mom.\nLily's mom helped the dragon feel better. She gave the dragon a big hug. Then, something unexpected happened. The dragon started to move! It was not a dragon, but a nice dragon. The dragon thanked Lily and her mom for helping him. They all became good friends.\n",
+      "generated_tokens": 97,
+      "trigram_repetition_rate": 0.021052631578947323,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 0.7,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn more. So, he asked the big tree, \"Can you teach me to talk to the big tree?\" The big tree said, \"Yes, I will help you.\"\nThe big tree taught the little robot how to talk. They talked and played together. The little robot was very happy. He learned many new things. The big tree was happy too.\nBut one day, the big tree was very angry. It did not want to talk to the little robot. The big tree and the little robot tried to talk to the angry tree. But the angry tree was too angry. The angry tree fell down, and the little",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.11111111111111116,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 0.7,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were sad. They had no more tea to play with. They looked out the window and saw a big, red truck coming to their house. It had a long hose and a big bag.\n\"Let's go outside and have some tea!\" Tom said.\n\"OK, but first we have to finish our tea!\" Mia said.\nThey ran outside with their cups and spoons. They found a nice spot under a tree and put their cups and cups in the cups. They drank the tea and smiled.\nBut then they heard a loud noise. It was the truck driver. He had a big truck and a loud noise",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.031746031746031744,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 0.7,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox was playing in the park. He was very happy and loved to make the children smile.\nOne day, the fox decided to try something new. He hopped around the park, looking for something special to make it special. He saw a big tree and thought, maybe there was something special in the tree.\nHe hopped up and he looked up. He saw something shiny in the tree. He hopped closer and closer until he could reach it. He was so excited, he hopped up and down to get it.\nBut then, he heard a voice. It was coming from the tree!\n\"What are you doing there?\"",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.04761904761904767,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 1.0,
+      "prompt": "Once upon a time, in a small village",
+      "text": "Once upon a time, in a small village, there was a rabbit named Bob. Bob loved to stretch his big body all day long. He also loved to play with his friends in the forest. One day, he found a tight hole in the ground. Bob was very curious about the hole.\nBob wanted to see what was inside the tight hole. He put his little paw in the hole and felt something soft. Bob thought it was a mole! He was scared that the mole might come to him. But he decided to be brave and bravely took a step closer.\nBob reached out and gently touched the mole. The mole was not happy that Bob tried to help it",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.007936507936507908,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 1.0,
+      "prompt": "Lily found a tiny dragon in the garden",
+      "text": "Lily found a tiny dragon in the garden. The dragon was hurt and sad. Lily took the dragon inside and gave it some food. She said, \"Don't be sad, little dragon. I will help you.\" The dragon was happy and started to look at Lily.\nWhen Lily went inside, she gave the dragon a drink. The dragon's tummy did not hurt anymore. The dragon said, \"Thank you, little dragon. You are a good friend.\" They both smiled and played together all day.\n",
+      "generated_tokens": 96,
+      "trigram_repetition_rate": 0.06382978723404253,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 1.0,
+      "prompt": "The little robot wanted to learn",
+      "text": "The little robot wanted to learn more. So, he asked the big tree, \"Can you teach me, big tree?\"\nThe big tree said, \"Yes, little robot, let's learn together!\" They tried to learn all day. At first, the little robot did not know many things. But he was so excited to learn.\nOne day, they were playing near a small house. They saw a little girl crying. She had lost her toy. The big tree and the little robot wanted to help. They found the toy and gave it back to the girl. The girl was happy. She said, \"Thank you, big tree and small earthquake",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.031746031746031744,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 1.0,
+      "prompt": "One rainy morning, Tom and Mia",
+      "text": "One rainy morning, Tom and Mia were very sad. They had to go inside to eat. They looked out the window and saw a big, red rainbow in the sky. They wanted to touch it and play with it.\nThey took their deaf dolls outside and ran towards the rainbow. They touched it gently and waved their arms. They felt the rainbow and smiled. They did not want to leave their favorite fun.\nBut then, they heard a voice. It was their dog, Rex, who was also splashy. Rex saw their infant brother and laughed. He was curious about them and wanted to play with them. He forgot he had a truck on his trunk",
+      "generated_tokens": 128,
+      "trigram_repetition_rate": 0.0,
+      "tie_embeddings": true
+    },
+    {
+      "run": "000-tied-small-init-full",
+      "temperature": 1.0,
+      "prompt": "The moon was bright when the fox",
+      "text": "The moon was bright when the fox lit it up. Soon enough, it was bright and bright! The little bunny hopped around the lady.\nThe fox was so happy. \"Thank you, little bunny! You were right. This is the best thing I have ever seen!\" He smiled and hopped away, full of joy.\n",
+      "generated_tokens": 60,
+      "trigram_repetition_rate": 0.0,
+      "tie_embeddings": true
+    }
+  ],
+  "summary": {
+    "000-batch-128-x2": {
+      "samples": 10,
+      "mean_generated_tokens": 119.8,
+      "mean_trigram_repetition_rate": 0.04957808967709959
+    },
+    "000-batch-512-sqrt-lr": {
+      "samples": 10,
+      "mean_generated_tokens": 104.7,
+      "mean_trigram_repetition_rate": 0.050084042237953916
+    },
+    "000-tied-small-init-full": {
+      "samples": 10,
+      "mean_generated_tokens": 114.9,
+      "mean_trigram_repetition_rate": 0.0330914164844736
+    },
+    "001-batch-512-linear-lr": {
+      "samples": 10,
+      "mean_generated_tokens": 126.6,
+      "mean_trigram_repetition_rate": 0.05120729082593489
+    }
+  }
+}

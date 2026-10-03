@@ -1,0 +1,6 @@
+[
+  {"name": "compile-bf16", "overrides": {"batch_size": 128, "max_steps": 300, "max_lr": 0.004, "min_lr": 0.0004, "eval_interval": 100, "compile_model": true, "dtype": "bfloat16", "save_checkpoints": false}},
+  {"name": "eager-bf16", "overrides": {"batch_size": 128, "max_steps": 300, "max_lr": 0.004, "min_lr": 0.0004, "eval_interval": 100, "compile_model": false, "dtype": "bfloat16", "save_checkpoints": false}},
+  {"name": "compile-fp16", "overrides": {"batch_size": 128, "max_steps": 300, "max_lr": 0.004, "min_lr": 0.0004, "eval_interval": 100, "compile_model": true, "dtype": "float16", "save_checkpoints": false}},
+  {"name": "eager-fp16", "overrides": {"batch_size": 128, "max_steps": 300, "max_lr": 0.004, "min_lr": 0.0004, "eval_interval": 100, "compile_model": false, "dtype": "float16", "save_checkpoints": false}}
+]

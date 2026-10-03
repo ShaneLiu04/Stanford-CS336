@@ -1,0 +1,6 @@
+[
+  {"name": "batch-256", "overrides": {"batch_size": 256, "max_steps": 300, "max_lr": 0.0056, "min_lr": 0.00056, "eval_interval": 100, "save_checkpoints": false}},
+  {"name": "batch-384", "overrides": {"batch_size": 384, "max_steps": 300, "max_lr": 0.0069, "min_lr": 0.00069, "eval_interval": 100, "save_checkpoints": false}},
+  {"name": "batch-512", "overrides": {"batch_size": 512, "max_steps": 300, "max_lr": 0.0079, "min_lr": 0.00079, "eval_interval": 100, "save_checkpoints": false}},
+  {"name": "batch-768", "overrides": {"batch_size": 768, "max_steps": 300, "max_lr": 0.0097, "min_lr": 0.00097, "eval_interval": 100, "save_checkpoints": false}}
+]

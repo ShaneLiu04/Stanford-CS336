@@ -1,0 +1,31 @@
+{
+  "bpe_training_seconds": 60.71151732187718,
+  "bpe_reused": false,
+  "peak_rss_mib": 349.11328125,
+  "vocab_size": 10000,
+  "merge_count": 9743,
+  "longest_token_hex": "206163636f6d706c6973686d656e74",
+  "longest_token_bytes": 15,
+  "vocab_sha256": "6baa539da6d7313cbdc3f9d818d6ddc5e5a802f37edd18319d91c6ef91f2749c",
+  "merges_sha256": "68b7f84159e868b61be6fbf948a34f4e4659e9e4c35833741b9809418ad1efa0",
+  "train": {
+    "source_bytes": 2227753162,
+    "tokens": 540796778,
+    "elapsed_seconds": 137.57535078469664,
+    "tokens_per_second": 3930913.3134346055,
+    "bytes_per_token": 4.11939059666513,
+    "minimum_token_id": 9,
+    "maximum_token_id": 9999,
+    "binary_bytes": 1081593556
+  },
+  "valid": {
+    "source_bytes": 22502601,
+    "tokens": 5461210,
+    "elapsed_seconds": 1.6223801393061876,
+    "tokens_per_second": 3366171.631227865,
+    "bytes_per_token": 4.120442356181139,
+    "minimum_token_id": 10,
+    "maximum_token_id": 9999,
+    "binary_bytes": 10922420
+  }
+}

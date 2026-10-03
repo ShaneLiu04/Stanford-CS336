@@ -1,0 +1,16 @@
+[
+  {
+    "name": "batch-256-full",
+    "overrides": {
+      "batch_size": 256,
+      "gradient_accumulation_steps": 1,
+      "max_steps": 5000,
+      "warmup_steps": 150,
+      "max_lr": 0.0055,
+      "min_lr": 0.00055,
+      "eval_interval": 100,
+      "save_checkpoints": false,
+      "seed": 42
+    }
+  }
+]

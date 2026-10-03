@@ -1,0 +1,191 @@
+\section{逐题讲解}
+\label{sec:walkthrough}
+本节按 handout 的 38 个 Problem 顺序给出自学要点。每题均区分
+``为什么''、``怎样实现''与``如何验证''；实验题只引用可追溯的实测记录。
+
+\subsection{Unicode 与 tokenizer}
+\paragraph{\texttt{unicode1}.}
+Python 的 \texttt{str} 保存 Unicode code point，而不是终端字形。
+\texttt{chr(0)} 是合法的 U+0000；\texttt{repr} 用转义显示它，\texttt{print}
+则没有可见输出。这个区别提醒我们：文本的逻辑内容、编码后的 bytes 和显示效果是三个层次。
+
+\paragraph{\texttt{unicode2}.}
+UTF-8 是变长、ASCII-compatible 的编码。多字节字符不能逐 byte 调用
+\texttt{decode}，因为单个 continuation byte 并非合法字符；overlong encoding
+也必须拒绝。Tokenizer 因而先在 byte 层面合并，最后才整体 UTF-8 decode。
+
+\paragraph{\texttt{train\_bpe}.}
+BPE 从 256 个单 byte token 开始，反复合并最高频相邻 pair。实现先以 GPT-2 regex
+做 pre-tokenization，并把 special token 当作不可跨越的边界。pair 频率相同时选择
+lexicographically greater pair，保证结果 deterministic。倒排索引只更新受本轮 merge
+影响的 pre-token，避免每轮扫描全语料。
+
+\paragraph{\texttt{train\_bpe\_tinystories}.}
+10K vocabulary 等于 256 个 bytes、一个 special token 和 9743 个 merges。
+实测最长 token `` accomplishment'' 是高频、语义完整且带 leading space 的英文片段，
+符合 GPT-2 pre-tokenization 的行为。现有 raw JSON 未保留首次 BPE wall-clock，
+所以报告只给出可验证的词表和编码指标。
+
+\paragraph{\texttt{train\_bpe\_expts\_owt}.}
+OWT 更大、题材更多，32K vocabulary 应学到更多专名、标点和长尾片段；这通常提高
+Web text 压缩率，却不保证对儿童故事更优。本题最终以 OWT 的 vocab、merges、最长 token
+和 cross-corpus compression matrix 回答，而不是只比较 vocabulary size。
+
+\paragraph{\texttt{tokenizer}.}
+\texttt{encode} 先 longest-match 隔离 special tokens，再逐 pre-token 按 merge rank
+重放 BPE；\texttt{decode} 拼接 bytes 后以 \texttt{errors=replace} 解码。
+\texttt{encode\_iterable} 对输入块惰性 yield，空间复杂度取决于最大块而不是文件总大小。
+正确性通过 GPT-2/tiktoken parity、Unicode round trip 和 special-token overlap tests 验证。
+
+\paragraph{\texttt{tokenizer\_experiments}.}
+对 TinyStories 与 OWT 各固定 seed 抽取 10 个 documents，用两个 tokenizer 形成
+$2\times2$ compression matrix。bytes/token 越大表示一个 token 覆盖的原始 bytes 越多；
+同时记录 bytes/s，并以 $825\,\mathrm{GB}/\mathrm{throughput}$ 外推 Pile 用时。
+32K token IDs 小于 $2^{16}$，所以 \texttt{uint16} 足够且比 int32 节省一半存储。
+
+\subsection{Transformer architecture}
+\paragraph{\texttt{linear}.}
+Linear layer 实现 $y=xW^\top$，不使用 bias。权重按 fan-in/fan-out truncated normal
+初始化；测试把手工载入的权重与 reference output 做 snapshot comparison。
+
+\paragraph{\texttt{embedding}.}
+Embedding 是参数矩阵的 integer row lookup，不应实现为 one-hot matrix multiplication。
+输入形状 $(B,T)$ 映射为 $(B,T,d)$，反向传播只更新被索引的 rows。
+
+\paragraph{\texttt{rmsnorm}.}
+RMSNorm 计算 $x/\sqrt{\operatorname{mean}(x^2)+\epsilon}$ 后乘 learnable gain。
+它不减均值，开销低于 LayerNorm；平方与归一化在 float32 中完成，避免 bf16 overflow
+或精度损失。
+
+\paragraph{\texttt{positionwise\_feedforward}.}
+SwiGLU 使用
+$W_2(\operatorname{SiLU}(W_1x)\odot W_3x)$：一条支路产生 gate，另一条携带 value。
+与单门 SiLU FFN 的公平比较需调整 hidden width，使参数量近似相同。
+
+\paragraph{\texttt{rope}.}
+RoPE 把相邻 hidden dimensions 看作二维向量，以 position-dependent angle 旋转。
+点积只依赖相对位置差，因此不需要 additive position embedding；预缓存 sin/cos
+避免每次 forward 重算。
+
+\paragraph{\texttt{softmax}.}
+直接计算 $\exp(x)$ 会 overflow。减去每行最大值不改变概率：
+$\operatorname{softmax}(x)=\operatorname{softmax}(x-\max x)$，却使最大 exponent 为 1。
+
+\paragraph{\texttt{scaled\_dot\_product\_attention}.}
+$\operatorname{softmax}(QK^\top/\sqrt{d_k})V$ 中的缩放避免 dot-product variance 随
+$d_k$ 增长。causal mask 在 softmax 前把未来位置设为 $-\infty$；实现支持任意 leading
+batch dimensions。
+
+\paragraph{\texttt{multihead\_self\_attention}.}
+一次 QKV projection 后 reshape 为 heads，各 head 并行执行 causal attention，
+再 concatenate 并做 output projection。多头让模型在不同子空间学习不同关系，
+但总 projection complexity 仍为 $O(Td^2)$。
+
+\paragraph{\texttt{transformer\_block}.}
+Pre-norm block 在每个 sublayer 前归一化并加 residual：
+\[
+y=x+\mathrm{MHA}(\mathrm{Norm}(x)),\qquad
+z=y+\mathrm{FFN}(\mathrm{Norm}(y)).
+\]
+这种 identity gradient path 通常比 post-norm
+更易优化。
+
+\paragraph{\texttt{transformer\_lm}.}
+完整 LM 串联 token embedding、$L$ 个 blocks、final RMSNorm 与 LM head，
+输出 logits $(B,T,V)$。训练时把输入向右错一位构造 targets；推理时只从最后位置采样。
+
+\paragraph{\texttt{transformer\_accounting}.}
+参数主要来自 $O(Ld^2)$ projections 与 $O(dV)$ embedding/head；activation memory
+随 batch 和 sequence length 增长。Attention 的 $T^2$ 项使长 context 成本最终超过
+dense layers，正文第 3.3 节给出各 GPT-2 shape 的 FLOPs 分解。
+
+\subsection{Optimization 与训练基础设施}
+\paragraph{\texttt{cross\_entropy}.}
+对 target class $y$，稳定形式为
+$-o_y+\log\sum_j\exp(o_j-\max o)+\max o$，不显式构造 probability tensor。
+对所有 non-class dimensions 取 mean，得到一个 scalar loss。
+
+\paragraph{\texttt{learning\_rate\_tuning}.}
+toy quadratic 展示 step size 太小收敛慢、适中快速收敛、太大则越过 minimum 并发散。
+其数值不能直接迁移到 Transformer，但说明 LR 本质上受 curvature 限制。
+
+\paragraph{\texttt{adamw}.}
+AdamW 维护 first/second moments，做 bias correction，并把 weight decay 与 adaptive
+gradient update 解耦。测试同时检查更新数值与 optimizer state，防止只在第一步碰巧正确。
+
+\paragraph{\texttt{adamw\_accounting}.}
+float32 参数、梯度、$m$、$v$ 各需 $4P$ bytes，静态项约 $16P$；activation 通常才是
+随 batch 增长的主项。MFU 估算必须同时说明硬件峰值、forward/backward FLOPs 与假设利用率。
+
+\paragraph{\texttt{learning\_rate\_schedule}.}
+前 $T_w$ steps 线性 warmup 到 $\alpha_{\max}$，随后 cosine decay 到
+$\alpha_{\min}$，超过 cycle 后保持 minimum。warmup 抑制训练初期 moment 尚不可靠时的大更新。
+
+\paragraph{\texttt{gradient\_clipping}.}
+把所有 parameter gradients 视为一个向量；若 global norm 超过阈值，
+统一乘 $\epsilon M/(\|g\|+\epsilon)$。统一缩放保留方向，逐 tensor clipping 则会改变方向。
+
+\paragraph{\texttt{data\_loading}.}
+从 memory-mapped token array 随机采样起点，返回长度 $T$ 的 $x$ 与右移一位的 $y$。
+memmap 避免把数 GB corpus 全载入 RAM，device transfer 则集中在 batch 边界。
+
+\paragraph{\texttt{checkpointing}.}
+可恢复训练必须保存 model、optimizer moments 和 iteration；只保存 weights 会丢失
+AdamW 状态与 schedule position。round-trip test 验证三者一致。
+
+\paragraph{\texttt{training\_together}.}
+JSON config 统一模型、optimizer、数据与 logging；训练循环记录 step、tokens、
+wall-clock、LR、train/validation loss、throughput 与 peak VRAM。每个 run 同时保存
+config 和 environment，使曲线可追溯。
+
+\paragraph{\texttt{decoding}.}
+Temperature 用 $z/T$ 调整分布尖锐度；top-$p$ 保留累计概率达到 $p$ 的最小 token 集合，
+再重新归一化采样。generation 在 EOT 或长度上限停止，且 context 超长时只保留最近窗口。
+
+\subsection{实验题}
+\paragraph{\texttt{experiment\_log}.}
+每次实验是 immutable run directory，包含 config、environment、metrics JSONL 与 summary；
+sweep-status 记录成功或 traceback。图由 raw records 自动重建，而不是手工抄写最终数字。
+
+\paragraph{\texttt{learning\_rate}.}
+先以约 10M tokens 做 coarse/fine sweep，再用 327.68M-token final runs 验证。
+短预算中 $2\times10^{-3}$ 最好；$10^{-1}$ 发散。结论强调选参趋势，而不把不同预算的
+absolute loss 直接比较。
+
+\paragraph{\texttt{batch\_size\_experiment}.}
+systems probe 分离 systems effect：batch 增大提高 GPU occupancy，也近似线性增加 VRAM；
+固定 token budget 的 final runs 再比较 optimization effect。batch 128 到 256 的边际收益
+远小于 batch 1 到 128 的 throughput 收益。
+
+\paragraph{\texttt{generate}.}
+同一 prompt 下，temperature 0.7 连贯但保守；1.0 增加 diversity 并出现角色漂移；
+1.3 退化为破碎搭配。它说明 validation loss 改善不等价于任意 sampling setting 都可读。
+
+\paragraph{\texttt{layer\_norm\_ablation}.}
+40M tokens 下移除 RMSNorm 从 1.637 恶化到 9.256；降低 LR 后仍为 7.007。
+全预算补跑 best loss 7.512，确认问题是长期优化不稳定，而不是单纯收敛更慢。
+
+\paragraph{\texttt{pre\_norm\_ablation}.}
+post-norm 在 40M 与 full budget 都略差；它把 gradient identity path 置于 normalization
+之后，深层训练通常更敏感。本实验规模较浅，所以差距有限但方向一致。
+
+\paragraph{\texttt{no\_pos\_emb}.}
+NoPE 仍能从 causal order 学到部分局部结构，但无法显式区分绝对/相对距离；
+full-budget loss 1.439 明显差于 RoPE baseline 1.371。
+
+\paragraph{\texttt{swiglu\_ablation}.}
+参数近似匹配后，SiLU FFN 与 SwiGLU 在本规模 final loss 接近。该结果只说明
+22.7M-parameter TinyStories setting 下差异小，不能外推为 gating 在大模型中无效。
+
+\paragraph{\texttt{main\_experiment}.}
+OWT 使用 32K tokenizer 与更大 LM head；主实验需报告 loss--tokens、loss--wall-clock、
+throughput、peak VRAM 和 generation。实测 40K-step best loss 为 4.116；
+结合 4.367 bytes/token 后约为 0.942 nats/byte。生成能维持局部语法，却比 TinyStories
+更易重复或 topic drift，说明相同模型与 compute 难以覆盖开放域 Web text。
+
+\paragraph{\texttt{leaderboard}.}
+Leaderboard 是受 45-minute wall-clock 约束的 systems/optimization 综合题。
+本项目选择 input/output embedding weight tying：直接共享 std=1 matrix 会退化，
+把 tied matrix 改为 std=0.02 后，TinyStories 40M-token pilot 从 baseline 1.637
+改善到 1.615，并减少约 5.12M 参数。最终 OWT run 明确标为本地 proxy experiment，
+在 38.96 分钟内达到 4.097；它不表述为官方排名或课程成绩。
