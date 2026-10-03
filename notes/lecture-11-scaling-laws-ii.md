@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_11.pdf"
   - "../experiments/topics/scaling-laws.md"
-  - "../assignments/spring2026/assignment3-scaling/report/main.tex"
+  - "../assignments/assignment3-scaling/report/main.tex"
 ---
 
 # Lecture 11 — Scaling Laws II：联合拟合、不确定性与外推
@@ -478,50 +478,146 @@ method spread、extrapolation ratio、boundary rate、held-out error 和目标�
 
 ## 13. 讨论：效度威胁、伦理与决策边界
 
-### Construct validity
+### 13.1 Construct validity
 
 Training loss 不等于 downstream utility、安全性或人类偏好；tokenizer 改变后 per-token loss
 不可直接比较。Theoretical FLOPs 不等于能源、时间或成本。应使用 bits-per-byte、统一
 evaluation 与 measured runtime 作为互补指标。
 
-### Internal validity
+### 13.2 Internal validity
 
 规模往往与 batch、learning rate、regularization、data order、hardware 和 training stability
 共变；任何一个未控制变量都可能伪装成 scaling。Checkpoint cherry-picking、静默删除失败
 runs 和事后改变 fit range 会产生研究者自由度偏差。
 
-### External validity
+### 13.3 External validity
 
 同一 family 内的插值结果不保证外推到新 architecture、MoE、长上下文、合成数据、RL
 post-training 或新硬件。数百倍 compute extrapolation 应表达为 scenario，而非承诺。
 公开复现还表明，原论文细节和数据不足会使精确指数难以独立恢复 [[13]](#ref-13)。
 
-### 资源与责任
+### 13.4 资源与责任
 
 Scaling 预测会驱动高成本决策。报告应包含预计 GPU-hours、能源/碳、数据治理、潜在重复
 训练成本及较小 baseline。统计上“最优”不自动意味着社会或经济上值得训练。
 
-## 面试要点速记
+## 14. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> Scaling II 是 LLM 面试的「统计+外推」进阶题：面试官常从「联合 law 怎么求闭式解」切入，
+> 追到「emergent abilities 是真的吗」「数据受限怎么办」「推理算力怎么改最优配置」
+> 「远距离外推怎么控风险」。核心是把「统计区间」与「函数形式风险」分开陈述，别拿狭窄
+> bootstrap 区间制造确定感。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：emergent abilities 是真的吗？** 要点：Wei 等报告跨任务不连续跃迁；
-   Schaeffer 等证明选用非线性/不连续指标（如 exact match）可制造“涌现”
-   表象，换连续指标往往平滑——结论依赖指标构造，这是面试的标准辩证题。
-2. **Q：数据受限下的 scaling？** 要点：Muennighoff 等——重复 ~4 epochs 内
-   近似等效新数据，之后边际收益骤降；数据受限时最优模型更小。
-3. **Q：推理算力如何改变最优配置？** 要点：Sardana & Frankle——部署期推理
-   占大头时，compute-optimal 模型应显著小于 Chinchilla（训练更小模型、
-   更长服务期摊薄）。
-4. **Q：远距离外推的风险控制？** 要点：profile likelihood、leave-one-tier-out
-   报告参数不确定性；不超出拟合支撑集一个数量级以上。
+### 14.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：scaling law 的价值不是连线，而是用有限 pilot runs 支持高成本训练决策；真正难的是
+确认有限实验是否支持该函数形式，并把 winner selection、seed、拟合、外推的不确定性一起传播。
 
-- 4 epochs 重复上限；Chinchilla 1:20 是“训练算力最优”而非“生命周期最优”；
-  inference-aware 最优 N:D 随部署强度下移。
+**必背数字与公式**
 
-## 14. 本讲小结
+- 联合 law \(L(N,D)=E+A/N^\alpha+B/D^\beta\)。
+- 闭式最优：\(N_{\mathrm{opt}}\propto C^{\beta/(\alpha+\beta)},\ D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)，指数和为 1。
+- 最优 loss \(L_{\mathrm{opt}}-E=KC^{-\gamma}\)，其中 \(\gamma=\frac{\alpha\beta}{\alpha+\beta}\)。
+- tokens-per-parameter \(\propto C^{(\alpha-\beta)/(\alpha+\beta)}\)，仅 \(\alpha=\beta\) 时与 compute 无关。
+- 数据重复约 **4 epochs** 后边际收益骤降（Muennighoff）；extrapolation ratio \(\rho_C=C_{\text{target}}/C_{\max,\text{obs}}\)。
+
+**三句话答高频**
+
+1. emergent abilities 依赖指标构造：离散指标（exact match）制造「涌现」表象，换连续指标往往平滑。
+2. bootstrap 必须重跑完整 pipeline（选 winner + 拟合 + 外推），只 bootstrap 末端回归会严重低估不确定性。
+3. 远距离外推的风险来自函数形式而非回归标准误；用 extrapolation ratio + leave-one-tier-out 表达。
+
+### 14.2 高频面试题与答题框架
+
+**Q1：联合 law 怎么求 \(N_{\mathrm{opt}},D_{\mathrm{opt}},L_{\mathrm{opt}}\) 的闭式解？**
+
+- 代入 \(D=C/(6N)\) 到 \(L=E+A/N^\alpha+B/D^\beta\)，对 \(N\) 求导令零。
+- 得 \(N_{\mathrm{opt}}=\left(\frac{\alpha A}{\beta B6^\beta}\right)^{1/(\alpha+\beta)}C^{\beta/(\alpha+\beta)}\)，同理 \(D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)。
+- 两 compute 指数和为 1 是 \(C=6ND\) 约束的直接结果。
+
+**Q2：\(L_{\mathrm{opt}}\) 的 compute exponent \(\gamma=\alpha\beta/(\alpha+\beta)\) 怎么来的？**
+
+- 一阶条件给出最优点两项满足 \(\alpha A N^{-\alpha}=\beta B D^{-\beta}\)。
+- 代回 loss 得 \(L_{\mathrm{opt}}-E=KC^{-\gamma}\)，其中 \(\gamma=\alpha\beta/(\alpha+\beta)\)。
+- 这连接了 loss surface 与 IsoFLOP envelope：理想可加 law 下 envelope 也应是带 floor 的 power law；若斜率不一致，需查 finite grid / 优化失败 / 模型错设。
+
+**Q3：emergent abilities 是真的吗？**
+
+- **Wei et al.**：报告跨任务、跨规模的离散能力跃迁；**Schaeffer et al.**：用非线性/离散指标（如 exact match）会制造「涌现」表象，换连续概率型指标往往平滑。
+- **辩证结论**：现象依赖指标构造与测量尺度——应同时画 loss、连续指标、离散任务指标，区分「底层能力突变」与「measurement threshold crossing」。
+
+**Q4：数据受限下的 scaling 怎么做？**
+
+- Muennighoff et al.：重复约 **4 epochs** 内近似等效新数据，之后边际收益骤降。
+- 数据受限时最优模型更小、且要按 unique data \(U\) 与 epochs \(e=D/U\) 扩展 law，而非把 consumed tokens 当独立信息。
+
+**Q5：推理算力如何改变最优配置？**
+
+- Sardana & Frankle：当部署期推理占大头时，compute-optimal 模型应**显著小于 Chinchilla**——训练更小模型、更长服务期摊薄推理成本。
+- 即「训练算力最优」≠「生命周期成本最优」；Chinchilla 1:20 是训练视角，不是 serving 视角。
+
+**Q6：远距离外推怎么控风险？**
+
+- 报告 extrapolation ratio \(\rho_C=C_{\text{target}}/C_{\max,\text{obs}}\)（越大，函数形式风险越主导）。
+- 用 leave-one-tier-out（留整个 compute tier，而非随机留 run）、profile likelihood、多方法敏感性（joint vs IsoFLOP、floor vs broken law）。
+- 不要把 bootstrap 95% 区间命名为「总不确定性」——它不含函数形式与分布外风险。
+
+**Q7：bootstrap 为什么要重跑完整 pipeline？**
+
+- 目标不是只估最后一条回归线的误差，而是传播 run/seed 噪声 → 每档 winner 选择 → scaling fit → 目标外推。
+- 若只 bootstrap 末端回归，会假装同 tier 点独立、丢失 winner selection 与清洗的不确定性，区间过窄。
+- 正确做法：以 compute tier 为 cluster 重采样，每个 replicate 重新 select_optima + 重拟合 + 重预测。
+
+**Q8：Kaplan 与 Chinchilla 为什么结论不同？**
+
+- 不能简化为「旧论文错、新论文对」：差异来自实验覆盖范围、LR schedule 是否调优、训练充分度、数据重复、tokenizer、模型定义与 optimum 提取方法。
+- Kaplan 偏向更大模型更少 tokens；Chinchilla 的密集 IsoFLOP sweep 直接找固定 compute 的 minimum。
+
+**Q9：tokens-per-parameter 是普适常数吗？**
+
+- \(D_{\mathrm{opt}}/N_{\mathrm{opt}}\propto C^{(\alpha-\beta)/(\alpha+\beta)}\)，只有 \(\alpha=\beta\) 时才与 compute 无关。
+- 「20 tokens/parameter」是特定实验范围 + recipe 下的经验近似，不应机械迁移到新 tokenizer/data/context/optimizer。
+
+**Q10：怎么判断联合 law 的参数不可识别？**
+
+- 观测远离 floor 时，很多 \(E,\alpha\) 组合能给出相似预测。
+- 诊断：Hessian/profile likelihood 是否平坦、多初值是否得到不同参数但相似 RMSE、去掉一个 compute tier 后参数是否剧变、是否碰 bounds。
+- 结论：预测可能比单个参数更稳定，也可能相反，两者都要检查。
+
+### 14.3 手撕要点（联合 law 闭式解）
+
+面试让「从联合 law 推导 compute-optimal」时，按链写：
+
+```text
+L(N,D) = E + A/N^α + B/D^β,   C = 6ND -> D = C/(6N)
+
+L(N|C) = E + A N^{-α} + B (6N/C)^β
+dL/dN = -αA N^{-α-1} + βB 6^β C^{-β} N^{β-1} = 0
+=> N_opt^{α+β} = (αA/βB 6^β) C^β
+=> N_opt ∝ C^{β/(α+β)},  D_opt ∝ C^{α/(α+β)}
+
+一阶条件: αA N^{-α} = βB D^{-β}
+=> L_opt - E = K C^{-γ},  γ = αβ/(α+β)
+```
+
+**三个必踩坑**
+
+1. **`L_\infty+Ax^{-\alpha}` 不能整体取 log 做线性回归**：加法项改变曲率，只能对幂律主项近似。
+2. **bootstrap 必须重跑 winner selection**：只重采样 optima pairs 会丢失离散 minimum 的不确定性。
+3. **CI 不含函数形式风险**：小 RMSE + 窄 bootstrap 不保证 300× 外推可靠。
+
+### 14.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| 小 RMSE 保证外推准吗？ | 否，插值拟合与 300× 外推是不同任务 |
+| emergent 是能力突变吗？ | 未必，可能是离散指标的 threshold crossing |
+| 数据重复有用吗？ | ~4 epochs 内近似等效新数据，之后骤降 |
+| 训练最优 = 生命周期最优吗？ | 否，推理占大头时训练更小模型更省 |
+| 指数是自然常数吗？ | 否，依赖架构/数据/recipe/范围/口径 |
+| 删掉不服从的点可以吗？ | 除非预先定义失败标准，否则可能在删反证 |
+
+## 15. 本讲小结
 
 联合 law 把容量受限与数据受限写成一个 loss surface，并在 \(C=6ND\) 下给出 compute-optimal 闭式比例。真正困难的不是求导，而是确认有限实验是否支持该函数形式，以及如何把 winner selection、seed、拟合和外推的不确定性一起传播。远距离预测应以多方法敏感性和外推距离为中心，而不是用狭窄 bootstrap 区间制造确定感。
 
@@ -569,5 +665,5 @@ arXiv:2404.10102, 2024.
 ## 延伸阅读
 
 - Stanford CS336, [Lecture 11 — Scaling Laws](https://github.com/stanford-cs336/lectures/blob/main/lecture_11.pdf).
-- [A3 报告源码](../assignments/spring2026/assignment3-scaling/report/main.tex)。
+- [A3 报告源码](../assignments/assignment3-scaling/report/main.tex)。
 - [Scaling Laws 主题导航](../experiments/topics/scaling-laws.md)。
