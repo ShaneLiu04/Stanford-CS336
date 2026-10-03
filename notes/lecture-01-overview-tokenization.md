@@ -7,7 +7,7 @@ lecturer: "Percy Liang"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_01.py"
-  - "../assignments/spring2026/assignment1-basics/"
+  - "../assignments/assignment1-basics/"
 ---
 
 # Lecture 01 — Overview 与 Tokenization：从数据契约到离散符号系统
@@ -559,12 +559,12 @@ tokenizer/
 
 | 概念 | 路径 / 符号 | 验证重点 |
 |---|---|---|
-| GPT-2 pre-tokenization | `assignments/spring2026/assignment1-basics/cs336_basics/tokenizer.py`：`GPT2_PATTERN` | leading space、Unicode 类别 |
+| GPT-2 pre-tokenization | `assignments/assignment1-basics/cs336_basics/tokenizer.py`：`GPT2_PATTERN` | leading space、Unicode 类别 |
 | BPE training | 同文件：`train_bpe` | tie-break、special boundary、局部计数更新 |
 | 流式/并行切块 | 同文件：`_chunk_boundaries`、`_count_pretokens` | 不切断 delimiter 和 UTF-8 |
 | BPE encoding | 同文件：`Tokenizer._encode_bytes`、`encode` | merge rank，不按新频率 |
 | decode / iterable | 同文件：`decode`、`encode_iterable` | bytes 拼接、惰性输出 |
-| 接口契约 | `assignments/spring2026/assignment1-basics/tests/adapters.py`：`run_train_bpe`、`get_tokenizer` | shape/type/返回值 |
+| 接口契约 | `assignments/assignment1-basics/tests/adapters.py`：`run_train_bpe`、`get_tokenizer` | shape/type/返回值 |
 | 正确性测试 | `.../tests/test_train_bpe.py`、`test_tokenizer.py` | parity、special token、round-trip |
 | 实验脚本 | `.../scripts/tokenizer_experiments.py` | 压缩率、吞吐、RSS |
 | 实验结论 | `.../report/main.tex` 第 2 节；`report/problem_walkthrough.tex` | 区分实测、推导与缺失值 |
@@ -605,17 +605,10 @@ tokenizer/
 | special token 被拆 | split 顺序与 regex escaping | 未 longest match |
 | 多进程结果不同 | chunk boundary、Counter merge | 切断 pre-token / 非确定 reduce |
 | encode 极慢 | pre-token length histogram | 超长噪声串导致 \(O(L^2)\) |
-| 算术/数值任务准确率异常 | digit merge 方式 | 检查数字切分规则与分组契约 [[14]](#ref-14) |
+| 算术/数字任务异常差 | digit merge 方式 / 数字 tokenization 策略 | BPE 频率目标把数字切成任意碎片 [[14]](#ref-14) |
 | 内存持续增长 | pair_to_words 清理、heap stale entries | 倒排索引未删除旧引用 |
-| 下游 loss 异常 | IDs/BOS/EOS/PAD 与 checkpoint | tokenizer artifact 不匹配 |
+| 训练 loss 突升或下游 loss 异常 | tokenizer 版本与 checkpoint 配套性 | vocab/merges 未随权重一起版本化 |
 | 吞吐很高但模型更慢 | \(V\)、\(T\)、LM head FLOPs | 只优化 tokenizer 本身 |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
-| 训练 loss 突升或输出乱码 | tokenizer 版本与 checkpoint 配套性 | vocab/merges 未随权重一起版本化 |
-| 算术/数字任务异常差 | 数字 tokenization 策略 | BPE 频率目标把数字切成任意碎片 |
 | 多语言 bytes-per-token 偏高 | pre-tokenization regex 与语料配比 | regex 按英文空白设计、merge 域偏斜 |
 | 生成出现 `<|endoftext|>` 类泄漏 | special token 过滤与 escape | 语料含模板字符串未消毒 |
 | 流式编码在块边界出错 | pre-tokenization 回退窗口 | BPE merge 跨 chunk 边界被截断 |
@@ -637,28 +630,28 @@ tokenizer/
 
 ## 12. 讨论：效度威胁与研究边界
 
-### 13.1 Construct validity
+### 12.1 Construct validity
 
 - `bytes/token` 衡量序列压缩，不等价于语义质量、形态合理性或模型 accuracy；
 - `tokens/s` 同时受 token 数和实现速度影响，不能单独代表 bytes/s；
 - token-level perplexity 的单位随 tokenizer 变化，跨 tokenizer 应转为 nats/byte，
   但 nats/byte 仍不等价于 downstream task quality。
 
-### 13.2 Internal validity
+### 12.2 Internal validity
 
 - 不同 tokenizer 若训练语料、normalization、special tokens、模型参数量或 byte budget
   不一致，无法把结果归因于 segmentation；
 - vocabulary 增大会同时改变序列长度和 embedding/head 参数，必须二者同时 accounting；
 - 单 seed training 差异可能来自初始化与 data order，而非 tokenizer。
 
-### 13.3 External validity
+### 12.3 External validity
 
 - TinyStories 上的最佳 vocabulary 未必迁移到 Web、code、数学或 multilingual data；
 - 200-document sample 无法代表完整 corpus long tail；
 - Python reference implementation 的吞吐不能代表 Rust/C++ production tokenizer；
 - 离线批处理结果不能直接推断 online serving 的 p99 latency。
 
-### 13.4 Fairness、隐私与安全
+### 12.4 Fairness、隐私与安全
 
 高资源语言主导的 frequency objective 可能让低资源语言产生更高 fertility，从而获得更短
 effective context、更多训练/推理成本和更高服务费用 [[8]](#ref-8)。Petrov 等人进一步
@@ -668,27 +661,122 @@ PII、URL、API key 或 offensive strings 记成单 token，增加 memorization 
 因此 artifact audit 应包含 per-language cost、敏感 pattern tokenization、异常 control
 characters 与 denial-of-service 长输入，而不仅是英文 compression。
 
-## 面试要点速记
+## 13. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> Tokenization 是 LLM 面试的高频开篇题：概念门槛低、却能一路追问到深度。面试官通常从
+> 「BPE 是什么」切入，追到「为什么 loss 跨 tokenizer 不可比」「训练复杂度怎么优化」
+> 「数字与多语言有什么系统性坑」。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织，
+> 每道题用统一框架回答：**定义 → 为什么/原理 → 公式/复杂度 → 工程落地 → 边界/反例**。
 
-1. **Q：为什么现代 LLM 普遍采用 byte-level BPE？** 要点：任意字节串可编码、无
-   OOV、可逆且确定；词表大小与压缩率可调。代价是低资源语言 bytes-per-token 偏高。
-2. **Q：词表大小如何权衡？** 要点：大词表序列短（attention 与步数省），但
-   embedding/softmax 参数多、低频 token 表示差；小词表反之。最优词表随模型规模
-   变化，需 sweep 验证。
-3. **Q：BPE 训练复杂度？** 要点：朴素每次 merge 全量统计为 O(L·M)；增量更新
-   （相邻对计数+惰性堆）近似线性。
-4. **Q：tokenizer 如何影响公平性与可比性？** 要点：不同语言 bytes-per-token
-   不同→同样内容的训练/推理成本不均；跨 tokenizer 比较模型必须换算
-   bits-per-byte，直接比 perplexity 无效。
+### 13.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：tokenizer 是「模型—数据」之间的系统契约，决定序列长度 \(T\)、词表参数
+\(Vd\)、训练 FLOPs 与 loss 的计量单位；它不是无关紧要的预处理，而应像 checkpoint 一样被版本化。
 
-- GPT-2 词表 50,257；GPT-4 级 ~100k；special tokens 须与训练协议严格一致。
-- pre-tokenization regex 决定 merge 的作用域，是 multilingual 行为的第一决定因素。
+**必背数字与公式**
 
-## 13. 结论与本讲小结
+- GPT-2 词表 **50,257**（256 bytes + 1 EOT + 50,000 merges）；GPT-4 级约 100k。
+- 最大 merge 数 \(M = V - 256 - S\)（\(S\) 为 special tokens）。
+- `bytes/token = N_byte / N_tok`；`nats/byte ≈ L_tok / (bytes/token)`；`bits/byte = nats/byte / ln2`。
+- 朴素 BPE 训练 \(O(MN)\)，增量更新近似线性；单个 pre-token 编码最坏 \(O(L^2)\)。
+
+**三句话答高频**
+
+1. byte-level BPE：256 bytes 起底 → 任意输入可编码、无 OOV；有序 merge 换较短序列。
+2. 训练 ≠ 编码：训练学「有序 merge rank」，编码按 rank 贪心合并，绝不按新文本频率重选。
+3. 跨 tokenizer 不可比：token 是人为单位，比较模型必须换算 `nats/byte` / `bits/byte`。
+
+### 13.2 高频面试题与答题框架
+
+**Q1：解释 BPE 的训练过程与编码过程，为什么是两回事？**
+
+- **定义**：训练在语料上反复合并最高频相邻 pair，产出「有序 merge 表」；编码对新文本按这张表的顺序贪心合并。
+- **为什么**：训练基于 corpus 统计，编码基于已冻结的 rank。若编码时按当前句子频率重选 pair，等于每次重训，词表不稳定、checkpoint 无法复用。
+- **公式**：pair 计数 \(C(p)=\sum_w c(w)\,\#\{i:(w_i,w_{i+1})=p\}\)，每轮取 \(\arg\max C(p)\)，最多 \(V-256-S\) 次。
+- **工程**：`pair_counts` + `pair_to_words` 倒排索引 + max-heap，只局部更新受影响 pre-token，避免每轮重扫全语料。
+- **边界**：greedy merge 是启发式，非压缩率全局最优（Zouhar et al. 2023）；overlap pair 一次 merge 只合并不重叠出现。
+
+**Q2：为什么现代 LLM 普遍用 byte-level BPE？解决什么、代价是什么？**
+
+- **解决**：word 词表的 OOV、code-point 词表的稀疏；任意字节串可编码、可逆且确定。
+- **为什么**：256 bytes 是完备基底，再学常见 byte 片段，在「开放词表」与「短序列」之间折中。
+- **代价**：低资源语言 fertility 高、bytes/token 偏高（Petrov et al. 2023）；数字被切成不规则片段伤算术（Singh & Strouse 2024）。
+
+**Q3：BPE、WordPiece、Unigram（SentencePiece）三者区别？**
+
+- **BPE**：合并最高频 pair，无概率模型，deterministic，工程最成熟。
+- **WordPiece**：每次选「最大化似然增益」的 pair（约等于频数 / 两子词频数积），BERT 生态，需处理 `##` 前缀。
+- **Unigram LM**：先过大量候选再按损失删低贡献 token，有概率模型、支持 subword regularization（采样多种切分）。
+- **SentencePiece** 是「raw-text framework」：统一 normalization 与 whitespace 符号，BPE 与 Unigram 都可运行其上，不依赖外部分词。
+
+**Q4：词表大小如何权衡？**
+
+- **大词表**：序列短 → attention \(O(T^2)\) 与训练步数省；但 embedding/head \(O(Vd)\) 参数多、低频 token 表示差、可能记领域噪声。
+- **小词表**：参数省，但序列长、算术/长尾表示差。
+- **结论**：最优词表随模型规模与数据规模变化，需 sweep；Dagan et al. 2024 指出 tokenizer 训练语料约数十 GB 后进入平台期，领域适配可增量扩词表 + embedding resize，不必从零重训。
+
+**Q5：为什么直接比较两个模型的 perplexity 可能误导？**
+
+- perplexity = \(\exp(L_{\text{tok}})\)，而 \(L_{\text{tok}}\) 的单位是 token——token 是人为构造单位。
+- 相同文本被切成不同 token 数，「loss 的分母」不同，标尺不同。
+- **正确做法**：换算 `nats/byte = L_tok / (bytes/token)`。本仓库实例：OWT 10K 与 32K tokenizer 的 token loss 分别为 3.081 与 4.116，只看 token loss 会误判 10K 更好；归一化后为 0.971 vs 0.942 nats/byte，32K 实际更优。
+
+**Q6：pre-tokenization 的作用？为什么 special token 必须是硬边界？**
+
+- **pre-tokenization**：先用 regex 把文本切成大致文字/数字/标点片段，约束 BPE 只在片段内 merge，防止跨词/跨文档合并。
+- GPT-2 的 `GPT2_PATTERN` 保留 leading space，所以 token 常是 `" the"` 而非 `"the"`——token boundary ≠ word boundary。
+- **special token**（如 `<|endoftext|>`）有协议语义：必须整体作为一个 token、BPE 不得跨边界、多个重叠时 longest match。
+
+**Q7：数字 tokenization 为什么是 BPE 的系统性盲区？**
+
+- BPE 由 corpus frequency 驱动，数字是长尾 + 进位结构，`1234` 可能被切成 `12`+`34` 或逐位，模型难学位值/进位。
+- Singh & Strouse 2024：逐位 vs 固定宽度分组显著改变加减乘准确率，部分算术失误可由更换 number tokenization 直接修复。
+- **工程**：数学/财务语料应强制逐位或固定分组 pre-tokenization，而不是接受无约束 merge。
+
+**Q8：tokenizer 如何造成多语言不公平？**
+
+- 高资源语言主导 frequency objective，低资源语言 fertility 更高 → 相同语义内容的 token 数可达数倍差异。
+- **后果**：更短 effective context、更高训练/推理成本与 API 计费（Petrov et al. 2023）。
+- **工程**：报告 per-language token cost / fertility，而不只看英文压缩率。
+
+### 13.3 手撕代码要点（BPE）
+
+面试手撕 BPE 时，先给数据结构，再给训练/编码两个循环，最后主动点出三个坑。
+
+```text
+数据结构（训练）
+  word_counts:   tuple -> freq             # pre-token 频数
+  pair_counts:   (a,b) -> weighted count   # 相邻 pair 频数
+  pair_to_words: (a,b) -> set(word_id)     # 倒排索引
+  heap:          (-count, tie_key)         # 取最大频 pair
+
+训练循环（至多 V-256-S 次）
+  1. 弹出最大频 pair p = (a,b)
+  2. 对所有含 p 的 word 做 non-overlapping merge
+  3. 局部更新受影响 word 的相邻 pair 计数 + 倒排索引 + heap
+
+编码循环（每个 pre-token）
+  反复: 找 rank 最小的可用 pair -> 一次性合并其所有不重叠出现
+```
+
+**三个必踩坑**
+
+1. **overlap**：`a a a` 中 `(a,a)` 出现两次，一次 merge 只能得 `aa a`，不能同时合并两个重叠位。
+2. **tie-break**：同频 pair 的选择顺序必须固定（如字典序最大优先），否则 vocab 不可复现。
+3. **determinism**：文件顺序、regex 版本、special token 顺序、多进程 reduce 顺序都要固定。
+
+### 13.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| greedy BPE 是最优压缩吗？ | 不是，是启发式；已有 combinatorial 分析证明非全局最优 |
+| 编码时能按新文本频率选 pair 吗？ | 不能，等于重训，破坏词表稳定与 checkpoint 兼容 |
+| 任意分块独立 encode 再拼接等于整串吗？ | 不等价，pre-token 可能跨 chunk，需 carry buffer 或按 record 边界切 |
+| 大词表一定更好吗？ | 否，缩短序列但增大 embedding/head 参数，还可能记领域噪声 |
+| bytes/token 能代表质量吗？ | 不能，只代表序列压缩，不等价于语义/形态/下游 accuracy |
+| token-free 会取代 BPE 吗？ | 未必，BPE 仍是 checkpoint/serving 的事实标准；MEGABYTE/BLT 把长序列代价转给架构 |
+
+## 14. 结论与本讲小结
 
 Tokenizer 定义了语言模型观察世界的离散单位，也定义了数据量、上下文长度和 loss 的标尺。
 Byte-level BPE 用 256-byte 完备基底保证开放词表，再用有序 merges 换取较短序列。
