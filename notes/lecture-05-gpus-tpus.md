@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_05.pdf"
   - "../experiments/topics/systems.md"
-  - "../assignments/spring2026/assignment2-systems/"
+  - "../assignments/assignment2-systems/"
 ---
 
 # Lecture 05 — GPUs、TPUs 与性能模型：从算术强度到端到端吞吐
@@ -309,8 +309,8 @@ time-to-quality、energy-to-quality 与失败/OOM runs。共享云环境还需�
 
 ## 5. 代码与实验映射
 
-- A2 统一入口：`assignments/spring2026/assignment2-systems/scripts/benchmark_systems.py`
-- 报告：`assignments/spring2026/assignment2-systems/report/main.tex`
+- A2 统一入口：`assignments/assignment2-systems/scripts/benchmark_systems.py`
+- 报告：`assignments/assignment2-systems/report/main.tex`
 - 原始数据：`report/results/raw/`
 - 系统导读：`experiments/topics/systems.md`
 
@@ -419,41 +419,34 @@ launch→bandwidth→compute 不同 regime。
 | GPU utilization 低 | CPU timeline/data loader | launch gap、I/O、同步 |
 | utilization 高但 TFLOP/s 低 | kernel mix/AI | elementwise、memory-bound |
 | GEMM 未上 tensor core | dtype/shape/instruction | alignment、autocast、layout |
-| occupancy 低 | registers/shared/block | tile 太大、spill |
+| occupancy 低 / SM 占用率低 | registers/shared/block | tile 太大、spill、block 过小 |
 | occupancy 高仍慢 | stall reasons | dependency、HBM、bank conflict |
 | 第一次 iteration 很慢 | warm-up/compile | JIT、autotune、allocator |
 | BF16 无显存收益 | state breakdown | FP32 master/moments、activations |
 | reserved 持续很高 | allocator snapshot | fragmentation/caching |
-| 多卡 scaling 差 | topology/NCCL timeline | exposed all-reduce、imbalance |
-| microkernel 快、模型不变 | end-to-end share | Amdahl’s law [[14]](#ref-14) |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
+| 多卡 scaling 差 / 扩展近线性失效 | topology/NCCL timeline | exposed all-reduce、跨 PCIe 通信、未用 NVLink |
+| microkernel 快、模型不变 | end-to-end share | Amdahl's law |
 | 实测带宽远低于峰值 | 访存合并（coalescing）与对齐 | 非连续 stride、跨 stride 读 |
-| SM 占用率低 | grid/block 配置 | block 过小、寄存器溢出导致降占用 |
 | kernel 时间不随规模线性 | L2 命中率 | cache 命中主导而非带宽 |
-| 多卡扩展近线性失效 | 通信占比与互联层次 | 跨 PCIe 通信、未用 NVLink 域内聚合 |
 | TPU 与 GPU 数值不一致 | 累加顺序与精度容差 | systolic 阵列累加顺序差异属预期 |
 | 吞吐周期性骤降 | SM clock 与功耗曲线 | 热节流降频，检查 clock 采样 |
 | roofline 预测失准 | 峰值参数取值（boost vs sustained） | 用 sustained 而非理论峰值作分母 |
 
 ## 11. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 11.1 Construct validity
 - GPU utilization、occupancy、MFU、TFLOP/s、tokens/s 是不同指标；
 - theoretical FLOPs 不包含 data movement/communication；
 - peak allocated 不等于 process VRAM；
 - synthetic microbenchmark 不等于 time-to-quality。
 
-### Internal validity
+### 11.2 Internal validity
 - 异步计时、未 warm-up、compile/autotune 混入会系统性偏差；
 - power/clock/thermal 与共享租户造成 run-to-run variance；
 - 不同 shape/dtype/kernel version 是 confounders；
 - profiler instrumentation 改变 runtime。
 
-### External validity
+### 11.3 External validity
 - 单 GPU 结果不外推多节点；
 - RTX 6000D 不代表 B200/TPU；
 - 一个 sequence/batch 的 kernel 最优参数不泛化；
@@ -462,26 +455,129 @@ launch→bandwidth→compute 不同 regime。
 论文式表述应限定硬件、软件、shape 与 measurement protocol，优先报告 confidence interval
 和完整失败点，而不是无条件“X× 更快”。
 
-## 面试要点速记
+## 12. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> GPU/性能模型是 ML Systems 面试的必考项：面试官常从「A100 带宽多少」切入，追到
+> 「为什么 GEMM 适合 GPU」「occupancy 高为什么不一定快」「怎么用 Roofline 判断瓶颈」。
+> 核心是建立 `FLOPs / bytes / parallelism / latency` 的统一账本，用硬件数量级支撑判断。
+> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：A100/H100 关键数字？** 要点：A100 80GB：HBM ~2TB/s、bf16 tensor ~312
-   TFLOPS（dense）、NVLink 600GB/s；H100 SXM：HBM3 3.35TB/s、bf16 ~990
-   TFLOPS（dense）、NVLink 900GB/s。峰值算力/带宽之比决定 roofline 拐点。
-2. **Q：为什么 GPU 适合 GEMM？** 要点：tensor core 在寄存器级完成小矩阵乘、
-   shared memory tiling 保证数据复用、高 arithmetic intensity。
-3. **Q：内存层次的数量级？** 要点：SMEM / L2 / HBM 带宽差 1–2 个数量级、
-   延迟差更多；kernel 优化的本质是最大化复用、减少远端访存。
-4. **Q：TPU 与 GPU 的本质差异？** 要点：systolic 阵列面向大规模批量 GEMM、
-   软件栈封闭、控制流与稀疏性弱；统一 HBM；选型取决于 workload 形态。
+### 12.1 一页速览卡（面试前 1 分钟）
+
+**核心主张**：加速器优化的统一原则是**让昂贵的数据搬运被更多有效计算摊销**——性能上界是
+`min(峰值算力, 带宽 × 算术强度)`，从算法 shape 预测，再用 profiler 证据修正。
 
 **必背数字**
 
-- roofline 拐点（A100 bf16）≈ 312e12 / 2e12 ≈ 156 FLOPs/byte；
-  occupancy = 活跃 warp / 最大 warp。
+- **A100 80GB**：HBM 约 2 TB/s、bf16 tensor core 约 312 TFLOPS（dense）、NVLink 600 GB/s。
+- **H100 SXM**：HBM3 约 3.35 TB/s、bf16 约 990 TFLOPS、NVLink 900 GB/s。
+- **roofline 拐点**（A100 bf16）：\(I^\*=312\text{e}12 / 2\text{e}12 \approx 156\) FLOPs/byte。
+- 内存层次带宽：register > shared/L1 > L2 > HBM，相邻差约 1–2 个数量级。
+- GEMM 的 arithmetic intensity \(O(n)\)；逐元素算子 \(O(1)\)。
 
-## 12. 小结
+**三句话答高频**
+
+1. GEMM 越大越 compute-bound（复用强）；elementwise、decode 偏 memory-bound（复用低）。
+2. occupancy 高只代表候选 warp 多，不等于算满；compute-bound 时加 occupancy 无收益。
+3. tensor core 有固定 micro-tile shape，`M,N,K` 不对齐、尾块占比高就会 underutilize。
+
+### 12.2 高频面试题与答题框架
+
+**Q1：A100 / H100 的关键数字？roofline 拐点怎么算？**
+
+- A100 80GB：HBM 约 2 TB/s、bf16 tensor core 约 312 TFLOPS、NVLink 600 GB/s；H100 SXM：HBM3 3.35 TB/s、bf16 约 990 TFLOPS、NVLink 900 GB/s。
+- 拐点 \(I^\*=C_{\max}/BW\)：A100 bf16 ≈ `312e12 / 2e12 ≈ 156` FLOPs/byte。
+- \(I<I^\*\) memory-bound，\(I>I^\*\) compute-bound；低于拐点的算子优化方向是减 bytes/fusion。
+
+**Q2：为什么 GPU 适合 GEMM？tensor core 和 tiling 怎么配合？**
+
+- GEMM 的 FLOPs \(O(n^3)\)、搬运 \(O(n^2)\)，arithmetic intensity \(O(n)\)，越大越 compute-bound。
+- **tiling**：把 A/B 切成 tile 放入片上（register/shared memory），让多个输出复用，强度随 tile 边长增长。
+- **tensor core**：在寄存器级完成固定 micro-tile MMA，配合正确的 dtype/layout/alignment 才能达到峰值；`M,N,K` 很小或尾块占比高会 underutilize。
+
+**Q3：内存层次的数量级？为什么重要？**
+
+- register（最快、线程私有）> shared memory/L1 > L2 > HBM（最慢最大），相邻层级带宽差约 1–2 个数量级、延迟差更多。
+- kernel 优化的本质是**最大化片上复用、减少远端访存**；FlashAttention 的价值就是减少 HBM 往返。
+- 层级化 roofline：一个 kernel 可能相对 HBM compute-bound，却受 shared-memory 带宽或 register 依赖限制。
+
+**Q4：TPU 与 GPU 的本质差异？**
+
+- **GPU**：SIMT + warp/block/SM，暴露细粒度细节，kernel 生态成熟、控制流/稀疏灵活。
+- **TPU**：systolic array + XLA 编译器静态调度，对规则大矩阵与 SPMD sharding 友好；控制流、稀疏与不规则 gather 较弱。
+- **结论**：不是谁更快，而是 workload 形态决定——规则大 batch GEMM 偏 TPU，灵活稀疏/细粒度优化偏 GPU。
+
+**Q5：occupancy 是什么？为什么高 occupancy 不一定快？**
+
+- occupancy = 活跃 warp / SM 最大 warp，受 registers、shared memory、block 数共同限制。
+- 高 occupancy 只表示有更多候选 warp 可供 latency hiding，不保证 ILP、cache hit 或 tensor-core utilization。
+- 若已 compute-bound，加 occupancy 无收益；register spill 时**降低** occupancy 反而更快。要看 stall reason 而非单一百分比。
+
+**Q6：memory coalescing 是什么？为什么重要？**
+
+- 同一 warp 连续访问相邻地址，可合并成少量 cache-line transaction；错误 stride、转置后非连续访问会放大 HBM 流量。
+- 布局（AoS/SoA）、`contiguous()`（本身会触发拷贝）都要在 profiler 里确认，而非默认正确。
+
+**Q7：为什么训练偏 compute-bound、decode 偏 memory-bound？**
+
+- 训练/大 batch：大 GEMM 复用强、arithmetic intensity 高 → compute-bound。
+- decode：每步 query 极少（matrix-vector/small GEMM），却要反复读取整段 weights + KV cache → bandwidth-bound。
+- 所以不能用训练 MFU 预测 serving tokens/s；decode 优化方向是压 KV cache/权重读取，而非提算力。
+
+**Q8：latency hiding 怎么工作？什么限制它？**
+
+- 某 warp 等待 memory/dependency 时，scheduler 切到 ready warp，用并发隐藏延迟。
+- 可驻留 warp 数受 threads/registers/shared memory/block limit 的最小项限制；software pipelining 把「加载下一 tile」与「计算当前 tile」重叠。
+- stage 太少藏不住延迟，太多耗 shared/register 降 occupancy，需联合调参。
+
+**Q9：怎么判断一个 kernel 慢在哪里？**
+
+- 先算 shape/dtype 的理论 FLOPs、最低 bytes 与 arithmetic intensity，猜 bound。
+- 再 profile：kernel 数、duration、launch gap、achieved bandwidth、tensor-core utilization、occupancy、stall reason。
+- 用证据证伪假设：若猜 memory-bound，应看到高 achieved bandwidth + 低 compute utilization；否则假设有误。
+
+**Q10：为什么 bf16 不一定让显存减半？**
+
+- bf16 只降低 parameter/gradient/activation 的 dtype；Adam moments、master weight 常仍为 fp32。
+- 训练态 16N 规则里，fp32 的 m/v + master 占 12N，bf16 只省了参数+梯度的 2N→4N 部分。
+- 报告 memory reduction 要写全 state breakdown，不能只按「dtype 减半」估计。
+
+### 12.3 手撕要点（Roofline 计算）
+
+面试让「算某个 kernel 是 compute-bound 还是 memory-bound」时，按固定步骤：
+
+```text
+1. FLOPs F：matmul [M,K]@[K,N] -> F ≈ 2 M K N
+2. bytes Q：读 A + 读 B + 写 C ≈ s(MK + KN + MN)   （理想一次读入）
+3. arithmetic intensity I = F / Q
+4. 拐点 I* = C_max / BW
+5. I < I* -> memory-bound；I > I* -> compute-bound
+
+例子（A100 bf16，s=2）：
+  方阵 n=1024 GEMM：F=2·1024³≈2.1e9，Q≈2·3·1024²≈6.3e6
+  I ≈ 340 FLOPs/byte > 156 -> compute-bound
+  elementwise ReLU（n 元素）：F≈n, Q≈2n·s -> I ≈ 0.25 -> memory-bound
+```
+
+**三个必踩坑**
+
+1. **峰值用 sustained 不用 boost**：boost clock 只在短时，长期受热/功耗限制。
+2. **Q 只是理想下界**：tile 重叠、cache eviction、非合并访问、中间写回都会放大实际 bytes。
+3. **拐点随 dtype 变**：bf16 峰值与 fp32 峰值不同，拐点也不同，别混用。
+
+### 12.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| occupancy 低就减寄存器吗？ | 不一定，spill 才减；compute-bound 时反而无需高 occupancy |
+| tensor core 为什么需要对齐？ | 固定 micro-tile 尺寸，M/N/K 或 layout 不对齐会 underfill |
+| GPU utilization 100% 说明算满吗？ | 否，memory/launch-bound 也能让设备一直忙 |
+| BF16 显存减半了吗？ | 否，Adam fp32 状态与 master weight 仍占大头 |
+| reserved 是真实占用吗？ | 否，含 allocator 缓存池；看 allocated 才是 live |
+| 跨卡直接按峰值倍数估加速吗？ | 否，通信/拓扑/软件成熟度都会改变，需实测 |
+| microkernel 快模型就快吗？ | 否，Amdahl：只快非瓶颈部分收益有限 |
+
+## 13. 小结
 
 加速器优化的统一原则是让昂贵的数据搬运被更多有效计算摊销。GPU/TPU 的接口不同，但都必须围绕 shape、布局、片上复用、低精度和通信建立资源账本。在模型规模增速持续超过带宽增速的背景下，这一原则只会越来越重要 [[11]](#ref-11)。Roofline 用于提出假设，benchmark 与 profiler 用于推翻或验证假设。
 
@@ -544,4 +640,4 @@ https://doi.org/10.1145/1465482.1465560
 - [PyTorch Profiler](https://pytorch.org/docs/stable/profiler.html)
 - [Nsight Systems User Guide](https://docs.nvidia.com/nsight-systems/UserGuide/index.html)
 - [JAX Scaling Book：TPU performance](https://jax-ml.github.io/scaling-book/)
-- [A2 Systems 官方题面](../assignments/spring2026/assignment2-systems/cs336_assignment2_systems.pdf)
+- [A2 Systems 官方题面](../assignments/assignment2-systems/cs336_assignment2_systems.pdf)
