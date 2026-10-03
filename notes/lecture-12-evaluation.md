@@ -553,26 +553,26 @@ prompt、decoding 和 tool environment。否则"复现"可能读到错误协议�
 
 ## 11. 讨论：效度威胁、伦理与决策边界
 
-### Construct validity
+### 11.1 Construct validity
 
 分数测的是"模型+协议+grader"的复合体。contamination、格式 exploit、
 judge 偏好都会让指标与构念脱钩；calibration、robustness 等辅助指标
 （HELM [[4]](#ref-4)）能提供构念三角验证。
 
-### Internal validity
+### 11.2 Internal validity
 
 协议微扰（shot 数、template、decoding）、checkpoint cherry-picking、
 parse failure 的静默丢弃都是研究者自由度；预注册与开发/最终集分离是
 标准防线。judge 的 non-determinism 未报告时，复现实验可能无法区分
 真实差异与噪声。
 
-### External validity
+### 11.3 External validity
 
 benchmark 分数到部署表现的迁移依赖用户分布、工具环境与失败代价的
 相似性。对高风险决策（医疗、法律、安全关键），应要求领域内私有评估
 与专家 rubric，而非外推通用榜单。
 
-### 伦理与激励
+### 11.4 伦理与激励
 
 leaderboard 会扭曲研究激励：为 0.5 分差异投入巨额算力、针对性清洗
 训练数据、隐藏失败切片。评估报告应公开不确定性、负结果与失败案例
@@ -609,28 +609,122 @@ leaderboard 会扭曲研究激励：为 0.5 分差异投入巨额算力、针对
 | agent 分数涨但成本翻倍 | 无成本控制 | accuracy–cost Pareto [[19]](#ref-19) |
 | "复现"结果与记录不符 | cache key 不完整 | key 加入协议全字段 |
 
-## 面试要点速记
+## 12. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> LLM 评估是面试的「统计+方法论」高频题：面试官常从「pass@k 无偏估计」切入，追到
+> 「MC 三种 adaptation 为什么排名会变」「LLM judge 三大偏差」「contamination 怎么检测」
+> 「为什么分数必须带区间」。核心是把评估当**测量设计**，牢记「一个分数是
+> (model, data, protocol, grader) 四元组的函数」。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：pass@k 的无偏估计？** 要点：\(1-\binom{n-c}{k}/\binom{n}{k}\)（不重复
-   采样版本）；朴素 c/n 在小 c 时高估。
-2. **Q：multiple-choice 的三种 adaptation？** 要点：完整序列 LM scoring、
-   按选择长度归一化、逐字符补全打分；adapter 选择本身会改变模型排名。
-3. **Q：LLM judge 的三大偏差与对策？** 要点：position（双向取平均）、
-   verbosity（长度控制/回归校正）、self-preference（隐藏身份 + 人工校准）。
-4. **Q：contamination 怎么分层检测？** 要点：数据侧 n-gram/MinHash 匹配 →
-   模型侧 exchangeability/选项扰动 → time-travel（只用基准发布前数据训练
-   对照组）。
-5. **Q：为什么分数必须带区间？** 要点：seed 与采样噪声下，单点分数不可比；
-   Wilson/bootstrap 区间 + 多重比较校正是报告底线。
+### 12.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：评估是把抽象能力目标转成可审计测量的工程+统计过程；一个分数只在四元组
+\((\text{model},\text{data},\text{protocol},\text{grader})\) 固定时才有定义，先问「怎么测」再谈「多少分」。
 
-- pass@k 公式；一个分数是 (model, data, protocol, grader) 四元组的函数——
-  面试中先问“怎么测”再谈“多少分”。
+**必背数字与公式**
 
-## 本讲小结
+- pass@k 无偏估计 \(\widehat{\text{pass@k}}=1-\binom{n-c}{k}/\binom{n}{k}\)。
+- PPL \(=e^{\bar\ell}\)，跨 tokenizer 须换 \(\text{bpb}=\frac{\bar\ell}{\ln2}\cdot\frac{T}{B_{\text{bytes}}}\)。
+- 二元标准误 \(\operatorname{SE}(\hat p)=\sqrt{\hat p(1-\hat p)/n}\)，小样本用 Wilson。
+- 校准误差 \(\operatorname{ECE}=\sum_b\frac{n_b}{n}|\operatorname{acc}(b)-\operatorname{conf}(b)|\)。
+
+**三句话答高频**
+
+1. 一个分数是四元组函数——protocol/grader 一变，测的就是另一个量。
+2. LLM judge 三大偏差：position（双向取平均）、verbosity（长度回归）、self-preference（隐藏身份+人工校准）。
+3. contamination 分层检测：数据侧 n-gram/MinHash → 模型侧 exchangeability/选项扰动 → time-travel。
+
+### 12.2 高频面试题与答题框架
+
+**Q1：pass@k 的无偏估计是什么？为什么？**
+
+- 单次通过率 \(p\) 时，\(\text{pass@k}=1-(1-p)^k\)；但实现是每题采样 \(n\) 次、\(c\) 次通过。
+- Codex 无偏估计 \(\widehat{\text{pass@k}}=1-\binom{n-c}{k}/\binom{n}{k}\)：从 \(n\) 个样本不放回抽 \(k\) 个，全未命中概率是超几何比值，对 \(c\sim\mathrm{Binomial}(n,p)\) 取期望由 Vandermonde 恒等式得 \((1-p)^k\)。
+- 朴素 `c/n` 在小 \(c\) 时高估；应在 log 空间算组合数避免溢出；pass@k 随 \(k\) 递增，与 pass@1（单次质量）可背离。
+
+**Q2：multiple-choice 的三种 adaptation？为什么排名会变？**
+
+- ① 生成式（生成选项字母/文本再解析）；② choice log-prob（每个选项条件似然取 argmax）；③ 排序式（比较选项相对似然）。
+- 三种 protocol 测的不是同一量，且模型对选项顺序高度敏感——换 protocol 或顺序排名会变。
+- 因此 protocol 必须预注册，不能事后挑对自己有利的作答方式。
+
+**Q3：LLM-as-a-judge 的三大偏差与对策？**
+
+- **position bias**：偏好先/后出现的答案 → 双向评估取平均、报告 swap 翻转率。
+- **length/verbosity bias**：更长被误判更好 → 长度回归控制（AlpacaEval-LC）、长度匹配对照。
+- **self-preference**：偏爱与自身同家族/同措辞的输出 → 隐藏模型身份、人工盲测校准。
+- 另有 style bias、sycophancy、reference leakage、non-determinism，需多 judge ensemble + 人工 adjudication。
+
+**Q4：contamination 怎么分层检测？**
+
+- **数据侧**：exact hash、n-gram（GPT-3 用 13-gram）、MinHash/LSH、embedding 检索——给覆盖率，但召回受 paraphrase/翻译限制。
+- **模型侧**：verbatim completion、exchangeability 检验（基准顺序似然显著高于随机打乱）、选项顺序扰动、time-travel 探针（补全「数据集发布后才有」的信息）。
+- **对照构造**：同分布新题（GSM1k vs GSM8K）、按时间切分（LiveBench）。注意「没发现 overlap ≠ 没有污染」。
+
+**Q5：为什么分数必须带区间？paired comparison 为什么更有功效？**
+
+- seed/采样噪声下单点分数不可比；用 Wilson/bootstrap 区间 + 多重比较校正。
+- paired 设计（两模型在同一批题上）消除题目难度共同方差：McNemar 检验只用答案不同的题目，paired bootstrap 对每题差值重采样。
+- 「A 的 CI 与 B 的 CI 相交」≠「无法区分 A 与 B」；错误选重采样单位（如把同 prompt 的重复判断当独立）是区间过窄的最常见原因。
+
+**Q6：perplexity 为什么不能跨 tokenizer 直接比？**
+
+- \(\operatorname{PPL}=e^{\bar\ell}\)，单位是 token；不同 tokenizer 的 token 数不同，per-token PPL 标尺不同。
+- 换 bpb（每字节比特数）才可比；对 prompt-response 任务只在 response mask 上算 conditional PPL，避免 prompt 长度支配指标。
+
+**Q7：Bradley–Terry 与 Elo 的区别？**
+
+- BT：离线 MLE，把模型参数化为潜在分数 \(s_i\)，\(P(A\succ B)=\sigma(s_A-s_B)\)；可复用传递性信息，对局集合内等价、可给 CI。
+- Elo：在线序贯更新，依赖对局顺序，tie 需特殊记分，不确定性难处理。
+- Chatbot Arena 用带 tie margin + 风格控制项的 BT 变体；朴素 Elo 对出场顺序/参赛集合/噪声更敏感。
+
+**Q8：calibration / ECE 是什么？为什么重要？**
+
+- ECE 把预测按置信度分桶，比较每桶平均置信度与实际正确率，是 reliability diagram 的数值摘要。
+- 校准对部署决策（阈值截断、selective prediction、abstain）至关重要；HELM 把它列为与 accuracy 并列的一级指标。
+
+**Q9：agent 评估为什么难？**
+
+- 统计单位是 task，grader 是测试/规则（SWE-bench 用 fail-to-pass 单元测试），把分数限制在测试覆盖域内。
+- 模型、scaffold、工具、预算、重试都贡献分数，归因难；Kapoor 等指出榜单普遍忽略成本，prompt hack 可无代价抬分。
+- 应在 accuracy–cost Pareto 前沿上做成本受控比较，固定其余变量才能谈 base model 贡献。
+
+**Q10：为什么「一个分数」不完整？**
+
+- 分数是四元组函数：protocol、grader、数据、采样任一变化都在测另一个量。
+- 总分上涨可能只来自简单大类，小而高风险切片退化会被 macro/micro average 掩盖；失败分析（解析失败 vs 知识缺失 vs 推理断裂）比总分更有行动价值。
+
+### 12.3 手撕要点（pass@k 与区间）
+
+面试让「推导 pass@k 无偏性」或「算区间」时，按公式写：
+
+```text
+pass@k = 1 - (1-p)^k，无偏估计 = 1 - C(n-c,k)/C(n,k)
+  无偏性：E_c[C(n-c,k)/C(n,k)] = (1-p)^k   （超几何 + Vandermonde）
+
+二元指标区间：SE(p̂) = sqrt(p̂(1-p̂)/n)，小样本/边界用 Wilson
+配对比较：McNemar χ² = (|b-c|-1)²/(b+c)，b+c 小用精确二项
+bootstrap 单位：每题 / prompt cluster / 领域 stratified / task，别把相关样本当独立
+```
+
+**三个必踩坑**
+
+1. **pass@k 别用朴素 `c/n`**：小 \(c\) 时高估；用无偏公式并在 log 空间算组合数。
+2. **PPL 别跨 tokenizer 比**：换 bpb，且只在 response mask 上算 conditional PPL。
+3. **别把同 prompt 的重复判断当独立样本**：错选重采样单位导致区间过窄。
+
+### 12.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| 测试集越大越真实吗？ | 否，样本量降低方差，不能修复构念偏差 |
+| judge 给理由就可信吗？ | 否，fluent rationale 不是判定正确性的证明 |
+| 高 human correlation 代表无偏吗？ | 否，总体相关可共存于领域偏差 |
+| fresh benchmark 不会污染吗？ | 否，公开后会迅速进入后续训练/调参闭环 |
+| benchmark 饱和等于解决吗？ | 否，可能是污染、格式 exploit 或难度不足 |
+| agent 分数是 LM 分数吗？ | 否，scaffold/工具/预算/重试同样贡献 |
+
+## 13. 本讲小结
 
 评估是把抽象目标转成可审计测量的工程与统计过程。一个分数只在
 \((\text{model},\text{data},\text{protocol},\text{grader})\) 四元组固定
