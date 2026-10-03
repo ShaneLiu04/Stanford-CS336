@@ -743,6 +743,25 @@ synchronization、统计量、OOM/error policy、correctness tolerance、完整�
 - GEMM 的 FLOPs 是 \(O(n^3)\)、搬运 \(O(n^2)\)，arithmetic intensity \(O(n)\)，越大越 compute-bound。
 - 标准 attention 的 score 矩阵是 \(T^2\) 中间量，算术强度随序列长度**下降**，因此长序列下受带宽限制；这正是 FlashAttention 通过减少 HBM 往返加速的动机。
 
+**Q11：为什么对 matmul，backward 是 forward 的 2 倍？**
+
+- 对 \(Y=XW\)，forward 一个 GEMM；backward 要算两个梯度：\(\partial L/\partial X=(\partial L/\partial Y)W^\top\) 与 \(\partial L/\partial W=X^\top(\partial L/\partial Y)\)，两个 GEMM 各与 forward 同阶 \(2mnk\)。
+- 故 backward ≈ 2× forward，训练总计 ≈ 3× forward → 每参数 `6` 次 matmul FLOPs，正是 \(6ND\) 的来源。
+- **注意**：这仅对 dense matmul 成立；softmax/norm/embedding 等非 matmul 算子的 backward 比例不同，需单独看。
+
+**Q12：怎么系统诊断训练 OOM？**
+
+- 先分层定位：parameters / gradients / optimizer states / activations / temporary workspace / allocator。
+- 用 `memory_allocated`（live tensors）区分 `memory_reserved`（caching allocator 预留），OOM 常是碎片而非总 free 不足。
+- 流程：阶段间 `synchronize()` → 记录 allocated/reserved/peak → 用 memory snapshot 查 allocation stack 与 lifetime → 检查是否把未 `detach()` 的 tensor 放进 Python list 导致整张图跨 step 存活。
+- **兜底**：`empty_cache()` 不释放 live tensors，只是归还 allocator 空闲块，不是常规优化手段。
+
+**Q13：`torch.compile` / kernel fusion 为什么能加速？什么时候无效？**
+
+- 它减少的是 **kernel launch 次数与 HBM round trips**，不是数学 FLOPs；把逐元素小算子（norm、softmax、dropout、mask）融合进一个 kernel，消除中间 tensor 写回。
+- **无效场景**：graph break、动态 shape、数据依赖 control flow、side effect 都会退回 eager；每次新 shape 触发 cache miss。
+- **正确比较**：分开 compile time、warm-up/autotuning、steady-state 与 graph cache miss，不能把首次运行计入 speedup。
+
 ### 14.3 手撕核算要点（显存 + FLOPs）
 
 面试常让「算一个给定 config 的模型显存 / FLOPs」，按固定步骤走，避免漏项：
@@ -766,6 +785,17 @@ FLOPs 核算（每 token，d_ff=4d）
   → 每 token ≈ (8+24)T d² + 4 T² d + 2 T d V
 ```
 
+**完整工作示例：7B 模型能否单卡全参数微调？**
+
+给定 `d=4096, L=32, V=32000`（约 LLaMA-7B 配置，tied embedding）：
+
+1. **参数量** \(N\approx12Ld^2=12\times32\times4096^2\approx6.44\times10^9\)（约 6.4B）。
+2. **训练态显存**（bf16+Adam，16N）\(\approx6.44\text{B}\times16\approx103\text{ GB}\) —— 单张 80GB GPU 放不下，需 ZeRO/offload/多卡。
+3. **训练 FLOPs**（2T tokens）\(C\approx6ND=6\times6.44\times10^9\times2\times10^{12}\approx7.7\times10^{22}\)。
+4. **单卡时间**（A100 bf16 峰值 312 TFLOP/s，忽略一切 overhead）\(\approx7.7\times10^{22}/3.12\times10^{14}\approx2.5\times10^8\text{ s}\) ≈ 8 年 —— 必须多卡。
+
+结论：**先算显存（16N）决定能否单卡放下，再算 FLOPs（6ND）决定要多少卡跑多久**；这就是 resource accounting 的完整闭环。
+
 **三个必踩坑**
 
 1. **别把参数量当显存**：Adam 状态与 activation 往往更大，16N 才是训练态小计。
@@ -784,6 +814,30 @@ FLOPs 核算（每 token，d_ff=4d）
 | loss scaling 解决什么？ | fp16 梯度 underflow；bf16 因 8-bit exponent 通常不需要 |
 | 梯度累积等于免费大 batch 吗？ | 否，省显存但总 FLOPs 不变、小 GEMM 可能更慢 |
 | checkpointing 是总内存减半吗？ | 否，只作用于可重算的 activation，不动参数/梯度/优化器 |
+
+### 14.5 模拟追问链（还原面试官的层层深入）
+
+算账类面试通常从「要多少显存」一路追到「瓶颈在哪、怎么优化」，每一层都在往**公式→边界→工程**递进：
+
+> **面试官**：训练一个 1B 模型最少要多少显存？
+> **你**：bf16+Adam 的 **16N 规则**，1B × 16 ≈ 16 GB，这还不含 activation 和碎片。
+>
+> **面试官**：为什么是 16 倍，不是权重的 2 倍？
+> **你**：bf16 参数 2 + 梯度 2，Adam 的 m/v 各 4 bytes（fp32）+ master weight 4 bytes，优化器状态 12 bytes 才是大头。
+>
+> **面试官**：训练 FLOPs 怎么估？\(C\approx6ND\) 的 6 哪来的？
+> **你**：forward 一次 matmul 约 \(2ND\)，backward 对 X 和对 W 各一次同阶 GEMM 共 \(4ND\)，合计 \(6ND\)。
+>
+> **面试官**：显存不够怎么办？
+> **你**：gradient accumulation 和 activation checkpointing 省 activation，ZeRO 分片优化器状态；但都不减少总 FLOPs。
+>
+> **面试官**：怎么判断当前是 compute-bound 还是 memory-bound？
+> **你**：算 arithmetic intensity \(I=\text{FLOPs}/\text{bytes}\)，对比 roofline 拐点 \(C_{\max}/BW\)；elementwise、decode 偏 memory-bound，大 GEMM 偏 compute-bound。
+>
+> **面试官**：GPU 利用率 100% 就说明算满了吗？
+> **你**：不是，那只是设备忙；memory/launch-bound 的 kernel 也能让设备一直忙。要看 MFU——理论 FLOPs 与峰值算力的比值，大模型密集训练 40–60% 算正常。
+
+**分层自测**：能答出「16N + 6ND」为**初级**；能讲清「backward 两个 GEMM、memory-bound vs compute-bound」为**中级**；能主动算「7B 模型显存/FLOPs 的完整闭环 + 诊断 OOM」为**高级**。
 
 ## 15. 结论与本讲小结
 
