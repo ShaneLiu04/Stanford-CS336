@@ -701,23 +701,73 @@ bias-free linear，它们都同时回答「表示能力 / 优化稳定性 / shap
 - **ALiBi**：向 attention logits 加距离线性 bias，实现最简、零参数外推。
 - **NoPE**：仅靠 causal mask，无法表达精确距离（本仓库 NoPE full-budget 1.439，差于 RoPE 1.371）。
 
+**Q9：为什么需要残差连接？残差流的方差随 depth 累积怎么控制？**
+
+- **为什么**：残差 \(x_{l+1}=x_l+F_l(x_l)\) 给梯度一条直接路径（Jacobian 含 identity），缓解梯度消失；也让子层学「残差」而非「重算全部」。
+- **问题**：若各层支路独立同尺度，残差方差会随 depth 线性累积，深层网络 scale 失稳。
+- **控制手段**：pre-norm 保持子层输入尺度稳定；对 residual output projection 乘 `1/√L` 或 depth scaling；DeepNorm/μP 提供有理论约束的参数化；初始化后实测每层 residual RMS / gradient norm。
+- **本仓库证据**：移除 RMSNorm 后 40M-token baseline 从 1.637 恶化到 9.256，降 LR、延长预算仍未恢复——说明 scale 失稳无法靠调参简单救回。
+
+**Q10：权重初始化怎么做？Xavier/He 的原理？**
+
+- **目标**：控制 signal/gradient scale，使前向激活与反向梯度不随层数爆炸或消失。
+- **推导**：若输入零均值方差 \(q\)，线性层 \(y_j=\sum_i W_{ji}x_i\) 的方差 \(\operatorname{Var}(y_j)=d_{\rm in}\operatorname{Var}(W)q\)，令 \(\operatorname{Var}(W)\propto 1/d_{\rm in}\) 可保持量级。
+- **变体**：Xavier（`2/(d_in+d_out)`）兼顾前向反向，适合 tanh；He（`2/d_in`）适配 ReLU 的半数神经元失活；本仓库用 fan-in/fan-out truncated normal `√(2/(d_in+d_out))`。
+- **注意**：初始化依赖 norm 位置、residual depth 与 weight tying；「标准正态初始化」不是完整描述，必须记录 distribution、std 与特殊 scaling。
+
+**Q11：深层 Transformer 为什么难训练？DeepNorm / μP 怎么解决？**
+
+- **为什么难**：残差方差随 depth 累积、梯度消失/爆炸、激活 scale 漂移，普通 post-norm 对 warm-up 与初始化高度敏感。
+- **DeepNorm**：对 residual 分支乘缩放因子、调 norm gain，把 post-norm Transformer 稳定扩展到千层量级——稳定性来自 scale 可控性，而非 norm 位置本身。
+- **μP（Tensor Programs V）**：规定各参数类随 width 的缩放规则，使 learning rate、初始化等超参可在小模型上调好后 zero-shot 迁移到大模型。
+
 ### 14.3 手撕要点（attention block）
 
-面试让「手撕 multi-head attention」时，按 shape 契约写，别漏 mask 顺序：
+面试让「手撕 multi-head attention」时，按 shape 契约写，别漏 mask 顺序。下面给出
+`RMSNorm + RoPE + causal MHA` 的完整、正确参考实现：
 
-```text
-X        [B,T,d]  ->  Q,K,V = Linear(X)  每个 [B,h,T,d_h]
-scores   = Q @ K^T / sqrt(d_h)            [B,h,T,T]
-mask     未来位置 -> -inf，再做 softmax(dim=-1)
-out      = softmax(scores) @ V            [B,h,T,d_h]
-out      -> concat heads -> [B,T,d] -> Linear -> [B,T,d]
+```python
+import torch
+import torch.nn.functional as F
+
+def rmsnorm(x, weight, eps=1e-6):
+    # x: [..., d]，沿最后一维归一化，不减均值、无 bias
+    rms = torch.sqrt(x.pow(2).float().mean(-1, keepdim=True) + eps)  # fp32 reduction
+    return (x / rms) * weight                                        # weight: [d]
+
+def apply_rope(q, k, cos, sin):
+    # q,k: [B,h,T,d_h]；cos,sin: [T, d_h]（按 d_h 成对旋转）
+    def rotate(x):
+        x1, x2 = x[..., :x.shape[-1] // 2], x[..., x.shape[-1] // 2:]
+        return torch.cat([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
+    return rotate(q), rotate(k)
+
+def causal_mha(x, Wq, Wk, Wv, Wo, h, cos, sin):
+    B, T, d = x.shape
+    dh = d // h
+    # 1. QKV projection + reshape 为多头
+    q = x @ Wq.T; k = x @ Wk.T; v = x @ Wv.T          # [B,T,d]
+    q = q.view(B, T, h, dh).transpose(1, 2)           # [B,h,T,dh]
+    k = k.view(B, T, h, dh).transpose(1, 2)
+    v = v.view(B, T, h, dh).transpose(1, 2)
+    # 2. RoPE：只旋转 Q/K
+    q, k = apply_rope(q, k, cos, sin)
+    # 3. scores / sqrt(dh) + causal mask(-inf) + softmax(dim=-1)
+    scores = q @ k.transpose(-2, -1) / (dh ** 0.5)    # [B,h,T,T]
+    mask = torch.triu(torch.ones(T, T, device=x.device, dtype=torch.bool), diagonal=1)
+    scores = scores.masked_fill(mask, float("-inf"))
+    attn = F.softmax(scores, dim=-1)
+    # 4. weighted sum + concat + output projection
+    out = attn @ v                                    # [B,h,T,dh]
+    out = out.transpose(1, 2).contiguous().view(B, T, d)
+    return out @ Wo.T
 ```
 
 **三个必踩坑**
 
-1. **mask 方向**：query `i` 只能看 key `j≤i`；`softmax` 前设 `-inf`，不能软 softmax 后再 mask。
+1. **mask 方向**：query `i` 只能看 key `j≤i`；用 `torch.triu(diagonal=1)` 掩掉未来，且在 `softmax` 前设 `-inf`，不能软 softmax 后再 mask。
 2. **softmax 轴**：沿 key 轴（`dim=-1`），不是 head/query 轴。
-3. **缩放**：除以 \(\sqrt{d_h}\) 而非 \(\sqrt{d}\)；RoPE 按 `d_h` 旋转、只旋转 Q/K。
+3. **缩放**：除以 \(\sqrt{d_h}\) 而非 \(\sqrt{d}\)；RoPE 按 `d_h` 旋转、只旋转 Q/K；`transpose(1,2)` 后 `.contiguous()` 再 view 回 `[B,T,d]`。
 
 ### 14.4 高频追问与陷阱
 
@@ -730,6 +780,33 @@ out      -> concat heads -> [B,T,d] -> Linear -> [B,T,d]
 | 为什么用 bias-free linear？ | 省参数、简化 shape；RMSNorm 已承担平移角色 |
 | 深层 Transformer 为什么难训练？ | 残差流方差随 depth 累积、梯度消失/爆炸；pre-norm/DeepNorm/μP 缓解 |
 | 外推和插值是一回事吗？ | 否：外推是直接加长，插值是把长位置压回训练区间，继续训练是在新长度更新参数 |
+
+### 14.5 模拟追问链（还原面试官的层层深入）
+
+架构题通常从「画 attention」一路追到「为什么是这些默认值」，每一层都在往**公式→数值→公平比较**递进：
+
+> **面试官**：手写一下 multi-head attention 的流程。
+> **你**：QKV 三个投影 → reshape 成 `[B,h,T,d_h]` → `scores = QKᵀ/√d_h` → causal mask `-∞` → softmax(dim=-1) → 乘 V → concat → 输出投影。
+>
+> **面试官**：为什么除以 \(\sqrt{d_h}\)？
+> **你**：q、k 各维独立方差约 1，点积方差 ≈ \(d_h\)；除以 \(\sqrt{d_h}\) 把 logit scale 拉回常数，避免 softmax 饱和。
+>
+> **面试官**：mask 在哪一步做？为什么？
+> **你**：softmax 之前设 `-∞`；若 softmax 后再 mask，未来 token 已参与归一化，会泄漏。
+>
+> **面试官**：pre-norm 和 post-norm 区别？为什么现在都用 pre-norm？
+> **你**：norm 放在 residual 之前 vs 之后；pre-norm 的 Jacobian 含 identity 直通路径，深层训练更稳，post-norm 对 warm-up/初始化敏感。
+>
+> **面试官**：RoPE 怎么把相对位置注入进去？
+> **你**：对 Q/K 施加位置相关旋转 \(R_m\)，因旋转正交，点积 \(\tilde q_m^\top \tilde k_n = q_m^\top R_{n-m}k_n\) 只依赖相对位移。
+>
+> **面试官**：SwiGLU 和普通 FFN 比，参数怎么对齐？
+> **你**：普通 FFN `2df`，SwiGLU `3df`；要等参需 \(f_{\rm GLU}\approx 8d/3\)，都设 4d 再比较是不公平的。
+>
+> **面试官**：那这个模型参数量多少？
+> **你**：单层 `12d²`，总 \(12Ld^2\)，7B 量级。
+
+**分层自测**：能画出 attention 流程并说清 mask 顺序为**初级**；能解释 `√d_h`、pre-norm Jacobian、RoPE 旋转为**中级**；能主动讲 SwiGLU 参数匹配、残差方差控制、DeepNorm/μP 为**高级**。
 
 ## 15. 结论与本讲小结
 
