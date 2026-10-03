@@ -7,7 +7,7 @@ lecturer: "Percy Liang"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py"
-  - "../assignments/spring2026/assignment1-basics/"
+  - "../assignments/assignment1-basics/"
 ---
 
 # Lecture 02 — PyTorch 与 Resource Accounting：从 tensor shape 到资源账本
@@ -555,7 +555,7 @@ latency-sensitive 服务还应报告 p50/p95。长训练同时报告 tokens/s �
 
 | 概念 | 路径 / 符号 | 阅读问题 |
 |---|---|---|
-| `einsum` Linear | `assignments/spring2026/assignment1-basics/cs336_basics/model.py`：`Linear.forward` | weight 为何是 `[d_out,d_in]`？ |
+| `einsum` Linear | `assignments/assignment1-basics/cs336_basics/model.py`：`Linear.forward` | weight 为何是 `[d_out,d_in]`？ |
 | Head reshape | 同文件：`CausalMultiHeadSelfAttention.forward` | `[B,T,d]` 如何变 `[B,h,T,d_h]`？ |
 | FLOPs 组件 | 同文件：Q/K/V/O、`scaled_dot_product_attention`、`SwiGLU` | 对照本讲逐项计数 |
 | Mixed precision | `.../cs336_basics/training.py`：`torch.autocast` | 哪些状态仍是 fp32？ |
@@ -601,28 +601,19 @@ latency-sensitive 服务还应报告 p50/p95。长训练同时报告 tokens/s �
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
 | 第一次 step 极慢 | 分离 compile/warm-up | CUDA context、JIT、autotune |
-| 计时异常快 | 是否同步 | 只测到 asynchronous launch |
-| 显存逐 step 增长 | live graph / Python list | 未 `detach()`、retain graph |
+| 计时异常快 / kernel 计时不可信 | 是否同步 | 只测到 asynchronous launch、未 `synchronize` |
+| 显存逐 step 增长 / 长时间运行缓涨 | live graph / Python list / allocator 碎片 | 未 `detach()`、retain graph、变长 shape 反复分配 |
 | reserved 很高、allocated 较低 | allocator snapshot | fragmentation/caching |
-| matmul 很慢 | shape、layout、dtype | 小 GEMM、非 contiguous、未用 tensor core |
-| GPU 100% 但 MFU 低 | kernel mix、bandwidth | memory/launch bound |
-| compile 无加速 | graph breaks / shape cache | 动态控制流、频繁新 shape |
-| accumulation loss 不一致 | loss scaling、clip/step 时机 | 未除 \(K\)、每 microbatch step |
-| mixed precision NaN | reduction dtype / scaling | fp16 overflow/underflow |
+| 训练/推理 OOM | 参数+梯度+优化器+激活账本 | 未计 optimizer state、未用 checkpointing、被计算图持有 |
 | 理论能放下却 OOM | temporary/workspace/reserved | 漏算 activation 或 fragmentation |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
-| 训练 OOM | 参数+梯度+优化器+激活账本 | 未计 optimizer state；未用 checkpointing |
-| 推理也 OOM | 参数量×dtype 与引用释放 | 张量被计算图/全局变量持有 |
+| matmul 很慢 | shape、layout、dtype | 小 GEMM、非 contiguous、未用 tensor core |
+| matmul 结果错乱 | dtype 与 broadcast 审计 | fp16 溢出、维度隐式广播 |
+| GPU 100% 但 MFU 低 | kernel mix、bandwidth | memory/launch bound、小 batch GEMM |
 | MFU 远低于预期 | arithmetic intensity 与 Roofline | 小 batch GEMM、launch-bound 循环 |
 | 实测比理论慢数倍 | 通信/数据加载 overlap | CPU 预处理瓶颈、未异步预取 |
-| matmul 结果错乱 | dtype 与 broadcast 审计 | fp16 溢出、维度隐式广播 |
-| loss 出现 NaN | loss scaling 与梯度范数 | 混合精度未用 GradScaler、上溢 |
-| 长时间运行显存缓涨 | allocator 碎片化 | 变长 shape 反复分配；固定 shape 或设分配器策略 |
-| kernel 计时不可信 | CUDA 异步语义 | 未 `synchronize` 就取时间戳 |
+| compile 无加速 | graph breaks / shape cache | 动态控制流、频繁新 shape |
+| accumulation loss 不一致 | loss scaling、clip/step 时机 | 未除 \(K\)、每 microbatch step |
+| mixed precision NaN / loss 出现 NaN | reduction dtype / scaling | fp16 overflow/underflow、未用 GradScaler |
 
 ## 12. 作业关联
 
@@ -636,54 +627,165 @@ latency-sensitive 服务还应报告 p50/p95。长训练同时报告 tokens/s �
 
 ## 13. 讨论：效度威胁与结论边界
 
-### 14.1 Construct validity
+### 13.1 Construct validity
 
 - FLOPs 是算法工作量近似，不包含所有 memory、launch、communication 和 control overhead；
 - peak allocated memory 不等于 process VRAM，也不等于可用 batch；
 - MFU 依赖 FLOP 公式和峰值规格，跨论文比较前必须统一 numerator/denominator；
 - GPU utilization 只表示设备忙，不表示有效模型计算。
 
-### 14.2 Internal validity
+### 13.2 Internal validity
 
 - 未同步 CUDA、未 warm-up 或把 compile time 混入，会系统性扭曲计时；
 - 不同 batch/sequence 同 step 数看过的 tokens 不同，不能归因于优化；
 - dtype、TF32、autocast、determinism 或 kernel version 未固定，会成为 confounder；
 - profiler 自身有 overhead，尤其是 stack trace、shape record 和 memory history。
 
-### 14.3 External validity
+### 13.3 External validity
 
 - 单 GPU、单 shape、单软件版本的 speedup 不自动迁移到其他硬件/规模；
 - microbenchmark kernel speedup 不等于 end-to-end time-to-quality；
 - synthetic tensors 可能缺少真实 padding、sparsity、data pipeline 和 communication；
 - 峰值规格是理论上限，power/thermal/clock 与共享环境会改变可达性能。
 
-### 14.4 研究报告最低信息
+### 13.4 研究报告最低信息
 
 硬件型号/数量、driver/CUDA/framework/commit、模型与 shapes、dtype、warm-up/repetitions、
 synchronization、统计量、OOM/error policy、correctness tolerance、完整运行命令。
 缺少这些信息的“X× 加速”不可可靠复现。
 
-## 面试要点速记
+## 14. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> 本讲是 ML Systems / LLM 面试最硬核的「算账」考点：面试官会让你当场手算参数量、FLOPs、
+> 训练显存、KV cache、MFU。核心不是背数字，而是掌握 `shape → FLOPs → bytes → bottleneck`
+> 这条推导链。下面按「一页速览 → 高频题 → 手撕核算 → 追问」四层组织，每题仍用
+> **定义 → 为什么/原理 → 公式 → 工程落地 → 边界**的框架。
 
-1. **Q：训练 1B 模型最少要多少显存（不含激活）？** 要点：bf16 参数 2N + 梯度
-   2N + Adam fp32 状态（m、v、master weights）12N ≈ **16N bytes** → 1B ≈ 16GB。
-2. **Q：\(C\approx6ND\) 的 6 从哪来？** 要点：前向 ~2ND，反向 ~4ND（对权重梯度
-   需重放两次矩阵乘）。
-3. **Q：什么时候是 memory-bound？** 要点：arithmetic intensity（FLOPs/字节）
-   低于机器峰值算力/带宽之比：elementwise、小 batch decode、optimizer step。
-4. **Q：activation checkpointing 的代价？** 要点：只存层边界激活、反向时重算
-   → 显存大降、时间 +约 33%（多一次前向）。
-5. **Q：MFU 怎么算、多少算健康？** 要点：实测 FLOPs /（峰值 FLOPs × 时间）；
-   大模型密集训练 40–60% 正常，低于 ~30% 先查通信、数据加载与小 kernel。
+### 14.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：resource accounting 是用 `shape → FLOPs → bytes → bottleneck → experiment`
+回答「模型能否放下、瓶颈是算力还是带宽、一次实验要多久」。
 
-- 16N bytes 规则（Adam+bf16 训练态）；6ND；checkpointing 时间 ~1.33×；
-  roofline 拐点 = 峰值算力 / 峰值带宽。
+**必背数字与公式**
 
-## 14. 结论与本讲小结
+- 训练 FLOPs \(C\approx6ND\)：forward \(2ND\) + backward \(4ND\)（\(N\) 为参与 matmul 的参数量）。
+- 参数量 \(P\approx12Ld^2\)（`d_ff=4d`，单层 QKV+out `4d²` + FFN `8d²`）。
+- **16N 规则**：Adam+bf16 训练态 ≈ parameter 2 + gradient 2 + fp32 moments(m,v) 8 + master 4 = **16 bytes/参数**。
+- 一次 matmul 的 backward ≈ 2× forward（对 X 和 W 各做一次同阶 GEMM）。
+- activation checkpointing 时间 ≈ **1.33×**（多一次 forward），显存从 \(O(L)\) 降到 \(O(\sqrt L)\)。
+- roofline 拐点 \(I^\*=C_{\max}/BW\)；\(I<I^\*\) 是 memory-bound，否则 compute-bound。
+
+**三句话答高频**
+
+1. FLOPs 决定「理论算多少」，memory 决定「能不能放」，arithmetic intensity 决定「能不能跑满」。
+2. Adam 显存大头是 fp32 的 m/v（8 bytes/参数），不是模型权重。
+3. backward 不是 forward 的 1 倍，对 matmul 约为 2 倍，所以总训练 ≈ 3× forward。
+
+### 14.2 高频面试题与答题框架
+
+**Q1：\(C\approx6ND\) 的 6 是怎么来的？什么时候失效？**
+
+- **推导**：forward 一次 matmul 约 \(2ND\)；backward 需要算对输入的梯度和对权重的梯度，各是同阶的 GEMM，共约 \(4ND\)；合计 \(6ND\)。
+- **为什么**：反向的两次 GEMM 正是「激活转置 × 输出梯度」与「输入转置 × 输出梯度」。
+- **失效边界**：忽略 attention 的 \(T^2\) 项、embedding lookup、softmax/norm、optimizer、recomputation、通信；只在长训练、dense matmul 主导时量级准确。
+
+**Q2：训练一个 1B 参数模型最少要多少显存（不含激活）？**
+
+- **bf16+Adam 的 16N 规则**：parameter 2 + gradient 2 + Adam 两个 fp32 moment 8 + fp32 master weight 4 = 16 bytes/参数。
+- 1B × 16 = **16 GB**；这还没算 activation、临时 workspace、CUDA context 与 allocator 碎片。
+- **为什么 Adam 是 3 倍权重**：m、v 各 4 bytes 与参数同 shape，master weight 再 4 bytes，共 12 bytes 纯优化器状态。
+- **注意**：纯 bf16 无 master weight 可降到 12N；fp32 全量是 16N 但来源不同（param 4 + grad 4 + m 4 + v 4）。
+
+**Q3：模型参数量怎么手算？**
+
+- 单层：QKV+out 四个 \(d\times d\) 矩阵 `4d²` + SwiGLU 三个矩阵（`d_ff=4d` 时）`3·4d²=12d²`，其中两个门 `2·4d²=8d²` 记入 FFN → 单层 `12d²`。
+- 总 `12Ld²` + embedding/head `2Vd`（tied 时 1 份）。
+- 例：`d=4096, L=32, V=32000` → `12×32×4096² ≈ 6.4B` 非嵌入参数，与 LLaMA-7B 量级一致。
+
+**Q4：训练显存由哪些部分组成？激活显存怎么估？**
+
+- 总 \(M_{\rm peak} = M_{\rm params}+M_{\rm grads}+M_{\rm opt}+M_{\rm activations}+M_{\rm temp}+M_{\rm allocator}\)。
+- activation 上界形如 \(A/B \approx L(7Td+4Tf+2hT^2)+Td+2TV\)，其中 `hT²` attention 概率与 `TV` logits 在大序列/大词表下最贵。
+- **工程**：用 `memory_allocated`（live）区分 `memory_reserved`（caching allocator 预留），OOM 常是碎片而非总 free 不足。
+
+**Q5：什么是 memory-bound？arithmetic intensity 与 roofline 怎么用？**
+
+- arithmetic intensity \(I=\text{FLOPs}/\text{bytes}\)；可达性能 \(\le\min(C_{\max}, BW·I)\)。
+- 拐点 \(I^\*=C_{\max}/BW\)：低于它受带宽限制（memory-bound），高于它受算力限制（compute-bound）。
+- **例子**：GEMM 的 \(I=O(n)\)（越大的矩阵复用越强，compute-bound）；逐元素 ReLU、softmax 的 \(I=O(1)\)（memory-bound）；decode 的 matvec 复用低、偏 memory-bound。
+
+**Q6：MFU 是什么？怎么算？多少算健康？**
+
+- \(\text{MFU}=\frac{\text{模型理论 FLOPs/step}×\text{steps/s}}{\text{峰值 FLOP/s}×\text{设备数}}\)。
+- 大模型密集训练 **40–60%** 算正常；低于 ~30% 先查通信、数据加载、小 kernel 与 launch gap。
+- **陷阱**：GPU utilization 100% ≠ MFU 高；memory-bound kernel 也能让设备一直「忙」但没算有效 FLOPs。
+
+**Q7：fp32 / fp16 / bf16 区别？为什么 bf16 通常不用 loss scaling？**
+
+- fp32：8-bit exponent + 23-bit fraction（稳、4 bytes）；fp16：5+10（范围小、梯度易 underflow，需 loss scaling）；bf16：8+7（2 bytes，动态范围≈fp32，精度粗）。
+- bf16 保留 8-bit exponent，梯度范围与 fp32 相近，因此大模型常可免 loss scaling（Kalamkar et al. 2019；PaLM）。
+- fp8 需 E4M3/E5M2 + per-tensor/channel scaling，数值边界更依赖实现。
+
+**Q8：gradient accumulation 为什么省显存？代价是什么？**
+
+- 把 global batch \(B_g\) 分成 \(K\) 个 microbatch \(B_\mu\)，loss 除以 \(K\) 累计后再 `clip + optimizer.step()`。
+- 它只降低 activation peak（每个 microbatch 的激活用完即释放），**不减少总 FLOPs**，且小 GEMM 可能降低 kernel 效率。
+- **语义等价前提**：累计完才 step/clip，且各 microbatch 数据分布一致；否则不等于 global batch。
+
+**Q9：activation checkpointing 的原理与代价？为什么约 1.33×？**
+
+- 普通反向保存每层激活（\(O(L)\)）；checkpointing 只存边界，backward 时重算中间 forward，把激活降到 \(O(\sqrt L)\)。
+- 代价：多跑一次 forward，理论时间 ≈ \((2+1)/(2) \approx 1.33×\) 的前向/反向总量；只作用于 activation，不动参数/梯度/优化器。
+- **进阶**：selective recomputation 按「省 1 byte 的重算代价」排序，只丢弃保存贵、重算便宜的中间量（如 `T²` attention 辅助矩阵）。
+
+**Q10：为什么 attention 是 memory-bound，而 GEMM 是 compute-bound？**
+
+- GEMM 的 FLOPs 是 \(O(n^3)\)、搬运 \(O(n^2)\)，arithmetic intensity \(O(n)\)，越大越 compute-bound。
+- 标准 attention 的 score 矩阵是 \(T^2\) 中间量，算术强度随序列长度**下降**，因此长序列下受带宽限制；这正是 FlashAttention 通过减少 HBM 往返加速的动机。
+
+### 14.3 手撕核算要点（显存 + FLOPs）
+
+面试常让「算一个给定 config 的模型显存 / FLOPs」，按固定步骤走，避免漏项：
+
+```text
+显存核算（训练，bf16+Adam）
+  1. 参数量 N = 12 L d² + 2 V d
+  2. params   = 2N bytes（bf16）
+  3. grads    = 2N bytes（bf16）
+  4. optimizer = 8N bytes（m,v 各 4N，fp32）
+  5. master   = 4N bytes（fp32，可选）
+  6. 小计     ≈ 16N bytes
+  7. activations（按公式估算，或用 torch.autograd 实测）
+  8. 加 workspace / context / 碎片余量
+
+FLOPs 核算（每 token，d_ff=4d）
+  1. QKV+O: 4 × 2T d²  = 8 T d²
+  2. scores + AV:       = 4 T² d
+  3. SwiGLU: 3 × 2T d·4d = 24 T d²
+  4. LM head:             = 2 T d V
+  → 每 token ≈ (8+24)T d² + 4 T² d + 2 T d V
+```
+
+**三个必踩坑**
+
+1. **别把参数量当显存**：Adam 状态与 activation 往往更大，16N 才是训练态小计。
+2. **backward ≠ forward**：对 matmul 约 2×，训练总计约 3× forward，才有 `6ND`。
+3. **`numel()` 不是峰值**：多个 tensor 生命周期重叠、allocator 碎片、临时 workspace 都会抬高真实 peak。
+
+### 14.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| view 和 contiguous 有什么区别？ | view 只改 stride 不搬数据；transpose 后要求 contiguous 会触发真实拷贝，profiler 里看 `aten::copy_` |
+| einsum 一定快吗？ | 否，只表达语义；能否 lower 成高效 GEMM 才决定性能 |
+| 为什么 Adam 显存是权重的 3 倍？ | m、v 各 4 bytes + master weight 4 bytes = 12 bytes 优化器状态 |
+| 大 batch GEMM 为什么效率高？ | 更大矩阵复用强、arithmetic intensity 高，但激活显存也随 batch 涨 |
+| MFU 和 GPU utilization 一样吗？ | 否，utilization 只表示设备忙，memory/launch-bound 也能 100% |
+| loss scaling 解决什么？ | fp16 梯度 underflow；bf16 因 8-bit exponent 通常不需要 |
+| 梯度累积等于免费大 batch 吗？ | 否，省显存但总 FLOPs 不变、小 GEMM 可能更慢 |
+| checkpointing 是总内存减半吗？ | 否，只作用于可重算的 activation，不动参数/梯度/优化器 |
+
+## 15. 结论与本讲小结
 
 PyTorch 编程的核心不是记 API，而是保持 tensor 轴、dtype、device 与生命周期可审计。
 FLOPs 决定理论工作量，memory accounting 决定能否运行，arithmetic intensity 决定硬件能否接近峰值。
@@ -756,6 +858,6 @@ Regularization.” *ICLR*, 2019. [link](https://arxiv.org/abs/1711.05101)
 - Stanford CS336, [Spring 2026 Lecture 2](https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py)
 - PyTorch, [Autograd mechanics](https://pytorch.org/docs/stable/notes/autograd.html)
 - einops, [Einstein notation and rearrange](https://einops.rocks/)
-- [A1 实验报告](../assignments/spring2026/assignment1-basics/report/main.tex)
-- [A2 实验报告](../assignments/spring2026/assignment2-systems/report/writeup.pdf)
+- [A1 实验报告](../assignments/assignment1-basics/report/main.tex)
+- [A2 实验报告](../assignments/assignment2-systems/report/main.pdf)
 - [Systems 主题导航](../experiments/topics/systems.md)
