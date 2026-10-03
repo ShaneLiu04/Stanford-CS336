@@ -739,25 +739,90 @@ characters 与 denial-of-service 长输入，而不仅是英文 compression。
 - **后果**：更短 effective context、更高训练/推理成本与 API 计费（Petrov et al. 2023）。
 - **工程**：报告 per-language token cost / fertility，而不只看英文压缩率。
 
+**Q9：GPT-2 的 pre-tokenization regex 为什么保留 leading space？token boundary 为什么不等于 word boundary？**
+
+- **为什么**：`GPT2_PATTERN` 把空格并入前面的 word（如 `" the"` 而非 `"the"`），使空格处理在 BPE 之外统一、避免词尾空格歧义，也提高英文压缩率。
+- **边界含义**：token boundary 由 regex 决定，不是词边界；一个 token 可能覆盖「空格 + 英文词」，一个中文字符可能跨多个 token。
+- **追问点**：pre-tokenization 是 multilingual 行为的第一决定因素——英文优化的 regex 对无空格语言（中日韩）和代码并不理想。
+
+**Q10：SentencePiece 与 tiktoken 的定位差异？为什么现代 decoder 常直接处理 raw bytes？**
+
+- **SentencePiece**：raw-text framework，统一 normalization + whitespace 符号（`▁`），不依赖外部分词，可跑 BPE/Unigram；训练和推理走同一 normalize 路径。
+- **tiktoken**：OpenAI 的 byte-level BPE（GPT-2/GPT-4 风格），直接以 UTF-8 bytes 为基底 + regex pre-tokenization，可逆、无 OOV，但无概率模型/采样。
+- **为什么 raw bytes**：byte 基底保证任意输入可编码、可逆、确定，配合正则约束即可获得「开放词表 + 短序列」，避免 code-point 词表的稀疏。
+
+**Q11：领域适配时如何调整 tokenizer？为什么通常不从头重训？**
+
+- **为什么**：tokenizer 一旦冻结，embedding/LM head 的每一行语义就固定了；换词表等于换「观察世界的单位」，旧 checkpoint 无法复用。
+- **做法**（Dagan et al. 2024）：对已有 tokenizer 继续训练、小规模扩展领域词表 + embedding resize + 少量 continued training，以极低成本改善领域 loss。
+- **前提**：任何词表扩展都要与 embedding resize、special-token 审计、旧 checkpoint 迁移策略一起设计，不能静默替换。
+
+**Q12：tokenizer 会引入哪些安全与隐私风险？**
+
+- **memorization/probing**：PII、URL、API key 或 offensive 串被记成单 token，更易被模型记忆和攻击者 probing。
+- **不公平**：低资源语言 fertility 高 → 上下文容量、延迟与 API 计费的系统性差异（Petrov et al. 2023）。
+- **DoS/审计**：异常 control characters、超长输入、恶意 special-token 注入需在 artifact audit 中显式覆盖，而不只看英文压缩率。
+
 ### 13.3 手撕代码要点（BPE）
 
-面试手撕 BPE 时，先给数据结构，再给训练/编码两个循环，最后主动点出三个坑。
+面试手撕 BPE 时，先把「训练」和「编码」分开写（面试官最在意你会不会混淆两者），
+给出可运行的 naive 版本，再主动补一句优化思路。下面是完整、正确的参考实现：
 
-```text
-数据结构（训练）
-  word_counts:   tuple -> freq             # pre-token 频数
-  pair_counts:   (a,b) -> weighted count   # 相邻 pair 频数
-  pair_to_words: (a,b) -> set(word_id)     # 倒排索引
-  heap:          (-count, tie_key)         # 取最大频 pair
+```python
+from collections import Counter
 
-训练循环（至多 V-256-S 次）
-  1. 弹出最大频 pair p = (a,b)
-  2. 对所有含 p 的 word 做 non-overlapping merge
-  3. 局部更新受影响 word 的相邻 pair 计数 + 倒排索引 + heap
+# ---------- 训练：反复合并最高频 pair ----------
+def train_bpe(pretokens, vocab_size=1000):
+    """pretokens: list[list[int]]，每个元素是一段 byte 序列（已 pre-tokenize）"""
+    merges = []                                      # 有序 merge 表 [(a,b), ...]
+    vocab = {i: bytes([i]) for i in range(256)}      # 初始 256 个 byte tokens
+    tie_break = lambda kv: (kv[1], kv[0])            # 同频时取字典序更大的 pair
 
-编码循环（每个 pre-token）
-  反复: 找 rank 最小的可用 pair -> 一次性合并其所有不重叠出现
+    while len(vocab) < vocab_size:
+        pairs = Counter()
+        for w in pretokens:
+            for a, b in zip(w, w[1:]):
+                pairs[(a, b)] += 1
+        if not pairs:
+            break
+        (a, b), _ = max(pairs.items(), key=tie_break)  # 最高频 pair
+        new_id = len(vocab)
+        vocab[new_id] = vocab[a] + vocab[b]
+        merges.append((a, b))
+
+        # non-overlapping 合并：重叠 pair 一次只合并一个
+        pretokens = [merge_once(w, a, b, new_id) for w in pretokens]
+    return merges, vocab
+
+def merge_once(w, a, b, new_id):
+    out, i = [], 0
+    while i < len(w):
+        if i + 1 < len(w) and w[i] == a and w[i+1] == b:
+            out.append(new_id); i += 2              # 跳过重叠位置
+        else:
+            out.append(w[i]); i += 1
+    return out
+
+# ---------- 编码：按 merge rank 贪心合并，绝不重新统计频率 ----------
+def encode(word, merges):
+    """word: list[int] byte 序列；merges 的顺序就是 rank"""
+    ranks = {pair: rank for rank, pair in enumerate(merges)}
+    word = list(word)
+    while True:
+        best_rank, best_i = float("inf"), -1
+        for i in range(len(word) - 1):
+            r = ranks.get((word[i], word[i+1]), float("inf"))
+            if r < best_rank:
+                best_rank, best_i = r, i
+        if best_i == -1:
+            return word
+        word[best_i:best_i+2] = [256 + best_rank]    # 新 id = 256 + rank
 ```
+
+**优化思路（面试官追问「训练怎么加速」时）**：朴素训练每轮全量扫一遍是 \(O(MN)\)；用
+`pair_counts` + `pair_to_words` 倒排索引 + max-heap 做增量更新，只在受影响的 pre-token
+上重算相邻 pair，接近线性；编码用 linked list + priority queue 可从 \(O(L^2)\) 降到
+\(O(L\log L)\)。
 
 **三个必踩坑**
 
@@ -775,6 +840,35 @@ characters 与 denial-of-service 长输入，而不仅是英文 compression。
 | 大词表一定更好吗？ | 否，缩短序列但增大 embedding/head 参数，还可能记领域噪声 |
 | bytes/token 能代表质量吗？ | 不能，只代表序列压缩，不等价于语义/形态/下游 accuracy |
 | token-free 会取代 BPE 吗？ | 未必，BPE 仍是 checkpoint/serving 的事实标准；MEGABYTE/BLT 把长序列代价转给架构 |
+
+### 13.5 模拟追问链（还原面试官的层层深入）
+
+面试官通常从「BPE 是什么」一路追到工程细节。下面是一段典型追问链，注意每一层都在往
+「复杂度 / 边界 / 反例」递进，答满前四层是优，主动补边界是加分：
+
+> **面试官**：介绍一下 BPE 分词。
+> **你**：byte-level BPE 从 256 bytes 起底，反复合并最高频相邻 pair，得到「有序 merge 表」；训练学 merge 表，编码按表的顺序贪心合并，两者是不同过程。
+>
+> **面试官**：训练时每轮怎么选要合并的 pair？
+> **你**：统计所有相邻 pair 的频数 \(C(p)=\sum_w c(w)\,\#\{(w_i,w_{i+1})=p\}\)，取 \(\arg\max\)；最多 \(V-256-S\) 次。
+>
+> **面试官**：复杂度多少？能优化吗？
+> **你**：朴素每轮全量扫描是 \(O(MN)\)；用 pair 计数 + 倒排索引 + 堆做增量更新，只在受影响的 pre-token 上重算，接近线性。
+>
+> **面试官**：序列 `aaa` 里 pair `aa` 出现了两次，一次 merge 能都合并吗？
+> **你**：不能，合并是 non-overlapping 的，一次只能得 `aa a`；计数定义和替换语义必须一致。
+>
+> **面试官**：两个词表大小相同的模型，为什么 perplexity 不能直接比？
+> **你**：perplexity 是 token-level 指数 loss，而 token 是人为构造单位；相同文本被切成的 token 数不同，「分母」不同。要换算成 `nats/byte = L_tok/(bytes/token)` 再比。
+>
+> **面试官**：那是不是词表越大越好？
+> **你**：不是。大词表缩短序列、省 attention 和步数，但增大 embedding/head 的 \(Vd\) 参数、低频 token 表示差、还可能记领域噪声，最优值要 sweep。
+>
+> **面试官**：数字 tokenization 有什么坑？
+> **你**：BPE 由频率驱动，数字是长尾 + 进位结构，`1234` 可能被切成 `12`+`34` 或逐位，模型难学位值/进位；数学/财务语料应强制逐位或固定分组 pre-tokenization。
+
+**分层自测**：能答出「训练/编码区别 + 复杂度」为**初级**；能补「增量更新数据结构 +
+nats/byte 换算」为**中级**；能主动讲「数字盲区、多语言 fertility、token-free 边界」为**高级**。
 
 ## 14. 结论与本讲小结
 
