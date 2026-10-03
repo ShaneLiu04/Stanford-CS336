@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_07.py"
   - "../experiments/topics/systems.md"
-  - "../assignments/spring2026/assignment2-systems/"
+  - "../assignments/assignment2-systems/"
 ---
 
 # Lecture 07 — Collectives 与 Data Parallelism：通信语义、同步正确性与重叠调度
@@ -313,7 +313,7 @@ gradients [[8]](#ref-8)。公平比较需把 compression/decompression FLOPs、�
 
 仓库教学实现位于：
 
-- `assignments/spring2026/assignment2-systems/cs336_systems/ddp.py`
+- `assignments/assignment2-systems/cs336_systems/ddp.py`
 - `cs336_systems/sharded_optimizer.py`
 
 其 DDP 核心语义是：
@@ -490,43 +490,35 @@ gradient correctness 与 time-to-loss。Microbenchmark 带宽高不保证 overla
 
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
-| 全部 ranks hang | collective sequence | shape/order 不一致 |
+| 全部 ranks hang / DDP 挂起 | collective sequence / bucket/hook 生命周期 | shape/order 不一致、梯度未完成即被使用 |
 | 仅某 rank OOM 后 hang | 最早异常 log | 其他 ranks 等 collective |
 | loss 比单卡大 \(p\) 倍 | reduction scaling | SUM 未除 world size |
 | ranks 参数逐步分叉 | wait/no_sync | optimizer 前未完成同步 |
-| overlap 图上没有重叠 | bucket ready order | bucket 太大/顺序错误 |
+| overlap 图上没有重叠 / 扩展比远低于线性 | bucket ready order / 通信 2S | bucket 太大/顺序错误、计算通信未重叠 |
 | 重叠后 backward 变慢 | HBM/SM contention | NCCL 与 compute 争资源 |
 | 小 tensor 带宽极低 | latency/message count | 过多 per-param collectives |
-| 多节点骤降 | topology/NIC | 错网卡、跨节点算法 |
+| 多节点骤降 / 节点间扩展骤降 | topology/NIC | 错网卡、跨节点算法、未分级归约 |
 | tied weight 梯度翻倍 | hooks | 同一 Parameter 重复注册 |
 | epoch 数据重复 | sampler | 未 shard 或未 `set_epoch` |
-
-### 故障排查速查
-
-| 现象 | 优先检查 | 常见根因 |
-|---|---|---|
-| DDP 挂起 | bucket/hook 生命周期 | 梯度未完成 all-reduce 即被使用 |
-| 扩展比远低于线性 | 通信量 \(2S\) 与 overlap | bucket 过小、计算通信未重叠 |
 | 各 rank 梯度不一致 | 未参与计算的参数 | 未正确处理 unused parameters |
 | 显存随 bucket 增长 | bucket_cap_mb 与 flatten | 分桶上限过大 |
 | ZeRO-1 显存未下降 | optimizer 分片是否生效 | 分片只作用于 optimizer state，参数/梯度仍在 |
-| 节点间扩展骤降 | 跨机带宽与拓扑 | 未做拓扑感知的分桶或分级归约 |
 
 ## 12. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 12.1 Construct validity
 - bus bandwidth、algorithm bandwidth、application throughput 不是同一指标；
 - overlap percentage 不等于 step-time reduction；
 - weak scaling efficiency 不等于固定任务加速；
 - gradient equality 不保证相同 stochastic training trajectory。
 
-### Internal validity
+### 12.2 Internal validity
 - barrier/同步是否计时会改变结果；
 - 只测 rank 0 隐藏 straggler；
 - network contention、topology、NCCL env 是 confounders；
 - 增 world size 同时改变 global batch/LR 会混合 systems 与 optimization。
 
-### External validity
+### 12.3 External validity
 - Gloo/CPU 不代表 NCCL/GPU；
 - 单节点 NVLink 不外推跨节点 Ethernet/IB；
 - 小模型 bucket optimum 不外推大模型；
@@ -535,26 +527,146 @@ gradient correctness 与 time-to-loss。Microbenchmark 带宽高不保证 overla
 推荐结论限定 model、batch、topology、backend、message range 与统计协议，并公开 hang/OOM/failed
 runs，而不是只写“DDP scales linearly”。
 
-## 面试要点速记
+## 13. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> 分布式/数据并行是 LLM 面试的高频系统题：面试官常从「DDP 每步通信量多少」切入，追到
+> 「ring all-reduce 公式」「ZeRO 三阶段」「为什么 overlap 不一定免费」「梯度裁剪为什么放同步后」。
+> 核心是区分「数值语义正确」与「系统性能」，用 \(\alpha\)-\(\beta\) 模型与 16N 账本支撑判断。
+> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：DDP 每步通信量是多少？** 要点：all-reduce 梯度 2S（ring 实现约
-   2(P−1)/P·S）；bucket 聚合小梯度、计算-通信 overlap 隐藏延迟。
-2. **Q：ZeRO-1/2/3 各分片什么、代价几何？** 要点：1=optimizer state
-   （16N → ~4N + 12N/P）；2=再分梯度；3=再分参数（~16N/P + 缓冲）；
-   ZeRO-3 通信由 2S 升为 3S（前/反向 all-gather + 梯度 reduce-scatter）。
-3. **Q：bucket 大小的权衡？** 要点：大桶通信效率高（摊薄延迟），但首个桶
-   就绪晚、峰值显存上升；`bucket_cap_mb` 需按模型调。
-4. **Q：梯度裁剪为何必须在 all-reduce 之后？** 要点：全局范数依赖完整梯度；
-   本地裁剪再归约会改变数学语义。
+### 13.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：DDP 的本质是**复制模型、切分数据、平均梯度**——解决吞吐、不解决容量；
+通信总 bytes 只是第一层，性能取决于消息粒度、\(\alpha/\beta\)、拓扑与能否和 backward 重叠。
 
-- 16N 账本（L02）是 ZeRO 各阶段收益的分母；DDP 2S / ZeRO-3 3S 是
-  扩展性估算的基本量。
+**必背数字与公式**
 
-## 13. 小结
+- ring all-reduce 每 rank 网络量 \(2\frac{p-1}{p}S\)，时间 \(2(p-1)\alpha+2\frac{p-1}{p}\frac{S}{\beta}\)。
+- DDP 通信 \(2S\)；ZeRO-1/2 也约 \(2S\)；ZeRO-3 约 \(3S\)。
+- 显存（16P 口径）：DDP `16P`；ZeRO-1 `8P+8P/p`；ZeRO-2 `4P+12P/p`；ZeRO-3 `16P/p`。
+- all-reduce = reduce-scatter + all-gather；ring 大消息 bandwidth-optimal，tree 小消息 steps 少。
+
+**三句话答高频**
+
+1. DDP 复制模型、切分数据、平均梯度，解决吞吐不解决容量。
+2. ring all-reduce 每 rank 传 \(2(p-1)/p·S\)，大消息带宽最优、小消息被 latency 支配。
+3. ZeRO 把 DP 复制的状态分片：1/2 期通信几乎免费，3 期涨到 3S 换显存随 \(p\) 线性下降。
+
+### 13.2 高频面试题与答题框架
+
+**Q1：DDP 每步通信量是多少？ring all-reduce 的公式？**
+
+- 梯度 tensor 大小 \(S=P s_g\)；all-reduce 每 rank 约传 \(2S\)（收发各 \(S\)）。
+- ring 分 reduce-scatter + all-gather 两阶段，各 \(p-1\) 步、每步传 \(S/p\)：\(V=2\frac{p-1}{p}S\)。
+- 时间 \(T\approx 2(p-1)\alpha+2\frac{p-1}{p}\frac{S}{\beta}\)：大消息 bandwidth-bound，小消息 \(2(p-1)\alpha\) 主导。
+
+**Q2：all-reduce 如何用 reduce-scatter + all-gather 实现？**
+
+- reduce-scatter：规约后每个 rank 只留结果的 \(1/p\) shard；
+- all-gather：每 rank 广播自己的 shard，最终每个 rank 都拿到完整规约结果。
+- 两阶段之和就是 all-reduce；ring 算法正是把这两阶段各自在环上做 \(p-1\) 步。
+
+**Q3：ZeRO-1 / 2 / 3 各分片什么？显存与通信怎么变？**
+
+- ZeRO-1 切 optimizer states（`8P+8P/p`）；ZeRO-2 再切 gradients（`4P+12P/p`）；ZeRO-3 再切 parameters（`16P/p`）。
+- 通信：ZeRO-1/2 约 \(2S\)（与 DDP 同级，显存收益近乎免费）；ZeRO-3 因 forward/backward 各要 all-gather 参数，通信涨到约 \(3S\)。
+- **洞察**：切分把「容量问题」转化为「collective 调度问题」，通信几乎不涨就能突破容量墙。
+
+**Q4：DDP 等于 global batch 训练的条件？**
+
+- 各 rank local batch 相等（或按样本数加权）、loss reduction 口径一致、data shards 无重复、参数/optimizer state 初始一致、RNG 语义正确、regularization 按 global objective 定义。
+- 若 local batch \(B_r\) 不同，正确梯度是 \(\sum_r B_r g_r/\sum_r B_r\)，不是简单 rank mean。
+- 任一假设破坏（如最后一个不完整 batch、token normalization），都会破坏「除 world size」的简单语义。
+
+**Q5：为什么 all-reduce 是 SUM 还要再除 \(p\)？**
+
+- DDP 目标是 global mean loss 的梯度：\(g=\frac1p\sum_r g_r\)。
+- 若只 all-reduce SUM 不除 \(p\)，有效学习率放大 \(p\) 倍，训练动态改变。
+- 常见做法是 loss 里已按 local mean 算，gradient hook 里再除 world size，避免二次缩放。
+
+**Q6：gradient bucket 的大小权衡？**
+
+- bucket 大：摊薄 latency、algorithm bandwidth 高；但首个 bucket 就绪晚、峰值显存高。
+- bucket 小：\(\alpha\)/launch 主导，且无法与 backward 充分重叠。
+- 生产框架按逆向参数顺序组 bucket（后层梯度先就绪），首轮观察 ready order 再 rebuild；最优值随模型/硬件变，需按 `bucket_cap_mb` 扫。
+
+**Q7：compute/communication overlap 为什么不一定免费？**
+
+- NCCL kernel 占用 SM、copy engine、HBM bandwidth 与 network injection。
+- 若 backward 本身 memory-bound，通信会争抢 HBM 拖慢 compute，overlap 后 compute kernel 变慢。
+- 应分别测 backward-only、communication-only、overlap timeline，判断是否真省时间。
+
+**Q8：梯度裁剪为什么必须在 all-reduce 之后？**
+
+- 全局 clip 阈值依赖完整梯度的 norm；各 rank 本地裁剪再规约会改变数学语义（相当于不同的正则强度）。
+- 正确顺序：all-reduce 得到全局梯度 → 算全局 norm → clip → optimizer step。
+
+**Q9：ring 与 tree all-reduce 怎么选？**
+
+- ring：大消息 bandwidth-optimal，每 rank 传 \(2(p-1)/p·S\)；小消息被 \(2(p-1)\alpha\) 支配。
+- tree：steps 约 \(O(\log p)\)，小消息更有优势，但每步消息和链路利用方式不同。
+- NCCL 会根据 topology、消息大小、channels 自动选 ring/tree/CollNet，不能只用 ring 公式解释所有算法。
+
+**Q10：strong 与 weak scaling 的区别？**
+
+- **strong**：global batch 固定，设备增加 → 每 rank compute 下降、通信不变，最受 Amdahl 串行项限制。
+- **weak**：每 rank local workload 固定，global batch 随 \(p\) 增大 → 系统效率更高，但 optimization problem 改变。
+- 报告要区分二者，并给 time-to-quality；不能把 LR scaling 等 optimization intervention 的收益记作 systems scaling。
+
+**Q11：`no_sync` 的作用？**
+
+- gradient accumulation 的前 \(A-1\) 个 microbatch 若每次都 all-reduce，产生无意义通信。
+- `no_sync()` 只在最后一次 backward 同步；loss 仍要除 \(A\)，clip/step 只做一次。
+- 遗漏最后一次同步会让 ranks 从此分叉，错误可能数步后才显现。
+
+**Q12：怎么诊断 DDP hang？**
+
+- 给每个 collective 编号、rank-local log 记录 enter/exit；检查各 rank tensor shape/dtype/device/sequence 是否一致。
+- 常见根因是「较早的真正异常（如某 rank OOM）+ 其他 rank 后续 hang」，只看 hang rank 会误诊。
+- 设 process-group timeout、NCCL debug，最小化到两 rank / 单 collective。
+
+### 13.3 手撕要点（通信量核算）
+
+面试让「算 all-reduce 通信量 / 比较 ZeRO 显存」时，按 16P 账本逐项写：
+
+```text
+设 P = 参数元素数，梯度 S = 4P bytes（fp32）
+
+DDP：
+  显存 = 16P（参数 4 + 梯度 4 + m 4 + v 4）
+  通信 = 2S（all-reduce，ring 每 rank 实际传 2(p-1)/p·S）
+
+ZeRO-1（切 optimizer state）：
+  显存 = 8P + 8P/p（m/v 分片，参数+梯度仍全量）
+  通信 ≈ 2S
+
+ZeRO-2（+ 切梯度）：
+  显存 = 4P + 12P/p
+  通信 ≈ 2S
+
+ZeRO-3（+ 切参数）：
+  显存 = 16P/p
+  通信 ≈ 3S（fwd/bwd 各 all-gather 参数 + 梯度 reduce-scatter）
+```
+
+**三个必踩坑**
+
+1. **别把「每 rank 发送量」当「总链路流量」**：ring 的 \(2(p-1)/p·S\) 是单 rank，总线带宽还要另算归一化。
+2. **SUM 要除 \(p\)**：all-reduce 只做 SUM，除 world size 由 loss/gradient 语义负责。
+3. **强扩展下通信不随 compute 下降**：local batch 变小，梯度 S 不变，通信占比反而上升。
+
+### 13.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| 为什么梯度用 all-reduce 不用 reduce？ | 每个 rank 都要全局梯度做 optimizer step |
+| tied weight 怎么处理？ | 按对象 identity 去重，否则同一 storage 注册两次 hook |
+| 小消息为什么 all-reduce 慢？ | \(2(p-1)\alpha\) 主导，应 bucketize 而非逐参数 |
+| overlap 一定更快吗？ | 否，NCCL 与 compute 争 HBM/SM，memory-bound 时可能更慢 |
+| BatchNorm 在 DDP 下等价吗？ | 否，local statistics ≠ global；用 SyncBatchNorm 或改 RMSNorm |
+| 多节点为什么骤降？ | 跨节点带宽/拓扑，需分级归约与拓扑感知分桶 |
+
+## 14. 小结
 
 DDP 的本质是复制模型、切分数据、平均 gradient。collective 的总 bytes 只是第一层分析；真正性能取决于消息粒度、\(\alpha/\beta\)、拓扑和能否与 backward 重叠。异步 API 只有在 buffer 生命周期、collective 顺序和等待边界正确时才既安全又有效。当复制本身成为容量瓶颈时，ZeRO 表明“数据并行”与“状态切分”可以在同一 collective 框架内统一——这正是 Lecture 08 多维并行的入口。
 
@@ -605,5 +717,5 @@ Little.” *ICLR*, 2019. https://arxiv.org/abs/1805.09767
 - [PyTorch DistributedDataParallel](https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html)
 - [PyTorch distributed collectives](https://pytorch.org/docs/stable/distributed.html)
 - [NCCL tests performance notes](https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md)
-- [A2 Systems 官方题面](../assignments/spring2026/assignment2-systems/cs336_assignment2_systems.pdf)
-- 本仓库：[A2 DDP/FSDP 报告](../assignments/spring2026/assignment2-systems/report/writeup.pdf)
+- [A2 Systems 官方题面](../assignments/assignment2-systems/cs336_assignment2_systems.pdf)
+- 本仓库：[A2 DDP/FSDP 报告](../assignments/assignment2-systems/report/main.pdf)
