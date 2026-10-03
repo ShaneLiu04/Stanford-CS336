@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_16.pdf"
-  - "../assignments/spring2026/assignment5-alignment/cs336_spring2026_assignment5_alignment.pdf"
+  - "../assignments/assignment5-alignment/cs336_spring2026_assignment5_alignment.pdf"
 ---
 
 # Lecture 16 — RLVR：可验证奖励下的推理强化学习
@@ -319,26 +319,117 @@ sequence-level 更新稳定性，但仍是 surrogate；平均 log-ratio 会隐�
 论文式表述应报告：零梯度组比例、verifier 对抗审计结果、held-out 与训练 parser 的
 独立性、多 seed 置信区间，以及明确声明结论仅在特定 verifier 与任务分布内成立。
 
-## 面试要点速记
+## 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> RLVR 是 LLM 面试的「推理强化学习」高频题：面试官常从「GRPO 为什么不用 critic」切入，
+> 追到「零信号组概率」「Dr.GRPO 修正什么」「GSPO 动机」「RFT 风险」。核心是理解五种算法变体的
+> **隐含重加权**——学习信号由采样温度、组内基线、尺度归一化、长度归一化与 off-policy 校正共同塑造。
+> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：GRPO 为什么不需要 critic？** 要点：同一 prompt 采样 G 个 response，
-   用组内相对奖励（均值-标准差归一化）作 advantage，以组基线替代 value network。
-2. **Q：零信号组的概率？** 要点：binary reward 下全同概率
-   \(p^G+(1-p)^G\)；隐式课程把信号集中在“可解但非稳解”的难度带。
-3. **Q：Dr.GRPO 修正哪两处？** 要点：advantage 不除组内 std（避免放大低方差
-   组）；loss 用常数而非逐序列长度归一（消除短序列单 token 权重放大与
-   长度偏置）。
-4. **Q：GSPO 的动机？** 要点：token 级 importance ratio 在长推理序列上方差
-   过大；改为序列平均 log-ratio 的指数（几何均值）+ 序列级 clipping。
-5. **Q：RFT 的风险？** 要点：只学成功 rollout → “偶然猜中”被当正例；早期
-   成功率低时信号稀疏；需去重成功轨迹并审计推理有效性。
+### 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：RLVR 把可验证任务转成策略优化，但 GRPO/Dr.GRPO/RFT/MaxRL 不是别名，它们对
+prompt 难度和 response 长度施加不同权重；reward 上升只在 verifier、行为分布与独立评估都可信时
+才能解释为能力提升。
 
-- \(p^G+(1-p)^G\)；DeepSeek-R1 证明纯 rule-based reward 足以激励长链推理；
-  RLVR 结论始终限定在 verifier 覆盖的分布内。
+**必背数字与公式**
+
+- GRPO：\(A_i=(r_i-\bar r)/(s_r+\epsilon)\)；Dr.GRPO：\(A_i=r_i-\bar r\)（不除 std）。
+- RFT：\(L=-r_i\sum_t m_{i,t}\log\pi_\theta\)；MaxRL：\(A_i=(r_i-\bar r)/(\bar r+\epsilon)\)。
+- GSPO：\(\rho_i=\exp(|y_i|^{-1}\sum_t m_{i,t}\log(\pi_\theta/\pi_{\text{old}}))\)。
+- 零梯度组概率（binary reward）：\(p^G+(1-p)^G\)。
+
+**三句话答高频**
+
+1. GRPO 用同 prompt 组内相对奖励估计 advantage，以组基线替代 value network。
+2. Dr.GRPO 移除标准差归一化（避免放大低方差组）与逐序列长度归一化（消除长度偏置）。
+3. 零梯度组概率 \(p^G+(1-p)^G\) 构成隐式难度课程，信号集中在「可解但非稳解」的 prompt。
+
+### 高频面试题与答题框架
+
+**Q1：GRPO 为什么不需要 critic？**
+
+- 同一 prompt 采样 \(G\) 个 response，用组内相对奖励（均值-标准差归一化）作 advantage，以组基线替代独立 value network。
+- 好处：省掉 value 网络的训练与显存，降低推理任务的 RL 系统复杂度（DeepSeekMath）。
+- baseline 不改变 on-policy 期望梯度，但改变方差；有限组估计还会引入 prompt reweighting。
+
+**Q2：GRPO 的 advantage 公式？零信号组的概率？**
+
+- \(A_i^{\text{GRPO}}=(r_i-\bar r)/(s_r+\epsilon)\)，\(\bar r=\frac1G\sum r_i\)。
+- 整组全对/全错时 \(r_i-\bar r=0\)，该 prompt 无梯度；binary reward 成功率 \(p\) 时全同概率 \(p^G+(1-p)^G\)。
+- 这构成隐式难度课程：对「可解但不可稳解」的 prompt 投入最多学习信号；组大小与温度决定出现正负样本的概率。
+
+**Q3：Dr.GRPO 修正哪两处偏差？**
+
+- ① advantage 不除组内标准差（避免放大奖励方差很小的组、隐式改变不同难度 prompt 权重）。
+- ② loss 用固定常数而非逐序列长度归一化（消除短序列单 token 权重放大与长度偏置）。
+- 这两类偏差共同解释了 R1-Zero 类训练中观察到的响应长度异常增长（Liu et al.）。
+
+**Q4：GSPO 的动机？**
+
+- token 级 importance ratio 在长推理序列上方差过大，逐 token clipping 又破坏整条 response 一致性。
+- GSPO 用 response 内平均 log-ratio 的指数（几何均值）作为序列级 ratio，再做 sequence-level clipping，同一 ratio 用于该 response 所有 token。
+- 仍是从 surrogate，平均 log-ratio 会隐藏局部 token 的极端变化。
+
+**Q5：RFT 的风险？**
+
+- 只学 verifier 通过的 rollout，直观稳定，但「偶然猜中」被当正例；早期成功率低时信号稀疏。
+- 应去重成功轨迹、检查推理有效性、记录每 prompt 的成功样本数；DeepSeekMath 的数学训练包含这一阶段。
+
+**Q6：MaxRL 的 advantage 公式？**
+
+- \(A_i^{\text{MaxRL}}=(r_i-\bar r)/(\bar r+\epsilon)\)：按组平均奖励缩放。
+- \(\bar r\) 小时少数成功样本被强烈放大，聚焦「较难但并非无解」的边界任务；风险是小分母、梯度尖峰与 seed variance，须监控 advantage 范围与 grad norm。
+
+**Q7：on-policy 与 off-policy 的区别？**
+
+- **on-policy**：生成后立即更新，ratio ≈ 1、偏差小但生成成本高；**off-policy**：一个 rollout 复用多次、样本效率高但 importance-weight 方差随 policy drift 增大。
+- `old_log_probs` 必须来自真实 behavior policy，重算或拿当前 policy 冒充会使 ratio 校正失效；clipping 有意引入 bias 换稳定性。
+
+**Q8：outcome verifier 与 process verifier 的区别？**
+
+- outcome verifier 只查最终产物（答案等价、测试通过），信号密度低但鲁棒；process verifier 对每步推理打分，信号密集但需步级标注，Lightman 证明其 pass@1 优势随难度增大。
+- verifier 本身是被攻击面（格式投机、字符串泄漏、沙箱逃逸）；held-out verifier 应与训练 parser 独立。
+
+**Q9：DeepSeek-R1 证明了什么？**
+
+- 纯 rule-based reward（无神经 reward model）下，RL 足以激励模型自发形成反思、验证等长链推理行为，无需监督推理数据。
+- 但结论始终限定在 verifier 覆盖的任务分布内；「涌现推理」换一个 parser 结论可能消失。
+
+**Q10：reward 上升 = 能力提升吗？**
+
+- 否。「reward 上升」测的是对 \(V(x,y)\) 的优化程度，不是推理能力本身；benchmark 通过率与真实推理存在测试集效度问题。
+- 响应长度、格式变化都可能被误读为推理深度；需 held-out verifier + 人工抽样确认不是 parser exploitation。
+
+### 手撕要点（advantage 公式）
+
+面试让「写各变体的 advantage」时，按公式写：
+
+```text
+GRPO:    A_i = (r_i - r̄) / (s_r + ε)
+Dr.GRPO: A_i = r_i - r̄            （不除 std；loss 用常数归一化）
+RFT:     L = -r_i Σ_t m log π      （只学成功 rollout）
+MaxRL:   A_i = (r_i - r̄) / (r̄ + ε)
+GSPO:    ρ_i = exp( (1/|y_i|) Σ_t m log(π_θ/π_old) )
+
+零梯度组概率（binary reward，成功率 p）: p^G + (1-p)^G
+```
+
+**三个必踩坑**
+
+1. **response mask 别错位**：把最后 prompt token 或 padding 纳入 loss。
+2. **`torch.std` 的有偏/无偏约定**：不同约定导致小组结果明显变化。
+3. **old_log_probs 必须来自真实 behavior policy**：重算或拿当前 policy 冒充会破坏 ratio 校正。
+
+### 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| reward 上升就说明变强了吗？ | 否，可能是 parser exploitation / 长度漂移 |
+| 只报 mean reward 够吗？ | 否，要 seed variance、entropy collapse、长度漂移 |
+| verifier 可靠吗？ | 是攻击面，需 held-out 与 adversarial audit |
+| 代码 reward 直接跑吗？ | 否，必须沙箱、限时限资源 |
+| 「涌现推理」可信吗？ | 依赖 verifier 分布，换 parser 可能消失 |
 
 ## 小结
 
@@ -379,4 +470,4 @@ Pushing Frontiers in Open Language Model Post-Training.” arXiv:2411.15124,
 
 - Stanford CS336, [Lecture 16 — RLVR](https://github.com/stanford-cs336/lectures/blob/main/lecture_16.pdf)
 - [Alignment 主题导航](../experiments/topics/alignment.md)
-- A5 主 handout：`../assignments/spring2026/assignment5-alignment/cs336_spring2026_assignment5_alignment.pdf`（及同目录 `grpo.py` 与 `report/`）
+- A5 主 handout：`../assignments/assignment5-alignment/cs336_spring2026_assignment5_alignment.pdf`（及同目录 `grpo.py` 与 `report/`）
