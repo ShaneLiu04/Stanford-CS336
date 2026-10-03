@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_15.pdf"
-  - "../assignments/spring2026/assignment5-alignment/"
+  - "../assignments/assignment5-alignment/"
 ---
 
 # Lecture 15 — SFT 与 RLHF：从模仿到偏好优化
@@ -269,19 +269,19 @@ LM loss；Lecture 中常见的 response-only SFT 需要额外 mask。当前 DPO 
 
 ## 11. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 11.1 Construct validity
 
 - preference ≠ 真实意图：标注者的比较受长度、语气、格式捷径影响；
 - RM score 与人工 win rate 是不同构造，前者是代理；
 - “对齐”没有单一标量：helpfulness、harmlessness、诚实性可能彼此冲突。
 
-### Internal validity
+### 11.2 Internal validity
 
 - SFT/RM/PPO 阶段同时变化时无法归因；
 - judge 模型与被评模型同族会造成系统性偏好；
 - 单 seed 的 win rate 置信区间常宽于报告的差异。
 
-### External validity
+### 11.3 External validity
 
 - 特定 rubric 与人群下收集的偏好不外推到其他文化或领域；
 - 小模型上的 \(\beta\)/学习率结论不迁移到大模型；
@@ -290,29 +290,121 @@ LM loss；Lecture 中常见的 response-only SFT 需要额外 mask。当前 DPO 
 论文式表述应报告标注协议、judge 版本与偏差测试、评估的置信区间与失败样本，而不是
 只给“我们的方法 win rate 更高”。
 
-## 面试要点速记
+## 12. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> SFT/RLHF 是 LLM 面试的「对齐」高频题：面试官常从「SFT 的 loss mask」「DPO 和 RLHF 区别」
+> 切入，追到「PPO 里 KL 与 clip 的分工」「reward hacking 怎么检测」「DPO 为什么不用 reward model」。
+> 核心是沿「模仿 → 偏好 → 策略优化」理解每种方法的数据、目标与失败模式，并牢记
+> 「对 reward 优化 ≠ 对真实意图对齐」。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：SFT 的 loss mask 怎么做？** 要点：只对 response token 计损
-   （response-only）；packed 场景须处理跨样本 attention 与边界 token。
-2. **Q：BT 模型与 RM loss？** 要点：\(P(y_w\succ y_l)=\sigma(r_w-r_l)\)，
-   loss = \(-\log\sigma(r_w-r_l)\)；pairwise accuracy 高不等于 reward
-   calibrated。
-3. **Q：PPO 中 KL 与 clip 的分工？** 要点：KL 约束限制对 reference 的整体
-   分布 drift；PPO clip 限制单步 token 级更新幅度；二者不可互相替代。
-4. **Q：DPO 一句话与常见坑？** 要点：KL-regularized 最优策略闭式代回，把 RL
-   化为 chosen/rejected log-odds 差的 logistic loss；坑：长度偏置、模板
-   泄漏、reference 冻结与 tokenizer 口径不一致。
-5. **Q：reward hacking 怎么检测？** 要点：RM 分与人工 win rate 的斜率分离、
-   长度/format 指标同步飙升、held-out RM 与训练 RM 分歧。
+### 12.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：后训练把「预测 token 的基座」变成「遵循指令、被偏好的助手」，主线是
+模仿(SFT) → 偏好(RM) → 策略优化(PPO/DPO)；任何「对齐提升」都要限定到 rubric、分布与评估协议。
 
-- InstructGPT 管线：pretrain → SFT → RM → PPO；KL 系数 \(\beta\) 过小
-  → hacking、过大 → 不学习；LIMA：~1k 高质量样本即可激活对齐能力。
+**必背数字与公式**
 
-## 12. 小结
+- SFT：\(\mathcal L_{\text{SFT}}=-\sum_t m_t\log\pi_\theta(y_t\mid x,y_{<t})\)（\(m_t\) 只盖 response token）。
+- RM：\(-\log\sigma(r_\phi(x,y_w)-r_\phi(x,y_l))\)。
+- PPO ratio \(\rho_t=\pi_\theta/\pi_{\text{old}}\)，clip 到 \(1\pm\epsilon\)。
+- RLHF 目标 \(\mathbb E[r_\phi-\beta\log(\pi_\theta/\pi_{\text{ref}})]\)。
+- DPO：对 chosen/rejected 的 reference-relative log-odds 差做 logistic loss。
+- LoRA \(W=W_0+BA\)；LIMA 约 **1k** 高质量样本即可激活对齐。
+
+**三句话答高频**
+
+1. SFT 建立任务接口，RM 压缩偏好成代理奖励，PPO 在线优化，DPO 直接做偏好分类。
+2. KL 约束控制对 reference 的整体 drift，PPO clip 控制单步 token 级更新，两者不等价。
+3. reward hacking 检测：RM 分与人工 win rate 斜率分离、长度/format 同步飙升、held-out RM 分歧。
+
+### 12.2 高频面试题与答题框架
+
+**Q1：SFT 的 loss mask 怎么做？**
+
+- 只对 response token 计损（response-only）：\(m_t=1\) 仅覆盖 response 位置，prompt 不计。
+- prompt 与 response 分开 tokenize 再拼接；shift 后 mask 的第一个 response 位置是 `prompt_length - 1`。
+- packing 提高利用率但须明确 EOS、跨文档 attention 与 prompt-token loss；数据质量 > 数量（LIMA）。
+
+**Q2：Bradley–Terry 模型与 RM loss？**
+
+- 假设 \(P(y_w\succ y_l)=\sigma(r_\phi(x,y_w)-r_\phi(x,y_l))\)，loss \(=-\log\sigma(r_w-r_l)\)。
+- pairwise accuracy 高 ≠ reward calibrated，也不保证 OOD 可靠；需按任务/安全类别/长度评估并查 reward margin。
+
+**Q3：PPO 里 KL 约束与 clip 的分工？**
+
+- **KL 约束**（\(\beta\log(\pi_\theta/\pi_{\text{ref}})\)）限制对 reference 的整体分布 drift，防 reward hacking。
+- **PPO clip**（\(\operatorname{clip}(\rho,1-\epsilon,1+\epsilon)\)）限制单次更新的 token 级幅度，是优化稳定性手段。
+- 两者角色相关但不等价：\(\beta\) 过小 hacking、过大不学习；clip 控制单步、KL 控制整体。
+
+**Q4：DPO 为什么不需要 reward model？常见坑？**
+
+- 在 KL-regularized 偏好优化下，最优策略可闭式表示 reward，代回后把 RL 化为 chosen/rejected 的 log-odds 差 logistic loss，免去显式 RM 与 online rollout。
+- **常见坑**：长度偏置（log-prob 求和）、模板泄漏（chosen/rejected 用不同模板）、reference 冻结 + tokenizer 口径不一致。
+- **注意**：DPO 免去「RL」，但没免去偏好假设、coverage 与数据偏差。
+
+**Q5：reward hacking 怎么检测？**
+
+- RM 分数远超人类示范、但人工 win rate 未同步提升 → reward-human 斜率下降（overoptimization）。
+- 长度/format 指标与 reward 同步飙升；held-out RM 与训练 RM 分数分歧；KL 快速逼近上限而 capability 下降。
+
+**Q6：RLHF 的完整管线？**
+
+- `pretrain → SFT → preference/RM → PPO`（InstructGPT）。
+- 数据契约：preference pair 共享 prompt、randomize 顺序、记录 rubric 与 disagreement；RM 有独立 prompt-level split。
+- 报告：reward、KL、entropy、clip fraction、value loss、长度与人工 win rate，多 seed。
+
+**Q7：SFT / RM / PPO / DPO 怎么选？**
+
+- SFT：高质量 demonstrations，简单稳定但只模仿覆盖到的行为；RM：pairwise preferences，得可复用 score 但 hacking/失准；PPO：RM+online rollout，可探索新输出但系统复杂、方差高；DPO：offline pairs，简洁无 critic 但受 offline coverage/reference/长度偏差。
+- 先建 SFT + 固定评估，再按「是否有可靠在线 reward、生成预算、探索需求」选 PPO 或 DPO。
+
+**Q8：LoRA 是什么？**
+
+- 冻结基座、只训练低秩增量 \(W=W_0+BA\)，\(B\in\mathbb R^{d\times r},A\in\mathbb R^{r\times d'},r\ll d\)。
+- 大幅降低 optimizer state 与显存，接近全参微调质量，便于多任务/多适配器管理。
+
+**Q9：LIMA 的发现？**
+
+- 约 1000 条高质量、多样、风格一致的示范即可让基座产生显著指令遵循能力。
+- 对齐能力大部分已存在于预训练分布，SFT 更像「激活接口」而非「注入知识」——数据质量 > 数量。
+
+**Q10：为什么「对 reward 优化」≠「对人的真实意图对齐」？**
+
+- RM 是代理：偏好受长度、语气、格式捷径影响；RM 分数与人工 win rate 是不同构造。
+- helpfulness/harmlessness/诚实性可能冲突，不能压成单分数；任何结论都要限定 rubric、分布与评估协议。
+
+### 12.3 手撕要点（SFT mask 与 DPO loss）
+
+面试让「写 SFT loss mask」或「推导 DPO」时，按公式写：
+
+```text
+SFT（response-only）: L = -Σ_t m_t log π_θ(y_t | x, y_{<t})
+  m_t = 1 仅 response token；shift 后第一个 response 位置 = prompt_len - 1
+
+RM: L = -log σ(r_w - r_l)
+
+DPO: L = -log σ( β [ log(π_θ(y_w|x)/π_ref(y_w|x))
+                       - log(π_θ(y_l|x)/π_ref(y_l|x)) ] )
+  只累计 response token log-prob；reference 前向 no_grad
+```
+
+**三个必踩坑**
+
+1. **SFT 别对 prompt token 计损**：否则声称 response-only 实际是 full-sequence。
+2. **chosen/rejected 必须共享 prompt**：用不同模板会学到模板差异而非偏好。
+3. **DPO 的 reference 必须冻结 + tokenizer 一致**：log-prob 口径不一致会污染 margin。
+
+### 12.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| DPO 是「无需 RL」吗？ | 是，但仍有偏好假设、coverage 与数据偏差 |
+| KL 过大/过小会怎样？ | 过小 reward hacking、过大几乎不学习 |
+| RM 分高就对齐了吗？ | 否，RM 是代理，可能被 hacking |
+| 把 helpful/harmless 压成单分数可以吗？ | 否，会掩盖对某群体的性能退化 |
+| 自动 judge 可信吗？ | 有长度/自信/同族偏好，需偏差测试 + 人工盲测 |
+
+## 13. 小结
 
 SFT 建立模型的任务接口，RM 把成对偏好压缩成代理奖励，PPO 在线优化该奖励，DPO 则直接
 做 reference-relative 偏好分类。它们的核心区别是数据来自哪里、是否在线探索、如何限制
@@ -352,4 +444,4 @@ Adaptation of Large Language Models.” *ICLR*, 2022.
 
 - Stanford CS336, [Lecture 15 — Mid/post-training](https://github.com/stanford-cs336/lectures/blob/main/lecture_15.pdf)
 - [Alignment 主题导航](../experiments/topics/alignment.md)
-- [A5 Supplement — Safety & RLHF](../assignments/spring2026/assignment5-alignment/cs336_spring2026_assignment5_supplement_safety_rlhf.pdf)
+- [A5 Supplement — Safety & RLHF](../assignments/assignment5-alignment/cs336_spring2026_assignment5_supplement_safety_rlhf.pdf)
