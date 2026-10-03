@@ -1,0 +1,1650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scaling Experiments Dashboard</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --bg-elev: #161b22;
+    --bg-elev-2: #1c232c;
+    --bg-soft: #131820;
+    --border: #2a313c;
+    --border-strong: #3a4250;
+    --fg: #e6edf3;
+    --fg-muted: #9aa4b2;
+    --fg-dim: #6e7681;
+    --accent: #4f8cff;
+    --accent-strong: #6ea0ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --gray: #6e7681;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); }
+  button, input, textarea, select {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+  }
+  button {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-strong);
+    color: var(--fg);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+    min-height: 32px;
+  }
+  button:hover:not(:disabled) { background: #242c37; border-color: #4a5260; }
+  button:active:not(:disabled) { background: #1a2029; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  button.primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
+  button.danger {
+    background: transparent;
+    border-color: var(--red);
+    color: var(--red);
+  }
+  button.danger:hover:not(:disabled) { background: rgba(248, 81, 73, 0.1); }
+  input, select, textarea {
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 32px;
+  }
+  select { font-family: var(--sans); }
+  input:focus, textarea:focus, select:focus, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  textarea { width: 100%; min-height: 280px; resize: vertical; }
+  code, pre { font-family: var(--mono); }
+  pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    overflow: auto;
+    margin: 0;
+    font-size: 12.5px;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: grid;
+    grid-template-columns: minmax(0, auto) 1fr;
+    gap: 16px;
+    align-items: center;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, rgba(79, 140, 255, 0.25), rgba(63, 185, 80, 0.18));
+    border: 1px solid var(--border-strong);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    padding: 5px;
+    flex: 0 0 auto;
+  }
+  .mark span {
+    display: block;
+    border-radius: 1px;
+    background: var(--accent);
+    opacity: 0.85;
+  }
+  .mark span:nth-child(2),
+  .mark span:nth-child(6) { background: var(--green); }
+  .mark span:nth-child(5) { background: var(--accent-strong); }
+  .title h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.2px; }
+  .title p {
+    margin: 1px 0 0;
+    color: var(--fg-dim);
+    font-size: 12px;
+    font-family: var(--mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60vw;
+  }
+  .title p.ok { color: var(--green); }
+  .title p.err { color: var(--red); }
+  .settings {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .settings label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--fg-muted);
+    font-size: 12.5px;
+  }
+  .settings input { width: 240px; padding: 5px 8px; min-height: 30px; }
+  .settings input.short { width: 110px; }
+  .last-updated {
+    color: var(--fg-dim);
+    font-size: 12px;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  /* ---------- main layout ---------- */
+  main {
+    padding: 20px;
+    max-width: 1500px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .card-header h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--fg-muted);
+  }
+  .card-header .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .card-body { padding: 14px 16px; }
+
+  /* ---------- metrics ---------- */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .metric {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .metric .label {
+    color: var(--fg-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .metric .value {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 700;
+    margin-top: 6px;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+  .metric .value.green { color: var(--green); }
+  .metric .value.yellow { color: var(--yellow); }
+  .metric .value.red { color: var(--red); }
+  .metric .sub {
+    margin-top: 6px;
+    color: var(--fg-dim);
+    font-size: 12px;
+  }
+  .metric .sub.link { color: var(--accent); cursor: pointer; }
+  .metric .sub.link:hover { text-decoration: underline; }
+  .progress {
+    height: 6px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-top: 10px;
+  }
+  .progress > div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), var(--yellow) 70%, var(--red) 95%);
+    transition: width 0.3s;
+  }
+
+  /* ---------- final submission slim card ---------- */
+  .final-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .final-empty { color: var(--fg-dim); font-style: italic; }
+  .final-summary {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    flex: 1;
+    align-items: center;
+    font-size: 13px;
+  }
+  .final-summary .item { color: var(--fg); }
+  .final-summary .item .k { color: var(--fg-dim); margin-right: 4px; font-size: 12px; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    display: grid;
+    grid-template-columns: 1fr 160px 180px;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-soft);
+  }
+  .toolbar label {
+    display: grid;
+    gap: 4px;
+    color: var(--fg-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .pills {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-soft);
+    flex-wrap: wrap;
+  }
+  .pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12px;
+    color: var(--fg-muted);
+    font-family: var(--mono);
+  }
+  .pill .n { color: var(--fg); font-weight: 600; }
+  .pill.queued .n { color: var(--gray); }
+  .pill.running .n { color: var(--blue); }
+  .pill.completed .n { color: var(--green); }
+  .pill.failed .n { color: var(--red); }
+
+  /* ---------- table ---------- */
+  .table-wrap { overflow-x: auto; }
+  table.experiments {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 880px;
+  }
+  table.experiments th, table.experiments td {
+    padding: 9px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  table.experiments th {
+    background: var(--bg-soft);
+    color: var(--fg-muted);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    user-select: none;
+  }
+  table.experiments tbody tr {
+    cursor: pointer;
+    transition: background 0.05s;
+  }
+  table.experiments tbody tr:hover { background: var(--bg-elev-2); }
+  table.experiments tbody tr.selected { background: rgba(79, 140, 255, 0.12); }
+  table.experiments tbody tr:last-child td { border-bottom: none; }
+  table.experiments td.mono { font-family: var(--mono); font-size: 12.5px; }
+  table.experiments td.right { text-align: right; }
+  table.experiments td.muted { color: var(--fg-muted); }
+  .row-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .row-progress .bar {
+    width: 120px;
+    height: 6px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  .row-progress .bar > div {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s;
+  }
+  .row-progress.completed .bar > div { background: var(--green); }
+  .row-progress.failed .bar > div { background: var(--red); }
+  .row-progress .count {
+    color: var(--fg-dim);
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+  svg.spark { display: block; width: 100px; height: 28px; }
+  svg.spark .line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+
+  /* ---------- badges ---------- */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border: 1px solid transparent;
+  }
+  .badge .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor;
+  }
+  .badge.queued    { color: var(--gray);   border-color: rgba(110,118,129,0.5); background: rgba(110,118,129,0.12); }
+  .badge.running   { color: var(--blue);   border-color: rgba(88,166,255,0.5);  background: rgba(88,166,255,0.12); }
+  .badge.running .pulse { animation: pulse 1.4s ease-in-out infinite; }
+  .badge.completed { color: var(--green);  border-color: rgba(63,185,80,0.5);   background: rgba(63,185,80,0.12); }
+  .badge.failed    { color: var(--red);    border-color: rgba(248,81,73,0.5);   background: rgba(248,81,73,0.12); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.4); }
+  }
+
+  /* ---------- detail panel ---------- */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(420px, 1.4fr);
+    gap: 18px;
+  }
+  .kv-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 5px 14px;
+    font-size: 13px;
+    align-items: baseline;
+  }
+  .kv-grid .k { color: var(--fg-dim); font-family: var(--mono); font-size: 12px; }
+  .kv-grid .v { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+  .kv-grid .sep {
+    grid-column: 1 / -1;
+    height: 1px;
+    background: var(--border);
+    margin: 6px 0;
+  }
+  .notice {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--fg-muted);
+    font-size: 13px;
+    line-height: 1.4;
+    margin-top: 12px;
+  }
+  .notice.error {
+    border-color: rgba(248, 81, 73, 0.4);
+    background: rgba(248, 81, 73, 0.06);
+    color: #ffd6d3;
+    white-space: pre-wrap;
+  }
+  details.json { margin-top: 10px; }
+  details.json summary {
+    cursor: pointer;
+    color: var(--fg-muted);
+    font-size: 12px;
+    padding: 4px 0;
+    user-select: none;
+  }
+  details.json summary:hover { color: var(--fg); }
+
+  /* ---------- chart ---------- */
+  .chart-wrap {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 8px 4px;
+    position: relative;
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 6px 4px;
+  }
+  .chart-header .title {
+    font-size: 11.5px;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .chart-header .toggle { font-size: 11.5px; color: var(--fg-muted); }
+  .chart-header .toggle input { vertical-align: middle; margin-right: 4px; min-height: auto; }
+  svg.chart { width: 100%; height: 280px; display: block; }
+  svg.chart .grid { stroke: var(--border); stroke-width: 1; }
+  svg.chart .axis-text { fill: var(--fg-dim); font-size: 10.5px; font-family: var(--mono); }
+  svg.chart .line { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+  svg.chart .point { fill: var(--accent); }
+  svg.chart .hover-line { stroke: var(--fg-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+  svg.chart .empty-text { fill: var(--fg-dim); font-size: 12px; text-anchor: middle; font-family: var(--sans); }
+  .chart-tooltip {
+    position: absolute;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-strong);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 5;
+  }
+
+  /* ---------- dialog ---------- */
+  dialog {
+    background: var(--bg-elev);
+    color: var(--fg);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 0;
+    max-width: 720px;
+    width: 92vw;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px); }
+  dialog .dialog-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  dialog .dialog-head h3 { margin: 0; font-size: 15px; }
+  dialog .dialog-body { padding: 16px 18px; }
+  dialog .dialog-foot {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    align-items: center;
+  }
+  .dialog-foot .left { margin-right: auto; font-size: 12px; }
+
+  /* ---------- toasts ---------- */
+  #toast-container {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 420px;
+  }
+  .toast {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    box-shadow: var(--shadow);
+    animation: slidein 0.18s ease-out;
+  }
+  .toast.error { border-color: var(--red); color: #ffd6d3; }
+  .toast.success { border-color: var(--green); color: #c8eed1; }
+  .toast .close { float: right; cursor: pointer; color: var(--fg-dim); margin-left: 12px; }
+  @keyframes slidein {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ---------- misc ---------- */
+  .empty {
+    color: var(--fg-dim);
+    text-align: center;
+    padding: 28px 12px;
+    font-style: italic;
+  }
+  .small { font-size: 12px; color: var(--fg-muted); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .spacer { flex: 1; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1100px) {
+    header { grid-template-columns: 1fr; }
+    .settings { justify-content: flex-start; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    main { padding: 12px; }
+    .metrics { grid-template-columns: 1fr; }
+    .toolbar { grid-template-columns: 1fr; }
+    .settings input { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+    </div>
+    <div class="title">
+      <h1>Scaling Experiments</h1>
+      <p id="connectionStatus">Not connected</p>
+    </div>
+  </div>
+  <div class="settings">
+    <label>API
+      <input id="apiUrl" type="url" placeholder="http://hyperturing.stanford.edu:8000" />
+    </label>
+    <label>Key
+      <input id="apiKey" type="password" class="short" placeholder="8-char ID" />
+    </label>
+    <button id="saveSettingsBtn">Save</button>
+    <button id="refreshBtn" class="primary">Refresh</button>
+    <label><input type="checkbox" id="autoRefresh" checked /> Auto (10s)</label>
+    <span class="last-updated" id="lastUpdated">never refreshed</span>
+  </div>
+</header>
+
+<div id="toast-container"></div>
+
+<main>
+  <section class="metrics" aria-label="Overview">
+    <div class="metric">
+      <div class="label">Experiments</div>
+      <div class="value" id="metricTotal">—</div>
+      <div class="sub" id="metricActive">—</div>
+    </div>
+    <div class="metric">
+      <div class="label">Best validation loss</div>
+      <div class="value" id="metricBestLoss">—</div>
+      <div class="sub link" id="metricBestId">no completed runs</div>
+    </div>
+    <div class="metric">
+      <div class="label">Runtime used</div>
+      <div class="value" id="metricRuntime">—</div>
+      <div class="sub" id="metricRuntimeSub">across all experiments</div>
+    </div>
+    <div class="metric">
+      <div class="label">Budget remaining</div>
+      <div class="value green" id="metricBudget">—</div>
+      <div class="sub" id="metricBudgetSub">connect to API</div>
+      <div class="progress"><div id="metricBudgetBar" style="width: 0%"></div></div>
+    </div>
+  </section>
+
+  <section class="card" id="finalCard">
+    <div class="card-header">
+      <h2>Final submission</h2>
+      <div class="actions">
+        <button id="setFinalBtn">Set final…</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="finalBody" class="final-row">
+        <div class="final-empty">No final submission saved yet.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="experimentsCard">
+    <div class="card-header">
+      <h2>Experiments</h2>
+      <div class="actions">
+        <button class="primary" id="newExperimentBtn">+ New experiment</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <label>
+        Search
+        <input id="searchInput" type="search" placeholder="ID, status, model shape, seed…" />
+      </label>
+      <label>
+        Status
+        <select id="statusFilter">
+          <option value="all">All</option>
+          <option value="queued">Queued</option>
+          <option value="running">Running</option>
+          <option value="completed">Completed</option>
+          <option value="failed">Failed</option>
+        </select>
+      </label>
+      <label>
+        Sort
+        <select id="sortSelect">
+          <option value="id-desc">Newest (highest id)</option>
+          <option value="id-asc">Oldest (lowest id)</option>
+          <option value="loss-asc">Best loss</option>
+          <option value="runtime-desc">Longest runtime</option>
+        </select>
+      </label>
+    </div>
+    <div class="pills" id="counts"></div>
+    <div class="table-wrap">
+      <table class="experiments">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Model</th>
+            <th>Tokens</th>
+            <th>Eval progress</th>
+            <th class="right">Best loss</th>
+            <th>Runtime</th>
+            <th>Trend</th>
+          </tr>
+        </thead>
+        <tbody id="experimentsBody">
+          <tr><td colspan="8" class="empty">No experiments yet — submit one to get started.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="detailCard" hidden>
+    <div class="card-header">
+      <h2>
+        <span>Experiment <span id="detailId"></span></span>
+        <span id="detailStatusBadge" style="margin-left: 8px;"></span>
+      </h2>
+      <div class="actions">
+        <button id="copyConfigBtn">Copy config</button>
+        <button id="useConfigBtn">Use config</button>
+        <button id="setAsFinalBtn">Set as final</button>
+        <button id="closeDetailBtn">Close</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="detail-grid">
+        <div>
+          <div class="kv-grid" id="detailKv"></div>
+          <div id="detailFailureNotice"></div>
+          <details class="json">
+            <summary>Training config (JSON)</summary>
+            <pre id="detailConfig"></pre>
+          </details>
+          <details class="json">
+            <summary>Raw response (JSON)</summary>
+            <pre id="detailRaw"></pre>
+          </details>
+        </div>
+        <div>
+          <div class="chart-wrap">
+            <div class="chart-header">
+              <span class="title">Validation loss</span>
+              <label class="toggle"><input type="checkbox" id="logScaleToggle" /> log y</label>
+            </div>
+            <svg class="chart" id="lossChart" viewBox="0 0 600 280" preserveAspectRatio="none"></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="submitDialog">
+  <form method="dialog">
+    <div class="dialog-head">
+      <h3 id="submitDialogTitle">Submit experiment</h3>
+      <button type="button" id="submitDialogClose">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="row" style="margin-bottom: 8px;">
+        <span class="small">Paste a TrainingConfig JSON, or load an example.</span>
+        <span class="spacer"></span>
+        <button type="button" id="loadExampleBtn">Load example</button>
+        <button type="button" id="formatJsonBtn">Format</button>
+      </div>
+      <textarea id="submitJson" spellcheck="false" placeholder='{"architecture_config": {...}, "optimizer_config": {...}, ...}'></textarea>
+      <div id="submitError" class="small" style="color: var(--red); white-space: pre-wrap; margin-top: 8px;"></div>
+    </div>
+    <div class="dialog-foot">
+      <span class="left small" id="submitMode"></span>
+      <button type="button" id="cancelSubmitBtn">Cancel</button>
+      <button type="button" class="primary" id="confirmSubmitBtn">Submit</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+
+// ---------- Storage / config ----------
+const LS = {
+  url:    "expdash.apiUrl",
+  key:    "expdash.apiKey",
+  auto:   "expdash.autoRefresh",
+  log:    "expdash.logScale",
+  search: "expdash.search",
+  status: "expdash.statusFilter",
+  sort:   "expdash.sort",
+};
+const DEFAULT_URL = "http://hyperturing.stanford.edu:8000";
+
+const state = {
+  apiUrl: localStorage.getItem(LS.url) || DEFAULT_URL,
+  apiKey: localStorage.getItem(LS.key) || "",
+  experiments: [],
+  selectedId: null,
+  selectedExperiment: null,
+  budget: null,
+  finalSubmission: null,
+  autoTimer: null,
+  inflight: false,
+  logScale: localStorage.getItem(LS.log) === "1",
+  search: localStorage.getItem(LS.search) || "",
+  statusFilter: localStorage.getItem(LS.status) || "all",
+  sort: localStorage.getItem(LS.sort) || "id-desc",
+  submitMode: "experiment", // "experiment" | "final"
+};
+
+// ---------- DOM helpers ----------
+const $ = (id) => document.getElementById(id);
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k === "style") e.style.cssText = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (v !== null && v !== undefined && v !== false) e.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c == null || c === false) continue;
+    e.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  }
+  return e;
+}
+function svgEl(tag, attrs = {}, text) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+// ---------- Toasts ----------
+function toast(message, kind = "info", ms = 5000) {
+  const t = el("div", { class: `toast ${kind}` },
+    el("span", { class: "close", onclick: () => t.remove() }, "✕"),
+    message,
+  );
+  $("toast-container").appendChild(t);
+  if (ms) setTimeout(() => t.remove(), ms);
+  return t;
+}
+
+// ---------- Connection status ----------
+function setConnection(message, kind = "") {
+  const e = $("connectionStatus");
+  e.textContent = message;
+  e.className = kind;
+}
+
+// ---------- API ----------
+async function api(method, path, body) {
+  if (!state.apiUrl) throw new Error("API URL not set");
+  if (!state.apiKey) throw new Error("API key not set");
+  const url = state.apiUrl.replace(/\/$/, "") + path;
+  const opts = {
+    method,
+    headers: { "X-API-Key": state.apiKey },
+  };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  let res;
+  try {
+    res = await fetch(url, opts);
+  } catch (e) {
+    throw new Error(
+      `Network error: ${e.message}. ` +
+      `If opening as file://, the API server must allow CORS, ` +
+      `or serve this file from the same origin.`
+    );
+  }
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); }
+    catch { /* leave as text */ }
+  }
+  if (!res.ok) {
+    const detail = data && (data.detail || data.message)
+      ? JSON.stringify(data.detail ?? data.message)
+      : text;
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`);
+  }
+  return data;
+}
+
+const getBudget       = () => api("GET", "/budget");
+const submitExp       = (cfg) => api("POST", "/submit", cfg);
+const listExperiments = () => api("GET", "/experiments");
+const getExperiment   = (id) => api("GET", `/experiment/${id}`);
+const setFinal        = (submission) => api("POST", "/final_submission", submission);
+const getFinal        = () => api("GET", "/final_submission");
+
+// ---------- Formatting ----------
+function fmtSeconds(s) {
+  if (s == null || isNaN(s)) return "—";
+  const total = Math.max(0, Math.round(Number(s)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${sec}s`;
+  // sub-minute: show one decimal
+  if (s < 60) return `${Number(s).toFixed(1)}s`;
+  return `${sec}s`;
+}
+function fmtTokens(n) {
+  if (n == null) return "—";
+  if (!Number.isFinite(Number(n))) return "—";
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(n);
+}
+function fmtDate(d) {
+  if (!d) return "—";
+  try {
+    const date = new Date(d);
+    if (isNaN(date)) return String(d);
+    return date.toLocaleString();
+  } catch { return String(d); }
+}
+function fmtRelative(d) {
+  if (!d) return "—";
+  const date = new Date(d);
+  const diff = (Date.now() - date.getTime()) / 1000;
+  if (isNaN(diff)) return String(d);
+  if (diff < 60) return `${Math.round(diff)}s ago`;
+  if (diff < 3600) return `${Math.round(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.round(diff / 3600)}h ago`;
+  return `${Math.round(diff / 86400)}d ago`;
+}
+function fmtLoss(v) {
+  if (v == null || isNaN(v)) return "—";
+  return Number(v).toFixed(4);
+}
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+// ---------- Experiment helpers ----------
+function statusOf(exp) { return exp?.status?.status_type ?? "unknown"; }
+function lossesOf(exp) {
+  const s = exp?.status;
+  if (!s) return [];
+  if (s.status_type === "running") return s.val_losses ?? [];
+  if (s.status_type === "completed") return s.val_losses ?? [];
+  if (s.status_type === "failed" && s.reason?.reason === "timeout") return s.reason.partial_val_losses ?? [];
+  return [];
+}
+function bestLoss(exp) {
+  const ls = lossesOf(exp);
+  return ls.length ? Math.min(...ls) : null;
+}
+function lastLoss(exp) {
+  const ls = lossesOf(exp);
+  return ls.length ? ls[ls.length - 1] : null;
+}
+function evalProgress(exp) {
+  const cfg = exp?.training_config ?? {};
+  const total = cfg.total_train_tokens ? 16 : 1;
+  const done = Math.min(lossesOf(exp).length, total);
+  const status = statusOf(exp);
+  const percent = status === "completed"
+    ? 100
+    : clamp(Math.round((done / total) * 100), 0, 100);
+  return { done, total, percent, status };
+}
+function modelShape(exp) {
+  const a = exp?.training_config?.architecture_config ?? {};
+  return `${a.hidden_size ?? "?"}h · ${a.num_hidden_layers ?? "?"}L · ${a.num_attention_heads ?? "?"}H`;
+}
+
+// ---------- Status badge ----------
+function statusBadge(status) {
+  const t = status?.status_type ?? "unknown";
+  const cls = ["queued", "running", "completed", "failed"].includes(t) ? t : "queued";
+  return el("span", { class: `badge ${cls}` },
+    el("span", { class: "pulse" }),
+    t,
+  );
+}
+
+// ---------- Render: metrics ----------
+function renderMetrics() {
+  const xs = state.experiments;
+  const counts = { queued: 0, running: 0, completed: 0, failed: 0 };
+  for (const e of xs) {
+    const s = statusOf(e);
+    if (s in counts) counts[s] += 1;
+  }
+  $("metricTotal").textContent = String(xs.length);
+  $("metricActive").textContent = `${counts.queued + counts.running} active · ${counts.completed} done · ${counts.failed} failed`;
+
+  // best loss across all (with losses)
+  let bestExp = null, bestVal = Infinity;
+  for (const e of xs) {
+    const v = bestLoss(e);
+    if (v != null && v < bestVal) { bestVal = v; bestExp = e; }
+  }
+  if (bestExp) {
+    $("metricBestLoss").textContent = fmtLoss(bestVal);
+    const sub = $("metricBestId");
+    sub.textContent = `experiment #${bestExp.experiment_id} →`;
+    sub.classList.add("link");
+    sub.onclick = () => selectExperiment(bestExp.experiment_id);
+  } else {
+    $("metricBestLoss").textContent = "—";
+    const sub = $("metricBestId");
+    sub.textContent = "no completed runs";
+    sub.classList.remove("link");
+    sub.onclick = null;
+  }
+
+  // total runtime across all experiments
+  const totalRuntime = xs.reduce((acc, e) => acc + (e.status?.used_runtime_seconds ?? 0), 0);
+  $("metricRuntime").textContent = fmtSeconds(totalRuntime);
+  $("metricRuntimeSub").textContent = `across ${xs.length} experiment${xs.length === 1 ? "" : "s"}`;
+
+  // budget
+  const b = state.budget;
+  if (b) {
+    $("metricBudget").textContent = fmtSeconds(b.remaining_seconds);
+    const pct = b.total_budget_seconds > 0 ? (b.used_seconds / b.total_budget_seconds) * 100 : 0;
+    $("metricBudgetSub").textContent = `${fmtSeconds(b.used_seconds)} / ${fmtSeconds(b.total_budget_seconds)} used (${pct.toFixed(1)}%)`;
+    $("metricBudgetBar").style.width = `${clamp(pct, 0, 100)}%`;
+    const m = $("metricBudget");
+    m.classList.remove("green", "yellow", "red");
+    const remPct = 100 - pct;
+    if (remPct < 10) m.classList.add("red");
+    else if (remPct < 30) m.classList.add("yellow");
+    else m.classList.add("green");
+  } else {
+    $("metricBudget").textContent = "—";
+    $("metricBudgetSub").textContent = "connect to API";
+    $("metricBudgetBar").style.width = "0%";
+  }
+}
+
+// ---------- Render: final submission ----------
+function renderFinal() {
+  const body = $("finalBody");
+  body.innerHTML = "";
+  const f = state.finalSubmission;
+  if (!f) {
+    body.appendChild(el("div", { class: "final-empty" }, "No final submission saved yet."));
+    return;
+  }
+  const arch = f.training_config?.architecture_config ?? {};
+  const opt = f.training_config?.optimizer_config ?? {};
+  const summary = el("div", { class: "final-summary" },
+    el("div", { class: "item" }, el("span", { class: "k" }, "submitted"), fmtRelative(f.submitted_at), " (", fmtDate(f.submitted_at), ")"),
+    el("div", { class: "item" }, el("span", { class: "k" }, "predicted loss"), fmtLoss(f.predicted_final_loss)),
+    el("div", { class: "item" }, el("span", { class: "k" }, "shape"), `${arch.hidden_size ?? "?"}h · ${arch.num_hidden_layers ?? "?"}L · ${arch.num_attention_heads ?? "?"}H`),
+    el("div", { class: "item" }, el("span", { class: "k" }, "tokens"), fmtTokens(f.training_config?.total_train_tokens)),
+    el("div", { class: "item" }, el("span", { class: "k" }, "max runtime"), fmtSeconds(f.training_config?.max_runtime_seconds)),
+    el("div", { class: "item" }, el("span", { class: "k" }, "peak lr"), String(opt?.lr_scheduler?.peak_value ?? "?")),
+  );
+  body.appendChild(summary);
+  body.appendChild(el("details", { class: "json", style: "flex-basis: 100%;" },
+    el("summary", {}, "Full training config"),
+    el("pre", {}, JSON.stringify(f.training_config, null, 2)),
+  ));
+}
+
+// ---------- Render: counts pills ----------
+function renderCounts() {
+  const xs = state.experiments;
+  const counts = { queued: 0, running: 0, completed: 0, failed: 0 };
+  for (const e of xs) {
+    const s = statusOf(e);
+    if (s in counts) counts[s] += 1;
+  }
+  const c = $("counts");
+  c.innerHTML = "";
+  c.appendChild(el("span", { class: "pill" }, "Total ", el("span", { class: "n" }, String(xs.length))));
+  for (const k of ["queued", "running", "completed", "failed"]) {
+    c.appendChild(el("span", { class: `pill ${k}` }, k + " ", el("span", { class: "n" }, String(counts[k]))));
+  }
+}
+
+// ---------- Sparkline ----------
+function sparkline(values) {
+  const W = 100, H = 28, PAD = 2;
+  if (!values || values.length === 0) {
+    const svg = svgEl("svg", { class: "spark", viewBox: `0 0 ${W} ${H}` });
+    return svg;
+  }
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = Math.max(max - min, 1e-9);
+  const pts = values.map((v, i) => {
+    const x = values.length === 1 ? W / 2 : PAD + (i / (values.length - 1)) * (W - 2 * PAD);
+    const y = PAD + ((max - v) / span) * (H - 2 * PAD);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const svg = svgEl("svg", { class: "spark", viewBox: `0 0 ${W} ${H}` });
+  svg.appendChild(svgEl("polyline", { class: "line", points: pts }));
+  return svg;
+}
+
+// ---------- Filter / sort ----------
+function filteredSortedExperiments() {
+  const q = state.search.trim().toLowerCase();
+  let xs = state.experiments.filter((e) => {
+    if (state.statusFilter !== "all" && statusOf(e) !== state.statusFilter) return false;
+    if (!q) return true;
+    const arch = e.training_config?.architecture_config ?? {};
+    const hay = [
+      e.experiment_id,
+      statusOf(e),
+      arch.hidden_size, arch.num_hidden_layers, arch.num_attention_heads,
+      arch.num_key_value_heads, arch.intermediate_size,
+      e.training_config?.model_seed, e.training_config?.total_train_tokens,
+    ].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+  const cmp = {
+    "id-desc":      (a, b) => (b.experiment_id ?? 0) - (a.experiment_id ?? 0),
+    "id-asc":       (a, b) => (a.experiment_id ?? 0) - (b.experiment_id ?? 0),
+    "loss-asc":     (a, b) => (bestLoss(a) ?? Infinity) - (bestLoss(b) ?? Infinity),
+    "runtime-desc": (a, b) => (b.status?.used_runtime_seconds ?? 0) - (a.status?.used_runtime_seconds ?? 0),
+  }[state.sort] || ((a, b) => (b.experiment_id ?? 0) - (a.experiment_id ?? 0));
+  xs.sort(cmp);
+  return xs;
+}
+
+// ---------- Render: experiments table ----------
+function renderExperiments() {
+  renderCounts();
+  const tbody = $("experimentsBody");
+  tbody.innerHTML = "";
+  const xs = filteredSortedExperiments();
+  if (state.experiments.length === 0) {
+    tbody.appendChild(el("tr", {},
+      el("td", { colspan: 8, class: "empty" }, "No experiments yet — submit one to get started.")
+    ));
+    return;
+  }
+  if (xs.length === 0) {
+    tbody.appendChild(el("tr", {},
+      el("td", { colspan: 8, class: "empty" }, "No experiments match the current filters.")
+    ));
+    return;
+  }
+  for (const e of xs) {
+    const s = e.status ?? {};
+    const ls = lossesOf(e);
+    const best = bestLoss(e);
+    const prog = evalProgress(e);
+    const runtime = (s.used_runtime_seconds != null) ? fmtSeconds(s.used_runtime_seconds)
+                  : (s.status_type === "running" ? "running…" : "—");
+
+    const progressEl = el("div", { class: `row-progress ${prog.status}` },
+      el("div", { class: "bar" }, el("div", { style: `width: ${prog.percent}%` })),
+      el("span", { class: "count" }, `${prog.done}/${prog.total}`),
+    );
+
+    const tr = el("tr", {
+      "data-id": String(e.experiment_id),
+      onclick: () => selectExperiment(e.experiment_id),
+    },
+      el("td", { class: "mono" }, "#" + e.experiment_id),
+      el("td", {}, statusBadge(s)),
+      el("td", { class: "mono muted" }, modelShape(e)),
+      el("td", { class: "mono" }, fmtTokens(e.training_config?.total_train_tokens)),
+      el("td", {}, progressEl),
+      el("td", { class: "right mono" }, best != null ? fmtLoss(best) : "—"),
+      el("td", { class: "mono" }, runtime),
+      el("td", {}, sparkline(ls)),
+    );
+    if (e.experiment_id === state.selectedId) tr.classList.add("selected");
+    tbody.appendChild(tr);
+  }
+}
+
+// ---------- Detail panel ----------
+function selectExperiment(id) {
+  state.selectedId = id;
+  const cached = state.experiments.find((e) => e.experiment_id === id);
+  if (cached) {
+    state.selectedExperiment = cached;
+    renderDetail();
+  }
+  // fetch fresh
+  getExperiment(id)
+    .then((exp) => {
+      state.selectedExperiment = exp;
+      const idx = state.experiments.findIndex((e) => e.experiment_id === id);
+      if (idx >= 0) state.experiments[idx] = exp;
+      renderDetail();
+      renderExperiments();
+      renderMetrics();
+    })
+    .catch((err) => toast(`Failed to load experiment #${id}: ${err.message}`, "error"));
+  $("detailCard").hidden = false;
+  $("detailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // mark selection in table immediately
+  for (const tr of $("experimentsBody").querySelectorAll("tr")) {
+    tr.classList.toggle("selected", tr.dataset.id === String(id));
+  }
+}
+function closeDetail() {
+  state.selectedId = null;
+  state.selectedExperiment = null;
+  $("detailCard").hidden = true;
+  for (const tr of $("experimentsBody").querySelectorAll("tr")) {
+    tr.classList.remove("selected");
+  }
+}
+function renderDetail() {
+  const exp = state.selectedExperiment;
+  if (!exp) return;
+  $("detailId").textContent = "#" + exp.experiment_id;
+  const badgeHost = $("detailStatusBadge");
+  badgeHost.innerHTML = "";
+  badgeHost.appendChild(statusBadge(exp.status));
+
+  const s = exp.status ?? {};
+  const tc = exp.training_config ?? {};
+  const arch = tc.architecture_config ?? {};
+  const opt = tc.optimizer_config ?? {};
+  const ls = lossesOf(exp);
+  const best = bestLoss(exp);
+  const last = lastLoss(exp);
+  const prog = evalProgress(exp);
+
+  const kv = $("detailKv");
+  kv.innerHTML = "";
+  function addRow(k, v, opts = {}) {
+    kv.appendChild(el("div", { class: "k" }, k));
+    kv.appendChild(el("div", { class: "v" + (opts.err ? " err" : "") }, String(v)));
+  }
+  function addSep() { kv.appendChild(el("div", { class: "sep" })); }
+
+  addRow("status", s.status_type ?? "?");
+  addRow("queued", fmtDate(s.queued_at));
+  if (s.dispatched_at) addRow("dispatched", fmtDate(s.dispatched_at));
+  if (s.completed_at)  addRow("completed",  fmtDate(s.completed_at));
+  if (s.failed_at)     addRow("failed",     fmtDate(s.failed_at));
+  if (s.used_runtime_seconds != null) addRow("runtime", fmtSeconds(s.used_runtime_seconds));
+  addRow("eval progress", `${prog.done} / ${prog.total} (${prog.percent}%)`);
+  if (best != null) addRow("best loss", fmtLoss(best));
+  if (last != null && last !== best) addRow("last loss", fmtLoss(last));
+
+  addSep();
+  addRow("shape", `${arch.hidden_size ?? "?"}h · ${arch.num_hidden_layers ?? "?"}L`);
+  addRow("heads / kv", `${arch.num_attention_heads ?? "?"} / ${arch.num_key_value_heads ?? "?"}`);
+  addRow("head dim", String(arch.head_dim ?? "?"));
+  addRow("intermediate", String(arch.intermediate_size ?? "?"));
+  addRow("dtype", String(arch.dtype ?? "?"));
+  addRow("vocab", String(arch.vocab_size ?? "?"));
+  addRow("seq × batch", `${tc.seq_len ?? 512} × ${tc.train_batch_size ?? "?"}`);
+  addRow("tokens", fmtTokens(tc.total_train_tokens));
+  addRow("max runtime", fmtSeconds(tc.max_runtime_seconds));
+  addRow("model seed", String(tc.model_seed ?? "?"));
+  if (opt?.lr_scheduler?.peak_value != null) addRow("peak lr", String(opt.lr_scheduler.peak_value));
+
+  // failure notice
+  const fn = $("detailFailureNotice");
+  fn.innerHTML = "";
+  if (s.status_type === "failed") {
+    const reason = s.reason ?? {};
+    let msg = "Failed without a reason payload.";
+    if (reason.reason === "timeout") {
+      msg = `Timeout after ${reason.partial_val_losses?.length ?? 0} validation point(s).`;
+    } else if (reason.reason === "unexpected") {
+      msg = reason.failure || "Unexpected failure.";
+    }
+    fn.appendChild(el("div", { class: "notice error" }, msg));
+  }
+
+  $("detailConfig").textContent = JSON.stringify(tc, null, 2);
+  $("detailRaw").textContent = JSON.stringify(exp, null, 2);
+
+  drawLossChart(ls);
+}
+
+// ---------- Loss chart ----------
+function drawLossChart(losses) {
+  const svg = $("lossChart");
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const W = 600, H = 280, PADL = 50, PADR = 14, PADT = 14, PADB = 30;
+  const innerW = W - PADL - PADR;
+  const innerH = H - PADT - PADB;
+
+  if (!losses || losses.length === 0) {
+    svg.appendChild(svgEl("text", { x: W / 2, y: H / 2, class: "empty-text" }, "No validation losses yet"));
+    return;
+  }
+  const xs = losses.map((_, i) => i + 1);
+  const log = state.logScale;
+  const transform = (y) => log ? Math.log10(Math.max(y, 1e-9)) : y;
+  const ys = losses.map(transform);
+  const yMin = Math.min(...ys);
+  const yMax = Math.max(...ys);
+  const yRange = (yMax - yMin) || 1;
+  const yPad = yRange * 0.08;
+
+  const xMin = xs[0], xMax = xs[xs.length - 1] || 1;
+  const xRange = (xMax - xMin) || 1;
+
+  const X = (x) => PADL + ((x - xMin) / xRange) * innerW;
+  const Y = (yT) => PADT + (1 - (yT - (yMin - yPad)) / (yRange + 2 * yPad)) * innerH;
+
+  const TICKS = 5;
+  for (let i = 0; i <= TICKS; i++) {
+    const t = i / TICKS;
+    const yT = (yMin - yPad) + t * (yRange + 2 * yPad);
+    const yPx = Y(yT);
+    svg.appendChild(svgEl("line", { class: "grid", x1: PADL, y1: yPx, x2: W - PADR, y2: yPx }));
+    const labelVal = log ? Math.pow(10, yT) : yT;
+    svg.appendChild(svgEl("text", {
+      x: PADL - 6, y: yPx + 3, class: "axis-text", "text-anchor": "end",
+    }, formatTickLabel(labelVal)));
+  }
+  const xTicks = Math.min(6, xs.length);
+  for (let i = 0; i < xTicks; i++) {
+    const idx = Math.round(i * (xs.length - 1) / Math.max(1, xTicks - 1));
+    const xVal = xs[idx];
+    const xPx = X(xVal);
+    svg.appendChild(svgEl("line", { class: "grid", x1: xPx, y1: PADT, x2: xPx, y2: H - PADB, stroke: "rgba(58,66,80,0.4)" }));
+    svg.appendChild(svgEl("text", { x: xPx, y: H - PADB + 14, class: "axis-text", "text-anchor": "middle" }, String(xVal)));
+  }
+  svg.appendChild(svgEl("text", { x: PADL, y: H - 4, class: "axis-text" },
+    `eval # (${losses.length} points${log ? ", log y" : ""})`));
+
+  let d = "";
+  losses.forEach((y, i) => {
+    const px = X(xs[i]);
+    const py = Y(transform(y));
+    d += (i === 0 ? "M " : " L ") + px.toFixed(2) + " " + py.toFixed(2);
+  });
+  svg.appendChild(svgEl("path", { class: "line", d }));
+
+  losses.forEach((y, i) => {
+    const px = X(xs[i]);
+    const py = Y(transform(y));
+    svg.appendChild(svgEl("circle", { class: "point", cx: px, cy: py, r: 2.5 }));
+  });
+
+  const wrap = svg.parentElement;
+  let tooltip = wrap.querySelector(".chart-tooltip");
+  if (!tooltip) {
+    tooltip = el("div", { class: "chart-tooltip" });
+    tooltip.style.display = "none";
+    wrap.appendChild(tooltip);
+  }
+  let hoverLine = null;
+  function clearHover() {
+    if (hoverLine) { hoverLine.remove(); hoverLine = null; }
+    tooltip.style.display = "none";
+  }
+  svg.onmousemove = (ev) => {
+    const rect = svg.getBoundingClientRect();
+    const vx = (ev.clientX - rect.left) * (W / rect.width);
+    if (vx < PADL || vx > W - PADR) { clearHover(); return; }
+    const xVal = xMin + ((vx - PADL) / innerW) * xRange;
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < xs.length; i++) {
+      const d = Math.abs(xs[i] - xVal);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    const px = X(xs[best]);
+    const py = Y(transform(losses[best]));
+    if (!hoverLine) {
+      hoverLine = svgEl("line", { class: "hover-line", x1: 0, x2: 0, y1: PADT, y2: H - PADB });
+      svg.appendChild(hoverLine);
+    }
+    hoverLine.setAttribute("x1", px);
+    hoverLine.setAttribute("x2", px);
+    tooltip.textContent = `eval ${xs[best]}: ${losses[best].toFixed(6)}`;
+    tooltip.style.display = "block";
+    const screenPx = (px / W) * rect.width;
+    const screenPy = (py / H) * rect.height;
+    tooltip.style.left = `${Math.min(rect.width - 160, screenPx + 8)}px`;
+    tooltip.style.top  = `${Math.max(0, screenPy - 26)}px`;
+  };
+  svg.onmouseleave = clearHover;
+}
+function formatTickLabel(v) {
+  if (!isFinite(v)) return "";
+  const a = Math.abs(v);
+  if (a === 0) return "0";
+  if (a >= 1000 || a < 0.01) return v.toExponential(1);
+  if (a >= 10) return v.toFixed(1);
+  return v.toFixed(3);
+}
+
+// ---------- Submit dialog ----------
+function exampleConfig() {
+  return {
+    architecture_config: {
+      attention_bias: false,
+      head_dim: 64,
+      hidden_size: 448,
+      intermediate_size: 1280,
+      num_attention_heads: 7,
+      num_hidden_layers: 9,
+      num_key_value_heads: 7,
+      rms_norm_eps: 1e-6,
+      rope_theta: 1000000,
+      tie_word_embeddings: false,
+      dtype: "bfloat16",
+      vocab_size: 32000,
+    },
+    optimizer_config: {
+      lr_scheduler: { peak_value: 3e-4, final_lr_frac: 0.1, warmup_frac: 0.05, init_value: 0.0 },
+      weight_decay: 1e-2,
+      beta1: 0.9,
+      beta2: 0.95,
+      eps: 1e-8,
+      eps_root: 1e-8,
+      grad_clip_norm: 1.0,
+    },
+    train_batch_size: 128,
+    val_batch_size: 32,
+    total_train_tokens: 1048576,
+    max_runtime_seconds: 30.0,
+    model_seed: 0,
+  };
+}
+
+function finalSubmissionPayload(trainingConfig) {
+  const selectedLosses = state.selectedExperiment ? lossesOf(state.selectedExperiment) : [];
+  const lastLoss = selectedLosses.length ? selectedLosses[selectedLosses.length - 1] : null;
+  return {
+    training_config: trainingConfig,
+    predicted_final_loss: lastLoss ?? 2.75,
+  };
+}
+
+function openSubmitDialog(mode, prefillCfg) {
+  state.submitMode = mode;
+  $("submitDialogTitle").textContent = mode === "final" ? "Set FINAL submission" : "Submit experiment";
+  const modeNote = $("submitMode");
+  modeNote.textContent = mode === "final"
+    ? "⚠ This sets your final submission (overwrites any previous one)."
+    : "Submits to the experiment queue. Counts against budget.";
+  modeNote.style.color = mode === "final" ? "var(--yellow)" : "var(--fg-dim)";
+  $("submitError").textContent = "";
+  const body = mode === "final"
+    ? finalSubmissionPayload(prefillCfg ?? state.finalSubmission?.training_config ?? exampleConfig())
+    : (prefillCfg ?? exampleConfig());
+  if (mode === "final" || prefillCfg !== undefined) {
+    $("submitJson").value = JSON.stringify(body, null, 2);
+  } else if (!$("submitJson").value.trim()) {
+    $("submitJson").value = JSON.stringify(body, null, 2);
+  }
+  $("submitDialog").showModal();
+}
+function closeSubmitDialog() { $("submitDialog").close(); }
+
+async function confirmSubmit() {
+  const raw = $("submitJson").value;
+  let cfg;
+  try { cfg = JSON.parse(raw); }
+  catch (e) { $("submitError").textContent = "Invalid JSON: " + e.message; return; }
+  $("submitError").textContent = "";
+  const btn = $("confirmSubmitBtn");
+  btn.disabled = true;
+  btn.textContent = "Submitting…";
+  try {
+    if (state.submitMode === "final") {
+      const res = await setFinal(cfg);
+      state.finalSubmission = res;
+      renderFinal();
+      toast("Final submission saved.", "success");
+    } else {
+      const res = await submitExp(cfg);
+      if (res?.budget_summary) { state.budget = res.budget_summary; renderMetrics(); }
+      toast(`Experiment #${res.experiment_id} submitted.`, "success");
+      await refresh();
+      if (res.experiment_id != null) selectExperiment(res.experiment_id);
+    }
+    closeSubmitDialog();
+  } catch (err) {
+    $("submitError").textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Submit";
+  }
+}
+
+// ---------- Refresh ----------
+async function refresh() {
+  if (state.inflight) return;
+  if (!state.apiUrl || !state.apiKey) {
+    $("lastUpdated").textContent = "set API URL + key, then refresh";
+    setConnection("Enter API URL and key.");
+    return;
+  }
+  state.inflight = true;
+  $("refreshBtn").disabled = true;
+  setConnection("Loading…");
+  try {
+    const [budget, experiments, finalSub] = await Promise.all([
+      getBudget().catch((e) => { toast(`/budget: ${e.message}`, "error"); return null; }),
+      listExperiments().catch((e) => { toast(`/experiments: ${e.message}`, "error"); return []; }),
+      getFinal().catch((e) => { toast(`/final_submission: ${e.message}`, "error"); return null; }),
+    ]);
+    if (budget) state.budget = budget;
+    state.experiments = Array.isArray(experiments) ? experiments : [];
+    state.finalSubmission = finalSub;
+    if (state.selectedId != null) {
+      const fresh = state.experiments.find((e) => e.experiment_id === state.selectedId);
+      if (fresh) state.selectedExperiment = fresh;
+    }
+    renderMetrics();
+    renderFinal();
+    renderExperiments();
+    if (state.selectedExperiment) renderDetail();
+    $("lastUpdated").textContent = "updated " + new Date().toLocaleTimeString();
+    setConnection(`Connected to ${state.apiUrl}`, "ok");
+  } finally {
+    state.inflight = false;
+    $("refreshBtn").disabled = false;
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  state.autoTimer = setInterval(refresh, 10_000);
+}
+function stopAutoRefresh() {
+  if (state.autoTimer) { clearInterval(state.autoTimer); state.autoTimer = null; }
+}
+
+// ---------- Init / event wiring ----------
+function init() {
+  $("apiUrl").value = state.apiUrl;
+  $("apiKey").value = state.apiKey;
+  $("autoRefresh").checked = localStorage.getItem(LS.auto) !== "0";
+  $("logScaleToggle").checked = state.logScale;
+  $("searchInput").value = state.search;
+  $("statusFilter").value = state.statusFilter;
+  $("sortSelect").value = state.sort;
+
+  $("saveSettingsBtn").addEventListener("click", () => {
+    state.apiUrl = $("apiUrl").value.trim() || DEFAULT_URL;
+    state.apiKey = $("apiKey").value.trim();
+    localStorage.setItem(LS.url, state.apiUrl);
+    localStorage.setItem(LS.key, state.apiKey);
+    toast("Settings saved.", "success", 2500);
+    refresh();
+  });
+  $("refreshBtn").addEventListener("click", refresh);
+  $("autoRefresh").addEventListener("change", (ev) => {
+    localStorage.setItem(LS.auto, ev.target.checked ? "1" : "0");
+    if (ev.target.checked) startAutoRefresh();
+    else stopAutoRefresh();
+  });
+
+  $("searchInput").addEventListener("input", (ev) => {
+    state.search = ev.target.value;
+    localStorage.setItem(LS.search, state.search);
+    renderExperiments();
+  });
+  $("statusFilter").addEventListener("change", (ev) => {
+    state.statusFilter = ev.target.value;
+    localStorage.setItem(LS.status, state.statusFilter);
+    renderExperiments();
+  });
+  $("sortSelect").addEventListener("change", (ev) => {
+    state.sort = ev.target.value;
+    localStorage.setItem(LS.sort, state.sort);
+    renderExperiments();
+  });
+
+  $("newExperimentBtn").addEventListener("click", () => openSubmitDialog("experiment"));
+  $("setFinalBtn").addEventListener("click", () => {
+    // if an experiment is selected, prefill with its config
+    const cfg = state.selectedExperiment?.training_config;
+    openSubmitDialog("final", cfg);
+  });
+
+  $("loadExampleBtn").addEventListener("click", () => {
+    const body = state.submitMode === "final"
+      ? finalSubmissionPayload(exampleConfig())
+      : exampleConfig();
+    $("submitJson").value = JSON.stringify(body, null, 2);
+    $("submitError").textContent = "";
+  });
+  $("formatJsonBtn").addEventListener("click", () => {
+    try {
+      const obj = JSON.parse($("submitJson").value);
+      $("submitJson").value = JSON.stringify(obj, null, 2);
+      $("submitError").textContent = "";
+    } catch (e) {
+      $("submitError").textContent = "Invalid JSON: " + e.message;
+    }
+  });
+  $("cancelSubmitBtn").addEventListener("click", closeSubmitDialog);
+  $("submitDialogClose").addEventListener("click", closeSubmitDialog);
+  $("confirmSubmitBtn").addEventListener("click", confirmSubmit);
+
+  // detail panel actions
+  $("closeDetailBtn").addEventListener("click", closeDetail);
+  $("copyConfigBtn").addEventListener("click", async () => {
+    const cfg = state.selectedExperiment?.training_config;
+    if (!cfg) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(cfg, null, 2));
+      toast("Config copied to clipboard.", "success", 2000);
+    } catch (e) {
+      toast("Could not copy: " + e.message, "error");
+    }
+  });
+  $("useConfigBtn").addEventListener("click", () => {
+    const cfg = state.selectedExperiment?.training_config;
+    if (!cfg) return;
+    openSubmitDialog("experiment", cfg);
+  });
+  $("setAsFinalBtn").addEventListener("click", () => {
+    const cfg = state.selectedExperiment?.training_config;
+    if (!cfg) return;
+    openSubmitDialog("final", cfg);
+  });
+
+  $("logScaleToggle").addEventListener("change", (ev) => {
+    state.logScale = ev.target.checked;
+    localStorage.setItem(LS.log, state.logScale ? "1" : "0");
+    if (state.selectedExperiment) drawLossChart(lossesOf(state.selectedExperiment));
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && $("submitDialog").open) closeSubmitDialog();
+    if ((ev.key === "r" || ev.key === "R") && !ev.target.closest("input, textarea, select")) {
+      ev.preventDefault();
+      refresh();
+    }
+  });
+
+  if ($("autoRefresh").checked) startAutoRefresh();
+
+  if (!state.apiKey) {
+    setConnection("Enter your API URL and 8-character key, then click Save.");
+    toast("Set your API URL and 8-character key, then click Save.", "info", 8000);
+  } else {
+    refresh();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>

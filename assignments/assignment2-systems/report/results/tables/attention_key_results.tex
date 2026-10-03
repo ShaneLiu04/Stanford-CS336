@@ -1,0 +1,22 @@
+\begin{table}
+\caption{Key attention measurements at sequence length 4096 and head dimension 64.}
+\label{tab:attention-measured}
+\begin{tabular}{lllrrr}
+\toprule
+mode & dtype & implementation & mean_ms & std_ms & peak_memory_mib \\
+\midrule
+forward & bf16 & pytorch_flash_tiled & 620.174 & 8.281 & 10.288 \\
+forward & bf16 & pytorch_sdpa & 0.630 & 0.002 & 222.629 \\
+forward & bf16 & triton_flash & 0.153 & 0.008 & 10.141 \\
+forward & fp32 & pytorch_flash_tiled & 563.491 & 4.619 & 12.241 \\
+forward & fp32 & pytorch_sdpa & 0.601 & 0.001 & 221.129 \\
+forward & fp32 & triton_flash & 0.185 & 0.005 & 12.141 \\
+forward_backward & bf16 & pytorch_flash_tiled & 1197.461 & 7.696 & 23.426 \\
+forward_backward & bf16 & pytorch_sdpa & 1.140 & 0.002 & 277.750 \\
+forward_backward & bf16 & triton_flash & 597.053 & 4.539 & 23.426 \\
+forward_backward & fp32 & pytorch_flash_tiled & 1117.995 & 8.412 & 24.379 \\
+forward_backward & fp32 & pytorch_sdpa & 1.098 & 0.001 & 280.250 \\
+forward_backward & fp32 & triton_flash & 556.087 & 2.731 & 24.379 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,10 @@
+{
+  "python": "3.12.3",
+  "pytorch": "2.8.0+cu128",
+  "platform": "Linux-5.15.0-78-generic-x86_64-with-glibc2.35",
+  "cuda_available": true,
+  "cuda_version": "12.8",
+  "device": "cuda",
+  "device_name": "NVIDIA RTX 6000D",
+  "parameter_count": 3363968
+}

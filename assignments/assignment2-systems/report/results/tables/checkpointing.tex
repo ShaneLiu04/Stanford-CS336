@@ -1,0 +1,22 @@
+\begin{table}
+\caption{Activation-checkpointing time/memory trade-off.}
+\label{tab:checkpoint-measured}
+\begin{tabular}{lrrrrrrlrrll}
+\toprule
+model_size & batch_size & sequence_length & segments & mean_ms & std_ms & peak_memory_mib & status & warmup & repetitions & gpu & torch_version \\
+\midrule
+large & 2 & 512 & 0 & 125.57 & 0.25 & 11380.74 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 512 & 4 & 168.87 & 33.69 & 8602.81 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 512 & 12 & 162.89 & 2.94 & 7971.54 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 512 & 36 & 167.61 & 1.87 & 7759.57 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 1024 & 0 & 303.65 & 0.25 & 21712.62 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 1024 & 4 & 373.78 & 0.39 & 11559.37 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 1024 & 12 & 388.43 & 0.33 & 9291.78 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 1024 & 36 & 403.58 & 31.60 & 8536.64 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 2048 & 0 & 983.81 & 0.33 & 56483.65 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 2048 & 4 & 1203.87 & 4.06 & 21837.01 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 2048 & 12 & 1256.03 & 26.27 & 14105.75 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+large & 2 & 2048 & 36 & 1254.51 & 0.54 & 11530.08 & ok & 2 & 5 & NVIDIA RTX 6000D & 2.8.0+cu128 \\
+\bottomrule
+\end{tabular}
+\end{table}

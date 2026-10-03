@@ -1,0 +1,139 @@
+\documentclass[UTF8,a4paper,11pt]{ctexart}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,booktabs,graphicx,hyperref,listings,xcolor,fancyhdr}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black}
+\pagestyle{fancy}\fancyhead[L]{CS336 Assignment 4: Data}\fancyhead[R]{ShaneLiu04}
+\fancyfoot[C]{\thepage}\setlength{\headheight}{14pt}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single}
+\newcommand{\measured}{\textbf{[实测]}}
+\newcommand{\limited}{\textbf{[资源受限]}}
+\newcommand{\figresult}[3]{\begin{figure}[htbp]\centering
+\includegraphics[width=.94\linewidth]{results/figures/#1}
+\caption{#2}\label{#3}\end{figure}}
+\title{\textbf{CS336 Assignment 4: Data}\\\large 从 Common Crawl 到可训练语料}
+\author{\href{https://github.com/ShaneLiu04}{ShaneLiu04}}\date{\today}
+\begin{document}\maketitle
+\begin{abstract}
+本文实现 HTML extraction、language identification、PII masking、NSFW/toxicity、
+Gopher quality rules、quality classification、exact line 与 MinHash deduplication，
+并建立 GPT-2 tokenization 与可复现过滤流水线。全部 21 项公开测试通过；400 篇受控文档、
+1000 条真实 WET records、12 组 filter ablations 与 23 组图用于解释每个 stage 的行为。本文为未使用 Modal/SUNET\_ID，也不声称
+2500-WET 或 8×B200 leaderboard 成绩。
+\end{abstract}
+\tableofcontents\newpage
+
+\section{范围、数据契约与实验方法}
+官方目标是从 Common Crawl 构建 GPT-2 training bin，并在 Paloma C4 100 domains 上比较
+validation loss。离线模式只使用公开 fixtures、可下载 classifiers 与 controlled proxy；
+不把 Paloma validation 文本并入训练数据。每个过滤阶段记录 documents/chars/tokens、
+keep rate、runtime 与 rejection reason，图由 raw JSON 自动生成。
+
+\section{Common Crawl 与文本抽取}
+WARC 保留 HTTP payload 和 metadata，适合重新抽取、链接/域分析与 HTML-aware filtering；
+WET 只保留预抽取文本，体积更小、处理更快，但丢失 DOM 结构并继承 Common Crawl extractor
+错误。高质量页面常包含完整叙事、技术文档或百科条目；导航页、cookie banner、SEO 堆词、
+404 和模板页不适合作为 language-model training data。
+
+实现先用 encoding detection 解码 bytes，再由 Resiliparse 提取 visible text。
+Fixture 与 golden text 逐字一致，说明段落与实体处理满足测试契约。
+
+\section{Language identification 与 PII}
+语言识别优先使用 fastText lid.176，返回 label 与非负 confidence；模型不可用时仅为测试提供
+Unicode-script fallback。生产阈值建议 $P(\mathrm{en})\ge0.7$。阈值过低引入多语噪声，
+过高会伤害 code-switching、专有名词和短文档召回。
+
+PII 使用边界敏感 regex 掩码 email、美国电话号码和合法 IPv4，并返回 replacement count。
+掩码而非删除可保留句法位置，但 regex 无法覆盖所有国际号码/IPv6，且可能把示例地址误当真实 PII。
+\figresult{pii_masking.pdf}{受控语料中的 PII replacement counts；该图用于验证计数管线。}{fig:pii}
+
+\section{有害内容与质量过滤}
+NSFW/toxic 优先使用 Dolma Jigsaw fastText；离线无模型时采用可解释 lexical fallback。
+Safety score 不应被解释为真实概率，且阈值会改变 domain distribution。
+\figresult{nsfw_score.pdf}{各受控文档组的 NSFW score 分布。}{fig:nsfw}
+\figresult{toxic_score.pdf}{各受控文档组的 toxic score 分布。}{fig:toxic}
+
+Gopher rules 检查 50--100k non-symbol words、平均词长 3--10、ellipsis line ratio 与
+alphabetic-word ratio。规则便宜且可解释，应放在 expensive classifier 前。
+\figresult{gopher_pass_rate.pdf}{不同 corruption groups 的 Gopher pass rate。}{fig:gopher}
+\figresult{document_length.pdf}{文档长度分布解释 short-document rejection。}{fig:length}
+\figresult{quality_score_by_group.pdf}{Quality score 的 group separation。}{fig:qscore}
+\figresult{quality_decision_matrix.pdf}{Wiki-like/CC-like heuristic decision matrix。}{fig:qmatrix}
+
+Quality classifier 的生产版本应由 Wiki 外链正样本与随机 CC 负样本训练，并保留 holdout；
+本离线实现将相同 interpretable features 映射为 cc/wiki score，以保证测试和流水线可复现。
+
+\section{过滤漏斗与阈值消融}
+\figresult{filter_funnel.pdf}{代表性 Gopher+quality+safety pipeline 的 document funnel。}{fig:funnel}
+\figresult{rejection_reasons.pdf}{12 个消融配置的 rejection reason decomposition。}{fig:reasons}
+\figresult{quality_threshold_pareto.pdf}{Quality threshold 与 corpus yield 的 Pareto curve。}{fig:threshold}
+\figresult{ablation_keep_rate.pdf}{Gopher、safety 与 threshold 的 keep-rate 对照。}{fig:keep}
+\figresult{character_retention.pdf}{Character yield：document count 相同不代表训练 tokens 相同。}{fig:chars}
+\figresult{document_retention.pdf}{Document yield。}{fig:docs}
+\figresult{ablation_runtime.pdf}{受控 corpus 上各 filter combination 的 wall-clock。}{fig:runtime}
+
+阈值调优不能只最大化 keep rate：高召回保留更多低质量模板，高精度可能造成 domain collapse。
+高质量方案应联合 Paloma loss、token yield 与 domain coverage 选择，而不是单看 classifier accuracy。
+
+\section{真实 Common Crawl WET 分布}
+\figresult{wet_language_distribution.pdf}{官方 example WET records 的语言预测分布。}{fig:wet-lang}
+\figresult{wet_language_scores.pdf}{语言 confidence 分布用于解释 0.7 threshold 的召回风险。}{fig:wet-lang-score}
+\figresult{wet_quality_scores.pdf}{真实 WET quality score 分布。}{fig:wet-quality}
+\figresult{wet_safety_scatter.pdf}{NSFW 与 toxic scores 的关系；两者不可互相替代。}{fig:wet-safety}
+\figresult{wet_length_quality.pdf}{文档长度与 quality score；长文档不自动等于高质量。}{fig:wet-length}
+\figresult{wet_domain_distribution.pdf}{样例 WET top domains，展示 Web source concentration。}{fig:wet-domain}
+\figresult{wet_filter_funnel.pdf}{真实 WET 的 language→Gopher→quality 漏斗。}{fig:wet-funnel}
+\figresult{wet_pii_counts.pdf}{真实 WET 中检测到的 email/phone/IPv4 数量。}{fig:wet-pii}
+
+真实 WET 分析与受控 corpus 的角色不同：前者测 distribution 与 filter yield，后者隔离规则边界。
+样例文件不能代表 2500 WET 全量，因此 domain proportion 和 toxicity rate 只作 exploratory
+evidence；但它能揭示 fixture 无法覆盖的 score overlap、长尾长度与 PII incidence。
+\measured 在 1000 条真实 WET records 中，lid 模型判为 English 325 条、Chinese 239 条，
+其余分布于 30 多种语言；733 条通过 Gopher，88 条被 quality heuristic 判为 Wiki-like，
+NSFW/toxic 分别为 12/24 条。该样例来自 paths 文件第一 shard，并非随机全库样本，因此这些
+比例不能外推 Common Crawl 全量，但足以说明 language filtering 与 quality filtering
+分别解决不同噪声来源。
+
+\section{Deduplication}
+Exact line deduplication 使用两趟全局计数：第一趟统计 normalized line hash，第二趟只写
+全局频次为 1 的行；每个输入文件仍产生输出，即使为空。该策略去除 boilerplate，但也可能删除
+合法高频短句。
+
+MinHash 将 NFD、小写、标点/空白与重音规范化后的 word n-grams 映射成 signatures；
+LSH 只生成 candidate pairs，最终用真实 Jaccard threshold 确认并通过 deterministic
+union-find 每簇保留一篇。测试覆盖 exact duplicates 与 MIT license fuzzy duplicates。
+生产环境需按 band bucket 分片落盘，避免 2500 WET signatures 全驻内存。
+
+\section{Tokenization 与训练}
+每篇保留文档使用 GPT-2 tokenizer，文档末尾追加 EOT，token IDs 以
+\texttt{np.uint16.tofile} 写入 flat binary。必须按 document 而非按 arbitrary line
+追加 EOT，否则改变 sequence boundary distribution。
+
+\limited 官方终训为 8×B200、16384 steps、约 8.6B sampled tokens；单张 RTX 6000D
+即使运行同样 steps 也只有约 1/8 sampled tokens。离线受控语料不足以支持有意义的 430M
+full training，因此本报告不运行“高占用率但重复采样严重”的伪 leaderboard 实验。
+GPU 应保留给至少数十亿 token 的数据版本比较；当前最有价值证据是过滤正确性与数据统计。
+
+\section{验证与局限}
+\figresult{test_matrix.pdf}{全部 21 项 extraction/language/PII/quality/toxicity/dedup tests 通过。}{fig:tests}
+\measured 全量 pytest 为 21 passed、0 failed。规则与 fixture correctness 不等于 web-scale
+precision：fastText 模型下载、Wiki-vs-CC classifier、2500-WET global MinHash 和
+Paloma downstream training 仍需 Modal 权限。报告明确区分已实测、proxy 与资源受限项目。
+
+\section{结论}
+高质量 data pipeline 的核心不是叠加最多 filters，而是可追溯的 stage-wise trade-off：
+cheap rules 先降噪，semantic classifier 控制 quality，PII/safety 降低风险，global dedup
+降低重复，最终用 downstream validation loss 决策阈值。任何 filter 都可能引入 domain bias，
+因此必须同时保存被丢弃样本和 score distributions。
+
+\appendix
+\section{复现命令}
+\begin{lstlisting}
+python -m pytest -q tests
+PYTHONPATH=. python scripts/run_offline_experiments.py
+python scripts/build_report_assets.py
+cd report && make
+\end{lstlisting}
+\section*{致谢}
+本项目由 \href{https://github.com/ShaneLiu04}{ShaneLiu04} 完成；
+课程材料版权归原作者所有。
+\end{document}

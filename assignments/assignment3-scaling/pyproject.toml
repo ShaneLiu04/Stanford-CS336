@@ -1,0 +1,76 @@
+[project]
+name = "cs336_scaling"
+version = "26.0.2"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.10",
+    "numpy>=2.4",
+    "pandas>=2.3",
+    "pydantic>=2.8",
+    "requests>=2.32",
+    "rich>=14.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "einx>=0.3.0",
+    "einops>=0.8.1",
+    "equinox>=0.13.0",
+    "fastapi[standard]>=0.115",
+    "flash-hog>=0.5.0",
+    "furu>=0.0.27",
+    "jax[cuda13]==0.9.1; sys_platform == 'linux'",
+    "jax==0.9.1; sys_platform != 'linux'",
+    "jaxtyping>=0.3.3",
+    "modal",
+    "optax>=0.2.3",
+    "polars>=1.40.1",
+    "psycopg[binary]>=3.2",
+    "psycopg2-binary>=2.9.12",
+    "python-dotenv>=1.2.2",
+    "sqlalchemy>=2.0",
+    "tqdm>=4.67",
+    "transformers>=5.6.2",
+    "typer>=0.12",
+    "uvicorn[standard]>=0.30",
+    "wandb>=0.26.1",
+]
+
+[tool.uv.build-backend]
+module-name = "cs336_scaling"
+module-root = ""
+
+[tool.uv]
+package = true
+python-preference = "managed"
+
+[project.scripts]
+dispatcher = "cs336_scaling.scheduler.dispatch_loop:main"
+
+[tool.fastapi]
+entrypoint = "cs336_scaling.app:app"
+
+[build-system]
+requires = ["uv_build>=0.10.7,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff.format]
+exclude = ["./cs336_scaling/db/tables.py"]
+
+[tool.ruff.lint]
+ignore = ["F722"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "ipykernel>=7.2.0",
+    "ipython>=9.13.0",
+    "pytest>=8.4",
+    "ruff>=0.15.11",
+    "ty>=0.0.32",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

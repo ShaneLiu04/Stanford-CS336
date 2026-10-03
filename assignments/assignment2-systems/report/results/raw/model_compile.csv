@@ -1,0 +1,5 @@
+experiment,implementation,model_size,dtype,batch_size,sequence_length,head_dimension,mode,warmup,repetitions,mean_ms,std_ms,peak_memory_mib,status,gpu,torch_version,cuda_version,git_sha,timestamp_utc
+transformer,cs336_basics_compile,small,fp32,4,512,64,forward_backward,2,5,48.8073892891407,0.807567834735654,982.8974609375,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:53:31Z
+transformer,cs336_basics_compile,small,bf16,4,512,64,forward_backward,2,5,18.112207390367985,0.8501906121794578,1907.095703125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:53:55Z
+transformer,cs336_basics_compile,medium,fp32,4,512,64,forward_backward,2,5,142.04221572726965,2.9116855514027855,4156.2333984375,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:54:21Z
+transformer,cs336_basics_compile,medium,bf16,4,512,64,forward_backward,2,5,54.790772311389446,1.538136015602101,7308.5498046875,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:55:06Z

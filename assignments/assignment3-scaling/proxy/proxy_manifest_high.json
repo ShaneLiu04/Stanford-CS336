@@ -1,0 +1,66 @@
+[
+  {
+    "name": "c1e+16-n3m",
+    "overrides": {
+      "d_model": 256,
+      "num_layers": 4,
+      "num_heads": 8,
+      "d_ff": 672,
+      "batch_size": 32,
+      "max_steps": 64676,
+      "warmup_steps": 100,
+      "eval_interval": 200,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c1e+16-n11m",
+    "overrides": {
+      "d_model": 384,
+      "num_layers": 6,
+      "num_heads": 12,
+      "d_ff": 1024,
+      "batch_size": 32,
+      "max_steps": 19164,
+      "warmup_steps": 100,
+      "eval_interval": 200,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c1e+16-n25m",
+    "overrides": {
+      "d_model": 512,
+      "num_layers": 8,
+      "num_heads": 16,
+      "d_ff": 1344,
+      "batch_size": 32,
+      "max_steps": 8085,
+      "warmup_steps": 100,
+      "eval_interval": 200,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c1e+16-n57m",
+    "overrides": {
+      "d_model": 768,
+      "num_layers": 8,
+      "num_heads": 24,
+      "d_ff": 2048,
+      "batch_size": 32,
+      "max_steps": 3594,
+      "warmup_steps": 100,
+      "eval_interval": 200,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  }
+]

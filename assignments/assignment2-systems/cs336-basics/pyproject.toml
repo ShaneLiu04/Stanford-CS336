@@ -1,0 +1,50 @@
+[project]
+name = "cs336-basics"
+version = "26.0.4"
+description = "CS336 Assignment 1"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "einops>=0.8",      # tensor operations
+    "einx>=0.4",        # more general tensor operations
+    "jaxtyping>=0.3",   # type hints for pytorch/jax/numpy
+    "numpy>=2.4",
+    "psutil>=7",
+    "pytest>=9.0",
+    "pytest-timeout",
+    "regex>=2026.3.32", # more powerful regex than the builtin `re` module
+    "tiktoken>=0.12.0",
+    "torch~=2.11.0",
+    "tqdm>=4.67",
+    "wandb>=0.25",
+    "ty>=0.0.26",
+    "ruff>=0.15.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "cs336_basics"
+module-root = ""
+
+[tool.uv]
+package = true
+python-preference = "managed"
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "WARNING"
+addopts = "-s"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint.extend-per-file-ignores]
+# Also ignore `E402` in all `__init__.py` files.
+"__init__.py" = ["E402", "F401", "F403", "E501"]
+
+[tool.ruff.lint]
+extend-select = ["UP"]
+ignore = ["F722"]

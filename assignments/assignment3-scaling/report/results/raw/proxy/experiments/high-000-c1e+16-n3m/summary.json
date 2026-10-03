@@ -1,0 +1,9 @@
+{
+  "steps": 64676,
+  "best_val_loss": 1.4859699726104736,
+  "elapsed_seconds": 1076.2757162256166,
+  "tokens_seen": 529825792,
+  "parameter_count": 8235264,
+  "peak_memory_mib": 1924.96533203125,
+  "peak_gpu_memory_bytes": 2018472448
+}

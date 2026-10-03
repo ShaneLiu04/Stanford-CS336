@@ -1,0 +1,98 @@
+[
+  {
+    "name": "c3e+14-n0.8m",
+    "overrides": {
+      "d_model": 128,
+      "num_layers": 4,
+      "num_heads": 4,
+      "d_ff": 352,
+      "batch_size": 32,
+      "max_steps": 7762,
+      "warmup_steps": 100,
+      "eval_interval": 388,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c3e+14-n1.8m",
+    "overrides": {
+      "d_model": 192,
+      "num_layers": 4,
+      "num_heads": 6,
+      "d_ff": 512,
+      "batch_size": 32,
+      "max_steps": 3450,
+      "warmup_steps": 100,
+      "eval_interval": 172,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c1e+15-n0.8m",
+    "overrides": {
+      "d_model": 128,
+      "num_layers": 4,
+      "num_heads": 4,
+      "d_ff": 352,
+      "batch_size": 32,
+      "max_steps": 25871,
+      "warmup_steps": 100,
+      "eval_interval": 1293,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c1e+15-n1.8m",
+    "overrides": {
+      "d_model": 192,
+      "num_layers": 4,
+      "num_heads": 6,
+      "d_ff": 512,
+      "batch_size": 32,
+      "max_steps": 11498,
+      "warmup_steps": 100,
+      "eval_interval": 574,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c3e+15-n0.8m",
+    "overrides": {
+      "d_model": 128,
+      "num_layers": 4,
+      "num_heads": 4,
+      "d_ff": 352,
+      "batch_size": 32,
+      "max_steps": 77611,
+      "warmup_steps": 100,
+      "eval_interval": 3880,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  },
+  {
+    "name": "c3e+15-n1.8m",
+    "overrides": {
+      "d_model": 192,
+      "num_layers": 4,
+      "num_heads": 6,
+      "d_ff": 512,
+      "batch_size": 32,
+      "max_steps": 34494,
+      "warmup_steps": 100,
+      "eval_interval": 1724,
+      "max_lr": 0.002,
+      "min_lr": 0.0002,
+      "save_checkpoints": false
+    }
+  }
+]

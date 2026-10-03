@@ -1,0 +1,24 @@
+
+tests/test_deduplication.py::test_exact_line_deduplication PASSED
+tests/test_deduplication.py::test_minhash_deduplication_exact_duplicates PASSED
+tests/test_deduplication.py::test_minhash_deduplication_fuzzy_duplicates PASSED
+tests/test_extract.py::test_extract_text_from_html_bytes PASSED
+tests/test_langid.py::test_identify_language_english PASSED
+tests/test_langid.py::test_identify_language_chinese_simplified PASSED
+tests/test_pii.py::test_mask_emails_single PASSED
+tests/test_pii.py::test_mask_emails_multiple PASSED
+tests/test_pii.py::test_mask_emails_existing_string PASSED
+tests/test_pii.py::test_mask_phones_single PASSED
+tests/test_pii.py::test_mask_ips PASSED
+tests/test_quality.py::test_classify_quality PASSED
+tests/test_quality.py::test_gopher_valid_input PASSED
+tests/test_quality.py::test_gopher_less_than_50_non_symbol_words PASSED
+tests/test_quality.py::test_gopher_more_than_100000_non_symbol_words PASSED
+tests/test_quality.py::test_gopher_average_word_length_less_than_3 PASSED
+tests/test_quality.py::test_gopher_average_word_length_greater_than_10 PASSED
+tests/test_quality.py::test_gopher_more_than_30_percent_lines_ending_with_ellipsis PASSED
+tests/test_quality.py::test_gopher_less_than_80_percent_words_with_alphabetic_character PASSED
+tests/test_toxicity.py::test_classify_nsfw PASSED
+tests/test_toxicity.py::test_classify_toxic_speech PASSED
+
+============================== 21 passed in 0.21s ==============================

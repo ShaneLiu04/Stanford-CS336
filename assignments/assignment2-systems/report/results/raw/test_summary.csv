@@ -1,0 +1,4 @@
+timestamp_utc,environment,python,torch,cuda,passed,skipped,failed,duration_seconds,notes
+2026-09-27T01:48:00Z,Windows-CPU,3.12,2.11.0+cpu,none,10,4,0,44.34,"CUDA/Triton tests skipped because the local environment has no GPU"
+2026-09-27T02:12:34Z,AutoDL-RTX6000D-CUDA,3.12.3,2.8.0+cu128,12.8,6,0,0,2.51,"CUDA and Triton attention tests"
+2026-09-27T02:13:27Z,AutoDL-CPU-Gloo,3.12.3,2.8.0+cu128,disabled,8,0,0,31.53,"DDP FSDP and sharded optimizer tests with CUDA_VISIBLE_DEVICES disabled"

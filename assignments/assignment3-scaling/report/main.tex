@@ -1,0 +1,174 @@
+\documentclass[UTF8,a4paper,11pt]{ctexart}
+\usepackage[margin=2.25cm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,graphicx,hyperref,listings,microtype,xcolor}
+\usepackage{longtable,fancyhdr}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black}
+\pagestyle{fancy}
+\fancyhead[L]{CS336 Assignment 3: Scaling}
+\fancyhead[R]{ShaneLiu04}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+\setlength{\emergencystretch}{3em}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single}
+\newcommand{\measured}{\textbf{[实测]}}
+\newcommand{\derived}{\textbf{[理论推导]}}
+\newcommand{\limited}{\textbf{[资源受限]}}
+\newcommand{\resultfigure}[3]{\IfFileExists{results/figures/#1}{%
+\begin{figure}[htbp]\centering\includegraphics[width=.94\linewidth]{results/figures/#1}
+\caption{#2}\label{#3}\end{figure}}{%
+\begin{figure}[htbp]\centering\fbox{\parbox[c][3cm][c]{.84\linewidth}{\centering
+缺少 \texttt{\detokenize{results/figures/#1}}；请重建报告资产。}}
+\caption{#2（资产缺失）}\end{figure}}}
+
+\title{\textbf{CS336 Assignment 3: Scaling}\\
+\large IsoFLOPs、Scaling Laws 与离线 Proxy 外推}
+\author{\href{https://github.com/ShaneLiu04}{ShaneLiu04}}
+\date{\today}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+本文实现 IsoFLOPs compute-optimal scaling、联合 loss law、bootstrap uncertainty 与
+held-out diagnostics，并在 RTX 6000D 上执行 TinyStories proxy scaling matrix。
+官方 72 条合成记录给出
+$N_{\mathrm{opt}}\propto C^{0.469}$、$D_{\mathrm{opt}}\propto C^{0.531}$；
+$10^{23}$ FLOPs 预测约 70.1B 参数与 237.9B tokens，$10^{24}$ FLOPs 预测约
+206.1B 参数与 808.6B tokens。本文是自学记录；
+未访问 Stanford B200 Training API，也未提交官方 leaderboard configuration。
+\end{abstract}
+\tableofcontents
+\newpage
+
+\section{范围、诚信与可复现性}
+\limited Assignment 3 的计分训练必须通过 Stanford hosted B200 API，并受 12 B200-hour
+拟合预算约束。本项目没有 A3 API key，因此 Part 2 采用公开数据与 RTX 6000D TinyStories
+proxy 完整演示方法学。Proxy 结论不能替代 DCLM、B200 或 \texttt{/final\_submission}。
+
+官方数据固定为 staff GitHub raw URL，并记录 SHA-256。报告资产位于
+\texttt{report/results/}：raw、figures、tables、summary、experiment log 与 manifest。
+每个 proxy run 保留 config/environment/metrics/summary；OOM 与失败同样归档。
+
+\section{Compute-optimal 问题}
+设 non-embedding parameters 为 $N$、训练 tokens 为 $D$。Transformer 训练计算量近似
+\[
+C\approx 6ND.
+\]
+固定 $C$ 时，大模型意味着更少 tokens，小模型意味着更多 tokens。两端都会损失：
+过大的模型 under-trained，过小的模型 capacity-limited，故 IsoFLOP profile 呈 U 形。
+
+\resultfigure{official_isoflop_profiles.pdf}
+{官方 9 个 compute tiers 的 IsoFLOP profiles；每 tier 直接取离散最低点，不用二次曲线
+制造网格外 minimum。}{fig:official-profiles}
+
+\section{Problem 1：官方 IsoFLOP Scaling}
+\subsection{参数与数据幂律}
+对每个 tier 的离散 minimum 拟合
+\[
+N_{\mathrm{opt}}(C)=A_N C^a,\qquad
+D_{\mathrm{opt}}(C)=A_D C^b.
+\]
+\resultfigure{official_n_opt.pdf}
+{Compute-optimal model size 及外推点；error bar 为 tier bootstrap 95\% interval。}
+{fig:official-n}
+\resultfigure{official_d_opt.pdf}
+{Compute-optimal dataset size 及外推点。}{fig:official-d}
+
+\measured 拟合得到 $a=0.4687$、$b=0.5313$，两者和为 1，符合
+$C=6ND$ 的代数约束。数值答案为：
+\begin{center}
+\begin{tabular}{lrr}\toprule
+Compute & $N_{\mathrm{opt}}$ & $D_{\mathrm{opt}}$\\\midrule
+$10^{23}$ FLOPs & 70.05B & 237.91B tokens\\
+$10^{24}$ FLOPs & 206.12B & 808.60B tokens\\
+\bottomrule\end{tabular}
+\end{center}
+
+\subsection{拟合质量与外推风险}
+\resultfigure{official_power_residuals.pdf}
+{离散 optima 在 log space 中相对参数幂律的残差。}{fig:official-residuals}
+\resultfigure{official_compute_progress.pdf}
+{Compute tier 增长时的最低 loss 与 compute-optimal tokens/parameter ratio。}
+{fig:official-progress}
+\resultfigure{official_experiment_map.pdf}
+{官方数据各 compute tier 的 run 覆盖；均匀的 profile 密度降低 winner selection bias。}
+{fig:official-map}
+\measured 联合模型
+\[
+L(N,D)=E+\frac{A}{N^\alpha}+\frac{B}{D^\beta}
+\]
+在 72 点上的 grid-profile fit 得到 $\alpha=0.339$、$\beta=0.363$、RMSE 0.00147。
+小 RMSE 不代表 $10^{24}$ 外推确定：目标 compute 比最大观测值高约 333 倍，model grid 的
+离散 winner、measurement noise 与 functional-form choice 都会被放大。
+
+\section{RTX 6000D Proxy Scaling}
+Proxy 使用 TinyStories 10K tokenizer、context 256、固定 optimizer/data order，并扫描约
+3M/11M/25M/57M non-embedding parameters 与三个 compute tiers。其目标是验证 analysis
+pipeline 和 finite-grid bias，而非预测 DCLM leaderboard。
+
+\resultfigure{proxy_isoflop_profiles.pdf}
+{TinyStories proxy IsoFLOP profiles。}{fig:proxy-profiles}
+\resultfigure{proxy_optimal_scaling.pdf}
+{Proxy 的 $N_{\mathrm{opt}}$、$D_{\mathrm{opt}}$ 与幂律。}{fig:proxy-optima}
+\resultfigure{proxy_learning_curves.pdf}
+{不同规模和 token budget 的 validation curves。}{fig:proxy-curves}
+\resultfigure{proxy_compute_allocation.pdf}
+{每个 proxy run 的参数量、tokens、理论 FLOPs 与 wall-clock allocation。}{fig:proxy-allocation}
+\resultfigure{proxy_boundary_diagnostic.pdf}
+{各 proxy tier 的离散 winner；最低 tier 落在 0.8M 扫描边界。}{fig:proxy-boundary}
+
+\measured 22 个 proxy runs 给出 $N_{\mathrm{opt}}\propto C^{0.676}$、
+$D_{\mathrm{opt}}\propto C^{0.324}$，明显不同于官方 0.469/0.531。四个 tier 的 winner
+从 0.8M 移至 3.1M，最高 tier 再移至 10.6M；最低 tier 仍落在扫描边界。
+Exponent 对离散 winner 与 domain 极敏感，因此 proxy 适合展示 finite-grid bias，
+不适合外推 B200/DCLM。
+
+\paragraph{解释原则。}
+如果某 tier 的 minimum 落在扫描边界，幂律点只提供 bound，而非 interior optimum；
+如果大模型因 compile overhead 或低利用率使 wall-clock/FLOPs 比例变化，则 wall-clock
+optimal 与 FLOP-optimal 不同。报告同时展示离散 winner 与拟合线，避免隐藏 winner's curse。
+
+\section{Uncertainty 与模型诊断}
+\resultfigure{bootstrap_exponents.pdf}
+{重采样得到的 scaling exponents 分布与 95\% interval。}{fig:bootstrap}
+\resultfigure{joint_law_surface.pdf}
+{联合 law 在 $(N,D)$ 空间的 loss surface 与观测点。}{fig:joint-surface}
+\resultfigure{heldout_predictions.pdf}
+{Leave-one-tier-out prediction 与 observed minima。}{fig:heldout}
+\resultfigure{extrapolation_sensitivity.pdf}
+{离散 minimum、profile interpolation 与联合 law 对大尺度预测的敏感性。}{fig:sensitivity}
+
+Bootstrap 必须按 compute tier 重采样，而不是把同 tier 的高度相关 runs 当独立样本。
+Held-out tier 误差比 in-sample RMSE 更接近真实外推风险；随着目标远离观测范围，
+confidence interval 应变宽，而不是因 log-linear fit 看似平滑而变窄。
+
+\section{48 B200-hour 方法学（非官方提交）}
+若具备 API access，推荐流程为：(1) 少量 calibration runs 估计有效 FLOP/s；
+(2) 4--5 个 IsoFLOP tiers，每 tier 3--5 个模型规模；(3) 在最优附近做 LR/batch/warmup
+消融；(4) 保留确认预算；(5) 用 completed runs 的 runtime 建立 wall-clock correction。
+参数量近似 $12n_{\mathrm{layer}}d_{\mathrm{model}}^2$，tokens 必须按
+\texttt{512×batch} 对齐。
+
+\limited 本报告不提供 fabricated 48-hour loss 或 training config。官方 final prediction
+需要真实 API response 中的 \texttt{used\_runtime\_seconds} 与 validation loss；RTX 6000D
+proxy 只能说明建模步骤和风险控制。
+
+\section{结论}
+官方合成数据支持近似 balanced scaling，但 $a,b$ 并非普适常数。高质量 scaling recipe
+应同时满足：(1) 每 tier 有 interior minimum；(2) compute 与 runtime 可追溯；
+(3) held-out error 可接受；(4) 外推 interval 随距离扩大；(5) 超参选择与 scaling fit
+分层进行。增加低价值 runs 不如扩大 tier 覆盖、补边界模型或重复关键 minimum。
+
+\appendix
+\section{复现命令}
+\begin{lstlisting}
+uv sync
+uv run python scripts/analyze_scaling.py
+uv run python scripts/build_report_assets.py
+cd report && make
+\end{lstlisting}
+
+\section*{致谢与使用声明}
+本项目由 \href{https://github.com/ShaneLiu04}{ShaneLiu04} 完成，用于个人自学与公开学习记录，
+不是 Stanford 课程提交。
+官方材料版权归原作者所有。
+\end{document}

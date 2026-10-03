@@ -1,0 +1,135 @@
+{
+  "source": "https://raw.githubusercontent.com/stanford-cs336/assignment3-scaling/main/data/isoflops_curves.json",
+  "source_sha256": "da6a464c3f5e5039d3f20e137dfcab3031a3d8e7ef0ac2f376f96e295d4afd27",
+  "records": 72,
+  "tiers": 9,
+  "n_power": {
+    "coefficient": 1.1634106364198435,
+    "exponent": 0.46868266774370226
+  },
+  "d_power": {
+    "coefficient": 0.1432569562708452,
+    "exponent": 0.5313173322563015
+  },
+  "predictions": {
+    "1e+23": {
+      "parameters": 70054233904.71297,
+      "tokens": 237910911842.0526
+    },
+    "1e+24": {
+      "parameters": 206118539185.04007,
+      "tokens": 808596195789.2869
+    }
+  },
+  "joint_law": {
+    "floor": 2.6906134381935076,
+    "A": 1568.1047522059062,
+    "alpha": 0.33860759493670883,
+    "B": 3383.2021789777536,
+    "beta": 0.36265822784810126,
+    "rmse": 0.0014729384247695403
+  },
+  "optima": [
+    {
+      "compute_budget": 6e+18,
+      "parameters": 762093419.0,
+      "tokens": 1312175089.1277542,
+      "final_loss": 5.899930270214304
+    },
+    {
+      "compute_budget": 1e+19,
+      "parameters": 806647749.0,
+      "tokens": 2066164157.4439783,
+      "final_loss": 5.617943423092358
+    },
+    {
+      "compute_budget": 3e+19,
+      "parameters": 1536852354.0,
+      "tokens": 3253402961.5703735,
+      "final_loss": 5.107176953205009
+    },
+    {
+      "compute_budget": 6e+19,
+      "parameters": 1952041776.0,
+      "tokens": 5122841182.472726,
+      "final_loss": 4.830586005050577
+    },
+    {
+      "compute_budget": 1e+20,
+      "parameters": 3253402960.0,
+      "tokens": 5122841182.472726,
+      "final_loss": 4.6528929644335255
+    },
+    {
+      "compute_budget": 3e+20,
+      "parameters": 5903836027.0,
+      "tokens": 8469069901.558091,
+      "final_loss": 4.311218819265305
+    },
+    {
+      "compute_budget": 6e+20,
+      "parameters": 6971055968.0,
+      "tokens": 14345028996.903902,
+      "final_loss": 4.121240846441071
+    },
+    {
+      "compute_budget": 1e+21,
+      "parameters": 6859328563.0,
+      "tokens": 24297810658.27429,
+      "final_loss": 4.002834749948777
+    },
+    {
+      "compute_budget": 3e+21,
+      "parameters": 12148905329.0,
+      "tokens": 41155971378.46459,
+      "final_loss": 3.773187514504335
+    }
+  ],
+  "proxy": {
+    "runs": 22,
+    "n_exponent": 0.6759076498151371,
+    "d_exponent": 0.32409235018486715,
+    "optima": [
+      {
+        "run": "small-000-c3e+14-n0.8m",
+        "target_compute": 300000000000000.0,
+        "parameters": 786432,
+        "tokens": 63586304.0,
+        "actual_compute": 300037825363968.0,
+        "final_loss": 1.935109955072403,
+        "best_loss": 1.935109955072403,
+        "runtime_seconds": 133.74409847147763
+      },
+      {
+        "run": "004-c1e+15-n3m",
+        "target_compute": 1000000000000000.0,
+        "parameters": 3145728,
+        "tokens": 52985856.0,
+        "actual_compute": 1000074544939008.0,
+        "final_loss": 1.730225110054016,
+        "best_loss": 1.7081720411777497,
+        "runtime_seconds": 108.53470525424927
+      },
+      {
+        "run": "008-c3e+15-n3m",
+        "target_compute": 3000000000000000.0,
+        "parameters": 3145728,
+        "tokens": 158949376.0,
+        "actual_compute": 3000069015994368.0,
+        "final_loss": 1.5692288756370545,
+        "best_loss": 1.5692288756370545,
+        "runtime_seconds": 324.243046997115
+      },
+      {
+        "run": "high-001-c1e+16-n11m",
+        "target_compute": 1e+16,
+        "parameters": 10616832,
+        "tokens": 156991488.0,
+        "actual_compute": 1.0000513521156096e+16,
+        "final_loss": 1.4582773387432098,
+        "best_loss": 1.4449158132076263,
+        "runtime_seconds": 463.67952561564744
+      }
+    ]
+  }
+}

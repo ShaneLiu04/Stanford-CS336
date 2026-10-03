@@ -1,0 +1,11 @@
+experiment,implementation,model_size,dtype,batch_size,sequence_length,head_dimension,mode,warmup,repetitions,mean_ms,std_ms,peak_memory_mib,status,gpu,torch_version,cuda_version,git_sha,timestamp_utc
+transformer,cs336_basics_eager,small,bf16,4,128,64,forward_backward,2,5,37.036070972681046,0.8940575043455553,1218.65478515625,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:52:33Z
+transformer,cs336_basics_eager,small,bf16,4,256,64,forward_backward,2,5,42.07095243036747,2.6725099699308683,1791.02392578125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:52:36Z
+transformer,cs336_basics_eager,small,bf16,4,512,64,forward_backward,2,5,39.92411233484745,1.7796500060774103,3259.82470703125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:52:39Z
+transformer,cs336_basics_eager,small,bf16,4,1024,64,forward_backward,2,5,113.32457475364208,0.07454321626429192,7753.423828125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:52:42Z
+transformer,cs336_basics_eager,small,bf16,4,2048,64,forward_backward,2,5,374.0953031927347,0.19352096186224563,23320.970703125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:52:45Z
+transformer,cs336_basics_eager,medium,bf16,4,128,64,forward_backward,2,5,67.69487857818604,1.5310181651598807,3528.0927734375,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:52:50Z
+transformer,cs336_basics_eager,medium,bf16,4,256,64,forward_backward,2,5,65.18455855548382,1.8362723718547276,4905.43115234375,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:52:56Z
+transformer,cs336_basics_eager,medium,bf16,4,512,64,forward_backward,2,5,90.75520765036345,0.3946076092195392,8564.0986328125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:53:02Z
+transformer,cs336_basics_eager,medium,bf16,4,1024,64,forward_backward,2,5,311.95762045681477,0.23359779553046123,19859.6220703125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:53:08Z
+transformer,cs336_basics_eager,medium,bf16,4,2048,64,forward_backward,2,5,998.8892585039139,0.33761866368331395,58035.8564453125,ok,NVIDIA RTX 6000D,2.8.0+cu128,12.8,unknown,2026-09-27T09:53:16Z

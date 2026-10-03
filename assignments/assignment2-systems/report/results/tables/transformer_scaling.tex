@@ -1,0 +1,18 @@
+\begin{table}
+\caption{RTX 6000D Transformer forward+backward measurements.}
+\label{tab:transformer-measured}
+\begin{tabular}{llrrr}
+\toprule
+model_size & dtype & mean_ms & std_ms & peak_memory_mib \\
+\midrule
+large & bf16 & 190.51 & 0.08 & 16927.30 \\
+large & fp32 & 411.86 & 0.60 & 20655.37 \\
+medium & bf16 & 94.06 & 0.86 & 8584.35 \\
+medium & fp32 & 177.26 & 0.19 & 10825.98 \\
+small & bf16 & 35.87 & 1.03 & 3233.62 \\
+small & fp32 & 58.62 & 0.12 & 4157.55 \\
+xl & bf16 & 438.12 & 1.59 & 38058.43 \\
+xl & fp32 & 1120.75 & 0.88 & 40990.37 \\
+\bottomrule
+\end{tabular}
+\end{table}
