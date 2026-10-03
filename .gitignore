@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Build and editor files
+build/
+dist/
+*.egg-info/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# Datasets, checkpoints, and experiment artifacts
+data/
+datasets/
+checkpoints/
+artifacts/
+outputs/
+runs/
+wandb/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.bin
+*.npy
+*.npz
+*.parquet
+*.warc
+*.warc.gz
+
+# Official tiny fixtures and snapshots are required by upstream tests.
+!assignments/**/tests/fixtures/**/*.pt
+!assignments/**/tests/fixtures/**/*.bin
+!assignments/**/tests/fixtures/**/*.safetensors
+!assignments/**/tests/_snapshots/**/*.npy
+!assignments/**/tests/_snapshots/**/*.npz
+
+# LaTeX build artifacts
+*.aux
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+
+# Archives and logs
+*.zip
+*.tar
+*.tar.gz
+*.log
+
+# Keep documentation placeholders
+!experiments/**/README.md
