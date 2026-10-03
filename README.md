@@ -8,7 +8,6 @@
 ---
 
 ## 为什么适合面试复习
-
 大模型面试的问题很少是「背定义」，而是三类：**能推导**（FLOPs、显存、KV cache、`C≈6ND`）、
 **能比较**（RMSNorm vs LayerNorm、DPO vs RLHF、DDP vs FSDP）、**能落地**（写一个 kernel、
 建一条数据管线、复现一个 scaling 实验）。这套笔记对每一讲都固定产出：
