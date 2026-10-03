@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_14.py"
-  - "../assignments/spring2026/assignment4-data/"
+  - "../assignments/assignment4-data/"
 ---
 
 # Lecture 14 — 过滤、去重与重加权：把规则变成可测系统
@@ -320,19 +320,19 @@ bucket、候选 pair 数和 peak RSS，避免热门模板形成超大 bucket。
 
 ## 14. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 14.1 Construct validity
 
 - “质量”由正负样本定义，classifier accuracy 不是数据质量的度量；
 - Jaccard 阈值是表面相似度，与“信息冗余”不一一对应；
 - ESS 衡量权重集中度，不衡量分布匹配的正确性。
 
-### Internal validity
+### 14.2 Internal validity
 
 - 阈值、去重、混合同时变更时，无法归因单一因素；
 - 下游 proxy 模型过小，其偏好未必代表目标规模模型 [[5]](#ref-5)；
 - 人工标注样本量小且标注者偏差存在，precision 数字有置信区间。
 
-### External validity
+### 14.3 External validity
 
 - 在一个语料/语言上校准的阈值与 \(b,r\) 不外推到其他分布；
 - 规则与分类器的误杀模式依赖时代（web 风格演化）；
@@ -341,28 +341,120 @@ bucket、候选 pair 数和 peak RSS，避免热门模板形成超大 bucket。
 论文式表述应报告完整管线版本、每级通过率、阈值敏感性分析与失败样本聚合统计，
 而不是只给“我们的 recipe 更好”的最终 loss。
 
-## 面试要点速记
+## 15. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> 过滤/去重/重加权是数据工程面试的高频题：面试官常从「MinHash 为什么能估 Jaccard」切入，
+> 追到「LSH 候选率」「DSIR vs DoReMi」「去重前先定义什么」「过滤为何不是越严越好」。
+> 核心是把「数据清洗」理解成**可测量、可重放、可证伪的决策系统**，而非清洗脚本。
+> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：MinHash 为什么能估计 Jaccard？** 要点：k-shingle 集合经随机置换取
-   最小哈希，两签名相等的概率 = Jaccard；b 带 × r 行的 LSH 用
-   \(1-(1-s^r)^b\) 控 recall/precision 曲线。
-2. **Q：去重前必须先定义什么？** 要点：“重复”的语义（URL/hash/MinHash 阈值）
-   与删除单位（文档/段落/序列）；语义不同结论完全不同。
-3. **Q：为什么过滤+去重同时改善 loss 与下游？** 要点：低质与重复内容浪费
-   token 预算、推高记忆与泛化风险；Gopher rules/模型分类器 + 精确/模糊去重
-   是 RefinedWeb/FineWeb 的标准组合。
-4. **Q：DSIR 与 DoReMi 的定位差异？** 要点：DSIR 学 raw→target 分布的重要性
-   权重做重采样（不删除）；DoReMi 用 group-DRO 学域混合权重，minimax 保住
-   最差域。
+### 15.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：原始语料到训练分布的每一步（过滤/去重/重加权）都是决策系统，每个 stage 应输出
+score、decision、reason 以便重放；「越严越好」和 classifier accuracy 都是误导。
 
-- LSH 概率式 \(1-(1-s^r)^b\)；典型 Jaccard 阈值 0.8 级；去重常带来
-  数倍数据压缩与下游增益并存。
+**必背数字与公式**
 
-## 15. 小结
+- MinHash 碰撞 \(\Pr[m(A)=m(B)]=J(A,B)\)，估计方差 \(\operatorname{Var}(\hat J)=J(1-J)/K\)。
+- LSH 候选率 \(P_{\text{cand}}(s)=1-(1-s^r)^b\)，近似拐点 \(s^\star\approx(1/b)^{1/r}\)。
+- DSIR 权重 \(w(x)=p_{\text{target}}/p_{\text{raw}}\)，有效样本量 \(\mathrm{ESS}=(\sum w)^2/\sum w^2\)。
+- 典型 Jaccard 阈值约 0.8；去重常带来数倍数据压缩。
+
+**三句话答高频**
+
+1. MinHash 用随机排列取最小哈希，碰撞概率等于 Jaccard；LSH 分 band 控制候选规模。
+2. 去重前先定义「重复」语义（URL/hash/MinHash 阈值）与删除单位（文档/段落/行）。
+3. 过滤越严不一定越好，要平衡人工精度 × token 产量 × 域覆盖 × 下游 loss。
+
+### 15.2 高频面试题与答题框架
+
+**Q1：MinHash 为什么能估计 Jaccard？LSH 的候选率？**
+
+- 把文档变 word n-gram shingles 集合；对随机排列/哈希取集合最小值 \(m_k(A)=\min_{a\in A}h_k(a)\)，则 \(\Pr[m_k(A)=m_k(B)]=J(A,B)\)。
+- \(K\) 个 hash 的碰撞率无偏估计 Jaccard，方差 \(J(1-J)/K\)，增大 \(K\) 降方差但增成本。
+- LSH 把 \(K=br\) 个 signature 分 \(b\) 个 band、每 band \(r\) 行，至少一个 band 全同即为候选：\(P_{\text{cand}}(s)=1-(1-s^r)^b\)；增大 \(b\) 提召回、增大 \(r\) 更严格。
+
+**Q2：去重前必须先定义什么？**
+
+- 「重复」的语义（URL / 内容 hash / MinHash 阈值）与删除单位（document / paragraph / line）。
+- 语义不同结论完全不同：exact hash 只删完全一致；MinHash 删近重复；SemDeDup 删语义冗余。
+- 还要定义「保留一份 vs 删除所有重复行」——本仓库 exact-line 删所有全局频次 >1 的行，会连带删合法免责声明。
+
+**Q3：为什么过滤 + 去重同时改善 loss 与下游？**
+
+- 低质与重复内容浪费 token 预算、推高记忆与泛化风险；去重后唯一 token 驱动收益（data-constrained scaling）。
+- Lee 等证明去重显著降 perplexity 并减少 memorization；Gopher rules + 精确/模糊去重是 RefinedWeb/FineWeb 的标准组合。
+
+**Q4：DSIR 与 DoReMi 的定位差异？**
+
+- **DSIR**：估计 raw→target 密度比 \(w=p_{\text{target}}/p_{\text{raw}}\) 做 importance resampling（**不删除**，保留概率多样性）。
+- **DoReMi**：在小 proxy 模型上用 group DRO 学域混合权重（给最差域加大权重），再用该权重训练大模型。
+- 两者都改变采样分布，与「删除式」过滤/去重正交；都依赖 reference data 且需审计其来源。
+
+**Q5：fastText 与 Gopher rules 的取舍？**
+
+- **Gopher rules**：文档统计启发式（词数、平均词长、省略号行、字母比例），便宜、可解释，但边界跳变 + 文化/领域偏差。
+- **fastText**：词/字符 n-gram 线性分类，推理快适合 web-scale 初筛；但「质量」由正负样本定义（Wikipedia 为正、随机网页为负学的可能是来源风格）。
+- 实务：先便宜规则做结构初筛，再用学习式分类器，最后小模型 ablation 裁决（FineWeb 方法论）。
+
+**Q6：exact dedup、MinHash、SemDeDup 的区别？**
+
+- **exact**：hash 完全一致才删，只去完全重复；**MinHash**：近似 Jaccard 去近重复；**SemDeDup**：embedding 空间按 cosine 去语义冗余，约减半数据等质量。
+- 代价递进：exact 最便宜、SemDeDup 需 encoder+聚类；语义去重有「语义相近但事实不同」被误删的风险。
+
+**Q7：DSIR 的 ESS 诊断什么？ratio 爆炸怎么处理？**
+
+- \(\mathrm{ESS}=(\sum w)^2/\sum w^2\) 衡量有效样本量；ESS 很低表示少数文档支配数据。
+- \(p_{\text{raw}}\) 很小时 ratio 爆炸 → 需 smoothing、log-weight clipping；目标集被 benchmark 污染会把污染放大到训练集。
+
+**Q8：DoReMi 的 group DRO 怎么做？**
+
+- 先训小 proxy 模型，在其上以 group DRO 优化域权重——给当前模型表现最差的域加大权重（minimax 保住最差域）。
+- 学到的域配比用于正式大模型训练，等预算下收敛更快。
+- 前提：proxy 足够小（否则学权重开销超收益）、域定义合适、tokenizer/数据版本与后续训练一致。
+
+**Q9：过滤为什么不是越严越好？**
+
+- 提高阈值提升人工精度，却减少领域/语言覆盖；目标是 \(\max_\tau U(\tau)=\text{quality}-\lambda C_{\text{tokens}}-\gamma\,\text{distribution shift}\)。
+- 每 stage 应输出 score/decision/reason，才能重放不同阈值；只优化 validation loss 可能奖励 benchmark 泄漏或风格窄化。
+
+**Q10：LSH 的 \(b\) 和 \(r\) 怎么调？**
+
+- \(b\) 大：召回高、候选多；\(r\) 大：更严格、候选少；拐点约 \(s^\star\approx(1/b)^{1/r}\)。
+- 最终阈值仍要通过数据校准；LSH 只缩小 pair 数，之后还要算真 Jaccard 复核（候选 ≠ 重复）。
+
+### 15.3 手撕要点（MinHash / LSH / DSIR）
+
+面试让「推导 MinHash 无偏性」或「算 LSH 候选率」时，按公式写：
+
+```text
+MinHash: m_k(A) = min_{a∈A} h_k(a),  Pr[m_k(A)=m_k(B)] = J(A,B)
+  Ĵ = (1/K) Σ 1[m_k(A)=m_k(B)],  Var(Ĵ) = J(1-J)/K
+
+LSH (K=br, b bands × r rows):
+  P_cand(s) = 1 - (1-s^r)^b,  拐点 s* ≈ (1/b)^{1/r}
+
+DSIR: w(x) = p_target(x)/p_raw(x)
+  ESS = (Σw)² / Σw²   （低 ESS = 少数文档支配数据）
+```
+
+**三个必踩坑**
+
+1. **LSH 候选 ≠ 重复**：还要算真 Jaccard 复核，用 union-find 合并簇。
+2. **Python `hash()` 不稳定**：跨进程/版本不同，必须用固定算法 + seed。
+3. **split 前去重**：train/validation 切分后再去重会跨 split 泄漏，应先建近重复簇再切分。
+
+### 15.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| 去重能解决所有污染吗？ | 否，语义改写、翻译重复、拼接污染仍在，且不证明模型不记忆 |
+| classifier accuracy 是数据质量吗？ | 否，只是正负样本定义的「风格」，精度有 CI |
+| survivor 选「最早抓到」对吗？ | 可能系统偏向特定域，策略需可解释并审计来源占比 |
+| 目标域含 benchmark 会怎样？ | DSIR/DoReMi 会把泄漏写进采样分布 |
+| MinHash 空集合会怎样？ | 全部同 signature 聚成一簇，应先过滤空文档 |
+
+## 16. 小结
 
 fastText 和 Gopher 适合廉价初筛，MinHash 估计集合相似度，LSH 控制候选规模，SemDeDup
 把去重推进到语义层，DSIR/DoReMi 则通过密度比与域权重改变采样分布。它们不是同一种
@@ -424,4 +516,4 @@ Optimizing Data Mixtures Speeds Up Language Model Pretraining.” *NeurIPS*,
 
 - Stanford CS336, [Lecture 14 — Filtering, Deduplication and Mixing](https://github.com/stanford-cs336/lectures/blob/main/lecture_14.py)
 - [Data Curation 主题导航](../experiments/topics/data-curation.md)
-- [A4 Data 官方题面](../assignments/spring2026/assignment4-data/cs336_assignment4_data.pdf)
+- [A4 Data 官方题面](../assignments/assignment4-data/cs336_assignment4_data.pdf)
