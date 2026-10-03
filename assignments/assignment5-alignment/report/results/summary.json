@@ -1,0 +1,29 @@
+{
+  "records": 4480,
+  "variants": [
+    "grpo",
+    "grpo_constant",
+    "drgrpo",
+    "rft",
+    "maxrl",
+    "offpolicy_grpo",
+    "gspo"
+  ],
+  "seeds": [
+    42,
+    123,
+    336,
+    2026
+  ],
+  "steps": 160,
+  "final_reward": {
+    "drgrpo": 0.97802734375,
+    "grpo": 0.984375,
+    "grpo_constant": 0.984375,
+    "gspo": 0.98388671875,
+    "maxrl": 0.9541015625,
+    "offpolicy_grpo": 0.0009765625,
+    "rft": 0.97900390625
+  },
+  "proxy_only": true
+}

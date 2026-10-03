@@ -1,0 +1,128 @@
+\documentclass[UTF8,a4paper,11pt]{ctexart}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,booktabs,graphicx,hyperref,listings,xcolor,fancyhdr}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single}
+\pagestyle{fancy}\fancyhead[L]{CS336 Assignment 5: Alignment}\fancyhead[R]{ShaneLiu04}
+\fancyfoot[C]{\thepage}\setlength{\headheight}{14pt}
+\newcommand{\measured}{\textbf{[实测]}}\newcommand{\limited}{\textbf{[资源受限]}}
+\newcommand{\figresult}[3]{\begin{figure}[htbp]\centering
+\includegraphics[width=.94\linewidth]{results/figures/#1}\caption{#2}\label{#3}\end{figure}}
+\title{\textbf{CS336 Assignment 5: Alignment}\\\large GRPO、Off-policy 与 Preference Optimization}
+\author{\href{https://github.com/ShaneLiu04}{ShaneLiu04}}\date{\today}
+\begin{document}\maketitle
+\begin{abstract}
+本文实现 GRPO/Dr.GRPO/MaxRL/RFT、off-policy token/sequence importance weighting、
+SFT packing、metrics parsing 与 DPO loss。主测试和 supplement 测试共 26 项全部通过。
+由于没有 Modal/SUNET\_ID，本报告使用 RTX 6000D 上 7 种 objective、4 seeds、160 steps
+的向量化 bandit proxy（4480 条 raw metrics）分析 normalization、length bias 与 clipping。
+这是自学记录，不冒充 OLMo-2/GSM8K 或 B200 正式结果。
+\end{abstract}\tableofcontents\newpage
+
+\section{目标、范围与验证}
+Alignment 的核心是把 sequence-level reward 转成稳定的 token-level gradient，同时控制
+sampling distribution 与 training distribution 的偏移。实现由公开 snapshots 验证；
+proxy 仅隔离 objective mechanics，不代表 language reasoning。
+\figresult{test_matrix.pdf}{GRPO 与 supplement 接口的测试覆盖。}{fig:tests}
+
+\section{Tokenization、log probability 与 reward}
+Prompt 与 response 先分别 tokenize，再拼接并 shift 成 input/labels；response mask 与 labels
+对齐，padding/prompt token 不参与 policy loss。对 logits 使用 log-softmax 后 gather label
+位置，entropy 为
+\[
+H(p_t)=-\sum_v p(v\mid x_{<t})\log p(v\mid x_{<t}).
+\]
+Rollout grader 返回 format/answer/total rewards。Format 正确但答案错误是重要 error class，
+因为它说明 prompt compliance 与 reasoning accuracy 必须分开记录。
+
+\section{GRPO Advantage 与 Baseline}
+组内 reward $r_i$，GRPO advantage 为
+\[
+A_i=\frac{r_i-\bar r}{s_r+\epsilon}.
+\]
+Baseline 不改变期望 gradient，但可降低方差；sample std normalization 又会按 group
+difficulty 重加权。Dr.GRPO 不除 std，MaxRL 除 mean reward，RFT 不减 baseline。
+\figresult{advantage_normalization.pdf}{不同 group success probability 下 advantage scale。}{fig:adv}
+
+GRPO 在极易/极难 group 中 std 很小，会放大少数差异；Dr.GRPO 更稳定但失去 scale
+normalization；MaxRL 强调低成功率 group。没有一种 normalization 对所有 difficulty
+distribution 都最优。
+
+\section{Policy Gradient 与 Length Bias}
+On-policy per-token objective 为 $-\!A\log\pi_\theta(y_t|x,y_{<t})$。
+Sequence normalization 先除每条 response length，再对 batch 平均；constant normalization
+以固定 $BGL$ 除总 loss。前者让短 response 每 token 权重更大，后者保留 token-count 权重。
+\figresult{response_length.pdf}{不同 objectives 下 proxy response length。}{fig:length}
+\figresult{gradient_norm.pdf}{四 seeds 的 gradient norm trajectory。}{fig:grad}
+\figresult{policy_loss.pdf}{Surrogate loss curves。}{fig:loss}
+
+\section{On-policy Objective Comparison}
+\figresult{reward_curves.pdf}{7 种 objectives 的 answer reward，曲线为 seed mean±std。}{fig:reward}
+\figresult{format_reward_curves.pdf}{Format reward 与 answer reward 的分离。}{fig:format}
+\figresult{entropy_curves.pdf}{Policy entropy：reward 提升通常伴随 exploration 收缩。}{fig:entropy}
+\figresult{policy_probability.pdf}{受控 correct-action probability。}{fig:prob}
+\figresult{final_reward.pdf}{Final proxy reward 及 seed uncertainty。}{fig:finalreward}
+\figresult{final_entropy.pdf}{Final entropy 对比。}{fig:finalentropy}
+\figresult{final_grad_norm.pdf}{Final gradient norm 对比。}{fig:finalgrad}
+
+\measured Proxy 中所有 objectives 都能提高正确动作概率，但速度与 entropy collapse 不同。
+RFT 只强化 positive samples，早期 signal 稀疏；GRPO/Dr.GRPO 使用 negative relative
+advantages，sample efficiency 更高。结果只证明 objective implementation behavior，
+不能推断 GSM8K accuracy。
+
+\section{Off-policy GRPO 与 GSPO}
+旧策略 $\pi_{\theta_{\rm old}}$ 产生 rollout 时，importance ratio
+\[
+\rho_t=\exp(\log\pi_\theta(y_t)-\log\pi_{\theta_{\rm old}}(y_t)).
+\]
+Noclip 无偏但高方差；GRPO/PPO 在 token level clip $\rho_t$；GSPO 对 response-mask 内
+平均 log-ratio 后做 sequence-level clip。
+\figresult{clip_fraction.pdf}{Token/sequence clipping fraction。}{fig:clip}
+
+Cliprange 过小会让多数 samples 失去 gradient，过大则无法约束 stale rollout。
+Off-policy efficiency 必须同时报告 wall-clock、clip fraction、effective sample size 与
+reward，而不能只比较 optimizer steps。
+
+\section{Sampling 与 pass@k}
+\figresult{pass_at_k.pdf}{由 final success probability 推导的 proxy pass@1/2/4/8。}{fig:passk}
+在独立采样近似下，$\mathrm{pass@}k=1-(1-p)^k$。Group rollout 提高发现正确答案的概率，
+但同一 prompt 的 samples 高度相关，真实 pass@k 通常低于独立估计。
+
+\section{SFT Packing、Metrics 与 DPO}
+Packed SFT 将多个 instruction examples 串接后切成固定长度 block，input 与 next-token
+labels shift 对齐；shuffle 只改变 document order，不丢 tokens。MMLU parser 只接受
+A--D，GSM8K supplement parser 取最后 numeric answer，二者不能与 R1-zero XML grader 混用。
+\figresult{gsm8k_lengths.pdf}{GSM8K question/rationale word-length distribution。}{fig:gsm}
+
+DPO 单样本 loss 为
+\[
+-\log\sigma\left(\beta[(\log\pi_\theta(y_w|x)-\log\pi_\theta(y_l|x))
+-(\log\pi_{\rm ref}(y_w|x)-\log\pi_{\rm ref}(y_l|x))]\right).
+\]
+Reference model 必须 no-grad；chosen/rejected 只在 response tokens 上累计 log probability。
+
+\section{资源边界与下一步}
+\limited 正式作业要求 OLMo-2-1B、vLLM rollout、2×B200 Modal 与四 seeds；supplement
+还需要 Llama-3.1-8B、HH/UltraChat 和 70B judge。单张 RTX 6000D 可承载 1B policy，
+但不能按 handout 同时提供训练与独立 vLLM GPU，也不能 bf16 运行 70B judge。
+因此本报告不伪造正式 accuracy/win-rate。
+
+下一步优先级：(1) 获得 Modal 权限后跑 50-step smoke；(2) standard GRPO 四 seeds；
+(3) 根据 seed variance 决定 LR/prompt sweep；(4) 再比较 Dr.GRPO/RFT/MaxRL；
+(5) off-policy 记录 ratio 与 clip fraction；(6) supplement 单独报告 alignment tax。
+
+\section{结论}
+高质量 alignment experiment 需要同时追踪 reward components、entropy、grad norm、
+response length、pass@k、clip fraction 与 seed variance。Reward 上升若伴随 format shortcut、
+entropy collapse 或 response-length drift，不能简单解释为 reasoning 改善。
+
+\appendix\section{复现}
+\begin{lstlisting}
+python -m pytest -q tests/test_grpo.py tests/test_data.py tests/test_metrics.py tests/test_dpo.py
+python scripts/run_proxy_alignment.py
+python scripts/build_report_assets.py
+cd report && make
+\end{lstlisting}
+\section*{致谢}
+作者：\href{https://github.com/ShaneLiu04}{ShaneLiu04}。
+\end{document}

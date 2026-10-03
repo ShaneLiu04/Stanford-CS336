@@ -1,0 +1,32 @@
+
+tests/test_grpo.py::test_tokenize_prompt_and_output PASSED               [  3%]
+tests/test_grpo.py::test_get_response_log_probs PASSED                   [  7%]
+tests/test_grpo.py::test_compute_rollout_rewards PASSED                  [ 11%]
+tests/test_grpo.py::test_compute_group_normalized_rewards_grpo PASSED    [ 15%]
+tests/test_grpo.py::test_compute_group_normalized_rewards_drgrpo PASSED  [ 19%]
+tests/test_grpo.py::test_compute_group_normalized_rewards_maxrl PASSED   [ 23%]
+tests/test_grpo.py::test_compute_policy_gradient_loss_on_policy PASSED   [ 26%]
+tests/test_grpo.py::test_compute_policy_gradient_loss_off_policy PASSED  [ 30%]
+tests/test_grpo.py::test_compute_policy_gradient_loss_off_policy_gspo PASSED [ 34%]
+tests/test_grpo.py::test_aggregate_loss_across_microbatch_sequence PASSED [ 38%]
+tests/test_grpo.py::test_aggregate_loss_across_microbatch_constant PASSED [ 42%]
+tests/test_grpo.py::test_grpo_train_step_standard_on_policy 
+-------------------------------- live log call ---------------------------------
+WARNING  transformers.modeling_utils:logging.py:328 We strongly recommend passing in an `attention_mask` since your input_ids may be padded. See https://huggingface.co/docs/transformers/troubleshooting#incorrect-output-when-padding-tokens-arent-masked.
+PASSED                                                                   [ 46%]
+tests/test_grpo.py::test_grpo_train_step_variants_on_policy[grpo_constant] PASSED [ 50%]
+tests/test_grpo.py::test_grpo_train_step_variants_on_policy[dr_grpo] PASSED [ 53%]
+tests/test_grpo.py::test_grpo_train_step_variants_on_policy[rft] PASSED  [ 57%]
+tests/test_grpo.py::test_grpo_train_step_variants_on_policy[maxrl] PASSED [ 61%]
+tests/test_grpo.py::test_grpo_train_step_off_policy[noclip] PASSED       [ 65%]
+tests/test_grpo.py::test_grpo_train_step_off_policy[grpo] PASSED         [ 69%]
+tests/test_grpo.py::test_grpo_train_step_off_policy[gspo] PASSED         [ 73%]
+tests/test_data.py::test_packed_sft_dataset PASSED                       [ 76%]
+tests/test_data.py::test_iterate_batches PASSED                          [ 80%]
+tests/test_metrics.py::test_parse_mmlu_response PASSED                   [ 84%]
+tests/test_metrics.py::test_parse_mmlu_response_unknown PASSED           [ 88%]
+tests/test_metrics.py::test_parse_gsm8k_response PASSED                  [ 92%]
+tests/test_metrics.py::test_parse_gsm8k_response_unknown PASSED          [ 96%]
+tests/test_dpo.py::test_per_instance_dpo_loss PASSED                     [100%]
+
+============================== 26 passed in 1.65s ==============================
