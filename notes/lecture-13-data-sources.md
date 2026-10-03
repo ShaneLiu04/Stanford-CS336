@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_13.py"
-  - "../assignments/spring2026/assignment4-data/"
+  - "../assignments/assignment4-data/"
 ---
 
 # Lecture 13 — 数据来源与数据集：先定义数据，再谈规模
@@ -228,7 +228,7 @@ N_{\text{usable}}
 | 概念 | 本仓库位置 | 可验证的契约 |
 | --- | --- | --- |
 | A4 总体任务与数据边界 | `experiments/official/a4-data.md` | WARC/WET、2500 WET、GPT-2 EOT 与固定训练预算 |
-| HTML/WET 输入 | `assignments/spring2026/assignment4-data/cs336_data/wet_files.py` | 流式读取 record，不把全 shard 载入内存 |
+| HTML/WET 输入 | `assignments/assignment4-data/cs336_data/wet_files.py` | 流式读取 record，不把全 shard 载入内存 |
 | 字节到文本 | `cs336_data/extract_lang.py` | 解码、正文抽取、语言 label 与 score |
 | 文档级统计 | `cs336_data/pipeline.py::PipelineStats` | 输入/输出文档和字符数、各拒绝原因 |
 | 文档边界 | `pipeline.py::tokenize_documents` | 每篇文档编码后追加 GPT-2 EOT，写 `uint16` |
@@ -289,19 +289,19 @@ N_{\text{usable}}
 
 ## 11. 讨论：效度威胁与结论边界
 
-### Construct validity
+### 11.1 Construct validity
 
 - “token 数”不是“信息量”；\(N_{\text{usable}}\) 的每级比率都依赖阈值与工具版本；
 - 语言/质量 score 是模型输出，不是真值；其系统性偏差会被下游放大；
 - 人工抽查样本量小，只能发现粗错误，不能证明分布正确。
 
-### Internal validity
+### 11.2 Internal validity
 
 - 来源比较若不固定抽取器、tokenizer 与训练配方，差异无法归因于来源本身；
 - funnel 比率之间的相关性使“乘积估计”失真；
 - 本仓库 A4 只在 1000–2500 条 WET 上验证，任何全量结论都是外推。
 
-### External validity
+### 11.3 External validity
 
 - 单一 snapshot 的语言/域名分布不外推到其他时期；
 - 小模型的语料偏好（FineWeb 式 ablation）未必与大模型一致 [[6]](#ref-6)；
@@ -310,25 +310,115 @@ N_{\text{usable}}
 论文式表述应限定 snapshot、抽取器版本、过滤配置与验证协议，并公开被拒绝样本的聚合统计，
 而不是只报告“我们的语料更好”。
 
-## 面试要点速记
+## 12. 面试备考（Interview Prep）
 
-**高频问题与答题要点**
+> 数据来源是 LLM 面试的数据工程高频题：面试官常从「WARC/WAT/WET 是什么」切入，追到
+> 「\(E_s\) 期望暴露」「数据受限 4 epochs」「model collapse」「provenance 怎么追踪」。
+> 核心是把「数据集」理解成**采样过程**（\(p_{\text{train}}=\sum w_s p_s\)），把「多大规模」
+> 升级为「什么分布、什么许可、什么暴露次数」。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
 
-1. **Q：WARC/WAT/WET 分别是什么？** 要点：原始 HTTP 响应（WARC）/ 元数据
-   （WAT）/ 提取文本（WET）；只存 WET 会丢 URL 与 provenance，治理与审计断层。
-2. **Q：\(E_s\)（期望暴露）衡量什么？** 要点：来源 s 的样本被模型看见的
-   期望次数×数据权重；\(E_s\) 越高记忆风险越大（canary 实验可校准阈值）。
-3. **Q：数据受限时的结论？** 要点：重复 ~4 epochs 内近似等效新数据；数据
-   受限时 compute-optimal 模型应更小。
-4. **Q：选 crawl snapshot 的偏差来源？** 要点：抓取时间、语言/域覆盖、
-   robots 屏蔽与封禁；部署域与快照时间的错配是系统性偏差，不是噪声。
+### 12.1 一页速览卡（面试前 1 分钟）
 
-**必背数字**
+**核心主张**：数据集不是中性文件集合，而是由「来源发现、抓取时机、抽取器、过滤器、混合权重」
+共同决定的采样过程；同一 URL 集合在不同管线下分布完全不同。
 
-- 4 epochs 上限；\(E_s\) 与记忆率的单调关系；fine-tune“特殊数据”的收益
-  边际递减且随规模缩水。
+**必背数字与公式**
 
-## 12. 小结
+- 训练分布 \(p_{\text{train}}(x)=\sum_s w_s\,p_s(x\mid \text{crawl,extract,filter})\)。
+- 期望遍历次数 \(E_s=\frac{T\,w_s}{N_s}\)（比 \(w_s\) 更直接关联记忆风险）。
+- 数据重复约 **4 epochs** 后边际收益趋近于零（Muennighoff）。
+- 有效 token funnel \(N_{\text{usable}}=N_{\text{raw}}\cdot r_{\text{extract}}r_{\text{lang}}r_{\text{quality}}r_{\text{safety}}r_{\text{dedup}}\)，总通过率常在个位数百分比。
+- WARC（原始响应）/ WAT（元数据）/ WET（纯文本）。
+
+**三句话答高频**
+
+1. 数据集是采样过程：C4/RefinedWeb/FineWeb 都源自 Common Crawl，但管线不同、分布大相径庭。
+2. \(E_s\) 衡量来源 token 被看到的期望次数，小来源即便权重低、\(E_s\) 高也构成记忆风险。
+3. 数据重复 4 epochs 后饱和；合成数据递归训练会 model collapse，只能补充稀缺分布。
+
+### 12.2 高频面试题与答题框架
+
+**Q1：WARC / WAT / WET 分别是什么？为什么 WET record ≠ 网页正文？**
+
+- **WARC**：保存请求/响应、header、URL、原始 payload，可重新抽取与审计；**WAT**：解析后的 metadata/links；**WET**：预抽取纯文本，吞吐友好但丢 DOM、链接上下文与部分 provenance。
+- 同一页面可能被抓取多次，一个 record 可能只剩导航/错误页/乱码；所以 `WET record ≠ 网页正文 ≠ 训练文档`。
+- 只存 WET 会丢治理与审计能力，生产应保留 WARC 或等价 provenance。
+
+**Q2：\(E_s\)（期望暴露）衡量什么？为什么比 \(w_s\) 更重要？**
+
+- \(E_s=Tw_s/N_s\)：来源 \(s\) 的 token 平均被看到的次数，混合权重 \(w_s\)、总预算 \(T\)、来源大小 \(N_s\) 共同决定。
+- 小来源即便权重不大，\(E_s\) 高就反复暴露 → memorization 风险高。只报 \(w_s\) 不足以判断 mixing。
+- Carlini 等：逐字记忆概率随重复次数显著增长，低重复样本几乎不被复述，高重复样本提取率可观。
+
+**Q3：数据受限时的结论？（4 epochs）**
+
+- Muennighoff 等：把「唯一 token \(D_u\)」与「重复次数 \(R\)」解耦，重复收益按幂律衰减，约 4 epochs 后趋近饱和。
+- 等价地有效数据量约束在约 \(4D_u\)；「再加一个 epoch」是决策不是默认，收益可由 scaling curve 预估。
+
+**Q4：数据混合权重怎么定？三种口径？**
+
+- 权重按**文档数 / 字节数 / token 数**计算会得到不同分布；真正影响优化的是训练时被采到的 token 概率。
+- 报告 mixing 必须同时给 \(w_s\)（权重）与 \(E_s\)（暴露），否则「来源占比」无法解释。
+
+**Q5：七类来源的「隐藏价格」是什么？**
+
+- 开放网页：覆盖广但模板/SEO/镜像/许可/PII；书籍：长程连贯但版权+出版选择偏差；百科：结构密度高但风格单一；代码：可执行验证但许可证/密钥；论文：技术密度高但 OCR/订阅复杂；论坛对话：贴近真实但毒性/身份/上下文缺失；合成：目标明确但继承 teacher 偏差。
+
+**Q6：model collapse 是什么？合成数据怎么用？**
+
+- 在递归生成的数据上反复训练，分布尾部逐步丢失（Shumailov 等），导致「失忆」与多样性坍缩。
+- 正确用法是**补充**稀缺分布（如 Phi 的教科书式合成数据），而非无节制稀释真实数据。
+
+**Q7：provenance 与删除请求怎么追踪？**
+
+- manifest 至少含 `document_id, source_uri, crawl_id, warc_path, record_offset, retrieved_at, extractor_version, content_hash, license_evidence, filter_decisions`。
+- 删除请求要能由 `document_id → shard → tokenized artifact` 传播，而不是只在原始文本层「删除」；这就是 manifest 作为一等数据结构存在的原因。
+
+**Q8：有效数据量 funnel？为什么不能机械相乘？**
+
+- \(N_{\text{usable}}=N_{\text{raw}}\cdot r_{\text{extract}}r_{\text{lang}}r_{\text{quality}}r_{\text{safety}}r_{\text{dedup}}\)。
+- 各通过率不独立，应记录逐级 funnel 与 rejection reason 交集；从 raw crawl 到最终语料总通过率常在个位数百分比（Dolma/FineWeb）。
+
+**Q9：memorization 风险怎么度量？**
+
+- 逐字记忆概率随模型规模与样本重复次数增长；canary 序列（已知内容）植入训练语料后测提取率，把「是否记忆」变成可测量指标。
+- 缓解：dedup、PII scrubbing、canary 监测；含 PII 的小来源只要 \(E_s\) 高就构成实质性风险。
+
+**Q10：为什么「公开可访问」≠「允许训练」？**
+
+- 「公开可访问」「允许训练」「允许再分发」「允许商用」是四个不同问题；Data Provenance Initiative 发现大量数据集许可标注缺失或与原始条款不符。
+- 应保留许可证据（条款 URL、抓取时间、存档快照）而非结论，并记录 robots.txt/noai/DMCA opt-out 遵守情况。
+
+### 12.3 手撕要点（\(E_s\) 与 funnel）
+
+面试让「算期望暴露」或「估有效 token」时，按公式写：
+
+```text
+E_s = T * w_s / N_s     （来源 s 的平均期望遍历次数）
+  例：T=1T tokens, w_s=0.01, N_s=10B
+  E_s = 1e12 * 0.01 / 1e10 = 1 次
+
+usable funnel = raw × r_extract × r_lang × r_quality × r_safety × r_dedup
+  （各比率不独立，需记录逐级 funnel 与 rejection 交集）
+```
+
+**三个必踩坑**
+
+1. **别把 token 数当信息量**：\(N_{\text{usable}}\) 每级比率依赖阈值与工具版本。
+2. **别只报 \(w_s\)**：小来源 \(E_s\) 高才是记忆风险的直接来源。
+3. **别在 split 后再去重**：镜像会跨 split 泄漏；应先建近重复簇，再按簇切分。
+
+### 12.4 高频追问与陷阱
+
+| 追问 | 正确方向 |
+| --- | --- |
+| 用 URL 去重可以吗？ | 否，URL 会变、同 URL 内容也会变，应保留内容 hash |
+| fastText 语言标签是真值吗？ | 否，短文本/代码混写/小语种易错分 |
+| 抽样只看 retained 够吗？ | 否，必须分层看 discarded 才能发现群体性误杀 |
+| 合成数据是免费午餐吗？ | 否，递归训练有 model collapse 风险 |
+| 公开数据能随便训练吗？ | 否，访问/版权/隐私/用途是不同问题 |
+
+## 13. 小结
 
 数据规模只有在采样过程、来源边界和有效 token 暴露次数明确时才有意义。WARC 提供可重
 抽取能力，WET 提供处理便利，但二者都不是现成训练集；开源语料生态（C4 → The Pile →
@@ -390,4 +480,4 @@ arXiv:2305.17493, 2023. [link](https://arxiv.org/abs/2305.17493)
 - [Common Crawl — Get Started](https://commoncrawl.org/get-started)
 - [IIPC WARC specifications](https://iipc.github.io/warc-specifications/)
 - [Data Curation 主题导航](../experiments/topics/data-curation.md)
-- [A4 Data 官方题面](../assignments/spring2026/assignment4-data/cs336_assignment4_data.pdf)
+- [A4 Data 官方题面](../assignments/assignment4-data/cs336_assignment4_data.pdf)
