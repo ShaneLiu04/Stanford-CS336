@@ -334,8 +334,7 @@ Spring 2026 全部 17 讲原创中文自学笔记见 [`notes/README.md`](notes/R
 - 第三方笔记和实现只在 `resources/` 中链接，不复制其内容。
 - 先独立实现和记录失败过程，再查看参考答案；引用任何思路时在 writeup 中注明来源。
 - 不将本仓库内容作为在读学生的课程提交。
-- 个人实现与报告为 **AI-assisted** 学习产物；作者：
-  [ShaneLiu04](https://github.com/ShaneLiu04)。
+- 作者： [ShaneLiu04](https://github.com/ShaneLiu04)。
 
 ---
 
