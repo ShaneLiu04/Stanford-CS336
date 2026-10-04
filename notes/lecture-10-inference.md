@@ -498,6 +498,11 @@ TTFT”。然后预先指定 baselines、sweep、stopping rule 与主要指标�
 - **量化位数减半就必然 2×：** 受 kernel、packing、反量化和非量化算子限制。
 - **只测平均 prompt：** 长尾长度和突发流量通常决定 p99 与 OOM。
 - **只报 tokens/s：** 必须说明 input/output tokens、并发、batch、SLO 和硬件。
+- **PagedAttention 是新的 attention 算法：** 它只是 KV cache 的分页内存
+  管理，数学结果与连续 cache 一致；把它与 continuous batching（调度
+  策略）混为一谈也是常见错误。
+- **MLA/GQA/量化是免费提速：** MLA 训练与 kernel 复杂度高；GQA 质量
+  须实测；量化收益受 kernel coverage 限制——压缩比不等于加速比。
 
 ## 13. Checklist
 
@@ -514,35 +519,44 @@ TTFT”。然后预先指定 baselines、sweep、stopping rule 与主要指标�
 
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
-| TTFT 高、TPOT 正常 / 尾部尖刺 | queue/prefill | 长 prompt、prefill blocking、未 chunked prefill |
+| TTFT 高、TPOT 正常 | queue/prefill | 长 prompt、prefill blocking |
 | TPOT 随 context 急升 | KV traffic | attention bandwidth |
 | throughput 高但 p99 差 | scheduler trace | 大 batch/head-of-line |
-| KV OOM 早于公式 / cache OOM | allocator/pages / 容量公式 | fragmentation/reservation、未分页、未用 GQA/KV 量化 |
+| KV OOM 早于公式 | allocator/pages | fragmentation/reservation |
 | prefix cache 命中低 | token/template key | tokenizer/version 不一致 |
-| speculative 不加速 / 加速为负 | acceptance/cost | draft 太慢、batch 已饱和、接受率低 |
+| speculative 不加速 | acceptance/cost | draft 太慢、batch 已饱和 |
 | quantized 更慢 | kernel coverage | dequant/unsupported ops |
-| output 与 base 不同 / 输出退化重复 | sampling correction | speculative/residual bug、温度/top-p 边界 |
+| output 与 base 不同 | sampling correction | speculative/residual bug |
 | CUDA graph 命中低 | shape buckets | 动态 batch/length |
 | worker hang | distributed state | rank failure/collective mismatch |
+
+### 故障排查速查
+
+| 现象 | 优先检查 | 常见根因 |
+|---|---|---|
+| TTFT 尾部尖刺 | prefill 调度与 chunked prefill | 长 prompt 独占计算、阻塞 decode |
 | decode 吞吐低 | batch 组成与 KV 读取带宽 | batch 过小、权重/KV 每步全量读取 |
-| goodput 远低于 throughput | SLO 违约率与准入 | admission control 缺失、排队策略不当 |
+| KV cache OOM | 容量公式×batch×上下文 | 未分页、未用 GQA/KV 量化 |
+| goodput 远低于吞吐 | SLO 违约率与准入 | admission control 缺失、排队策略不当 |
 | 量化后质量下降 | scale 校准与 outlier 通道 | 未做 per-channel scale、激活异常值未处理 |
+| speculative 加速为负 | 接受率与 draft 成本 | draft 接受率低或 draft 推理本身过慢 |
+| 输出退化/重复 | 采样实现审计 | 温度/top-p 边界条件 bug |
 
 ## 14. 讨论：效度威胁与结论边界
 
-### 14.1 Construct validity
+### Construct validity
 - tokens/s 不区分 input/output，也不体现 SLO；
 - average latency 隐藏 p99/tail；
 - model-only benchmark 排除 queue/sampling/network；
 - memory capacity 不等于可稳定服务并发。
 
-### 14.2 Internal validity
+### Internal validity
 - synthetic fixed lengths、closed-loop clients 会夸大 batching；
 - prefix cache warm/cold、compile/capture 状态影响结果；
 - quantization 方法若 kernel coverage 不同，不能只按 bits 比；
 - speculative sampling 参数/seed 不一致会混入质量差异。
 
-### 14.3 External validity
+### External validity
 - 单一 GPU/traffic trace 不外推多租户生产；
 - offline throughput 不外推 bursty arrival goodput；
 - 小模型 acceptance/quantization 规律不外推 70B；
@@ -551,128 +565,390 @@ TTFT”。然后预先指定 baselines、sweep、stopping rule 与主要指标�
 学术报告应公开 arrival/length distribution、SLO、client model、concurrency、batch scheduler、
 cache state、sampling config、hardware/software 和质量评测；否则“serves X tok/s”不可比较。
 
-## 15. 面试备考（Interview Prep）
+## 面试要点速记
 
-> LLM 推理是 serving 系统面试的核心：面试官常从「prefill 和 decode 谁是 memory-bound」切入，
-> 追到「KV cache 显存公式」「continuous batching」「PagedAttention」「speculative decoding 为什么无损」。
-> 核心是区分「compute-bound 的 prefill」与「memory-bound 的 decode」，围绕 KV cache 这一瓶颈展开所有优化。
-> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 15.1 一页速览卡（面试前 1 分钟）
+1. **Q：prefill 和 decode 谁是 memory-bound？** 要点：decode——每步读全部
+   权重与 KV 却只算一个 token（GEMV、低 arithmetic intensity）；prefill 是
+   大 GEMM，通常 compute-bound。两者 SLO 不同（TTFT vs TPOT）。
+2. **Q：KV cache 怎么估？** 要点：2·l·h_kv·d_h·seq·B·bytes；70B 级 GQA
+   模型 + 128k 上下文可达每请求 GB 量级 → 必须分页/量化/分层。
+3. **Q：continuous batching 的收益来源？** 要点：迭代级调度，异质长度请求
+   不再互相等整批；GPU 利用率随到达率平滑变化。
+4. **Q：speculative decoding 为什么无损？** 要点：对 target 分布做 rejection
+   sampling（接受/重采样），输出分布不变；净加速 = 接受率×草稿并行度 − 验证开销。
+5. **Q：goodput 与 throughput 的区别？** 要点：吞吐不区分 SLO 违约；
+   goodput 只计满足 SLO 的有效吞吐，是容量规划的正确目标。
+6. **Q：PagedAttention 到底解决什么问题？** 要点：解决 KV cache 内存
+   管理——固定大小页按需分配/释放、消除内外碎片、支持动态扩容与
+   prefix 跨请求共享（copy-on-write）；不改变 attention 数学结果。
+7. **Q：PD 分离何时值得上？** 要点：prefill compute-bound、decode
+   bandwidth-bound，混部互相干扰尾延迟；分离后独立扩缩容、稳定时延；
+   代价是 KV 跨实例传输与路由复杂度，低 QPS 小集群不划算。
+8. **Q：MLA 与 GQA/MQA 的本质区别？** 要点：MQA/GQA 靠共享 KV head
+   硬省；MLA 把 KV 低秩压缩到潜空间（KV cache −93.3%，DeepSeek-V2
+   官方口径），推理时上投影恢复表达，容量与质量兼得，代价是 kernel
+   与训练复杂度。
+9. **Q：投机解码什么情况下反而变慢？** 要点：draft 成本占比高、接受率
+   低、大 batch 下 target 本身已高效、树形验证与 KV 管理开销失控；
+   必须端到端测 latency，而非只看 acceptance rate。
 
-**核心主张**：推理 = 可并行、偏 compute-bound 的 prefill + 串行、偏 memory-bound 的 decode；
-KV cache 消除历史 K/V 重算，却把显存容量与带宽推到核心位置，所有优化都围绕这个瓶颈展开。
+**必背数字**
 
-**必背数字与公式**
+- KV cache 公式；TTFT/TPOT/goodput 三指标；chunked prefill 与
+  prefill-decode 分离是尾延迟治理的两个主杠杆。
 
-- KV cache：\(M_{\mathrm{KV}}=2\,B\,L\,S\,K\,H\,b_e\)（K/V 各一份，bf16 `b_e=2`）。
-- arithmetic intensity：prefill MLP \(\sim BS\)、attention \(\sim S/2\)；decode MLP \(\sim B\)、attention \(<1\)。
-- 服务指标：TTFT（首 token）、TPOT（token 间隔）、E2E、throughput、goodput（满足 SLO 的有效吞吐）。
-- speculative 接受率 \(a(x)=\min(1,q(x)/p(x))\)，拒绝后从残差 \(r\propto\max(q-p,0)\) 重采样。
+**工业界参照（2024–2026，口径见括注）**
 
-**三句话答高频**
+- 推理显存构成：模型权重 50%–70%、KV cache 20%–40%、临时计算张量
+  5%–10%（vLLM 优化实践口径）。
+- continuous batching 较静态 batching 吞吐约 2.5×；TensorRT-LLM 在
+  Hopper 上 FP16 吞吐约达理论峰值 75%（行业口径）。
+- MLA：KV cache −93.3%、最大吞吐 +576%（DeepSeek-V2 官方口径）。
+- INT4/INT8 权重量化减少 50%–75% 显存；FP8 需 Hopper 及以上。
+- 投机解码端侧实践吞吐约 2×；稀疏/检索式 attention 压缩约 70% KV
+  而长序列效果不显著受损（实践口径）。
+- 前沿模型单用户 TPS 已普遍 >200 tokens/s（2025–2026 行业口径）。
 
-1. prefill 是大 GEMM、compute-bound；decode 每步读全权重+KV 只算一个 token、memory-bound。
-2. KV cache 用显存换计算：\(2BLSKH·b_e\) bytes，长上下文下直接决定可并发请求数。
-3. speculative decoding 用 rejection sampling 严格保持 target 分布，是无损加速而非近似。
+## 行业现状与最新进展（2024–2026）
 
-### 15.2 高频面试题与答题框架
+### 推理显存构成与 serving 栈：vLLM 与 TensorRT-LLM
 
-**Q1：prefill 与 decode 谁是 memory-bound？为什么？**
+推理显存构成（vLLM 优化实践口径）：
 
-- **prefill**：一次算全部 prompt `[B,S,d]`，大 GEMM 复用强、arithmetic intensity 高 → compute-bound。
-- **decode**：每步 `[B,1,d]`，只算一个新 token 却要读全权重 + 整段 KV，matrix-vector/small-batch GEMM → memory-bound。
-- **SLO 不同**：prefill 影响 TTFT，decode 影响 TPOT；两者调度目标冲突，需分开治理。
+| 构成 | 占比 | 主要优化手段 |
+|---|---:|---|
+| 模型权重 | 50%–70% | 权重量化（INT4/INT8 省 50%–75%）、TP 切分 |
+| KV cache | 20%–40% | PagedAttention、prefix cache、GQA/MLA、KV 量化 |
+| 临时计算张量 | 5%–10% | CUDA Graph 复用、workspace 控制 |
 
-**Q2：KV cache 显存怎么估？给个 70B 例子？**
+- **vLLM**：PagedAttention 把 KV cache 划分为固定大小「页」，按需
+  分配/释放，消除显存碎片、支持动态扩容；continuous batching 以步为
+  单位调度请求进出，较静态 batching 吞吐约 2.5×（行业口径）；prefix
+  cache 跨请求复用公共前缀 KV；支持 PD 分离与 FlashAttention-3。
+  关键参数：gpu_memory_utilization（显存上限）、max_num_batched_tokens、
+  max_seq_len、tensor_parallel_size（head 数须能被 TP 卡数整除）、
+  swap-space。
+- **TensorRT-LLM**：Hopper 深度优化，FP16 吞吐约达理论峰值 75%；
+  集成 Medusa 并行解码与前缀缓存。
+- **PD 分离**：Prefill（计算密集）与 Decode（访存密集）部署到独立
+  实例，避免资源竞争、稳定时延；另有 SplitFuse 类动态切分的中间
+  方案（MindIE：splitChunkTokens 建议 512 倍数、cacheBlockSize
+  默认 128）。
 
-- \(M_{\mathrm{KV}}=2BLSKHb_e\)。设 70B 级模型 `L=80, K=8, H=128`、bf16、上下文 `S=32768`：
-- 单 request 约 \(2\times80\times32768\times8\times128\times2\approx10.7\text{ GiB}\)——不做 GQA/量化/分页根本撑不起并发。
-- 若 `S=128k` 再翻 4 倍；所以长上下文 serving 的容量由 KV cache 主导，而非权重。
+| 维度 | vLLM | TensorRT-LLM |
+|---|---|---|
+| 定位 | 开源通用引擎，社区迭代快 | NVIDIA 官方栈，硬件深度协同 |
+| KV 管理 | PagedAttention 分页 + prefix cache | 分页/前缀缓存 + Hopper 专属 kernel |
+| 批调度 | continuous batching、PD 分离 | in-flight batching |
+| 生态 | 多后端、新模型覆盖快 | FP16/FP8 官方路径，峰值性能导向 |
 
-**Q3：TTFT 与 TPOT 的区别？为什么它们的目标冲突？**
+### KV 压缩谱系：MHA → MQA/GQA → MLA，再到稀疏化
 
-- TTFT = 首 token 时间（受排队 + prefill 影响）；TPOT/inter-token latency = 后续每 token 时间（受 decode 影响）。
-- 大 prefill batch 提高吞吐，却阻塞正在 decode 的 latency-sensitive 请求（head-of-line blocking）。
-- chunked prefill 把长 prompt 切成 chunks 与 decode 交错，是治理这一冲突的主杠杆。
+| 方案 | 机制 | KV cache 相对 MHA | 代价/收益 |
+|---|---|---:|---|
+| MHA | 每 query head 独立 KV | 1× | 基线；显存与带宽压力最大 |
+| MQA | 全部 query 共享 1 组 KV | 降至 1/N | 牺牲表达，质量下降 |
+| GQA | 分组共享 KV | K/N | 平衡；主流训练标配 |
+| MLA | KV 低秩压缩到潜空间，推理上投影恢复 | −93.3%（官方口径） | 最大吞吐 +576%；kernel/训练复杂 |
 
-**Q4：continuous batching 是什么？收益来源？**
+稀疏化实践：Minference 动态稀疏模式（A-shape、垂直划块、分块稀疏）
+与检索式 head 压缩，据报道可压缩约 70% KV 而长序列效果不显著受损
+（实践口径）；attention 稀疏性随任务变化，须按 workload 实测。
 
-- 以 decode iteration 为调度粒度：每轮所有活跃请求各执行一步，完成的移出、新请求插入空位。
-- 相比 static batching（等整批、短请求被长请求拖住、padding 浪费），异质长度请求不再互相等待。
-- 收益来源：摊销权重读取、减少 padding 与 head-of-line blocking，GPU 利用率随到达率平滑变化。
+### 投机解码工业方案与量化
 
-**Q5：PagedAttention 是什么？解决什么？**
+- **drafter 三路线**：蒸馏小模型（如 7B 蒸馏）、自起草（Medusa 附加
+  头）、检索式；EAGLE-2 进一步用动态草稿树，按验证置信度扩展分支。
+- **验证机制**：树形 attention（mask 隔离无效分支）+ 拒绝采样或
+  typical acceptance；端侧实践吞吐约 2×——每周期主模型一次前向验证
+  多个 token。KV 管理二选一：缓存迁移（额外拷贝）或重计算。
+- **量化**：INT4/INT8 权重量化减少 50%–75% 显存；W8A8/W8A16/W4A16
+  配合 SmoothQuant 缓解激活离散化；FP8 需 Hopper 及以上。
 
-- 把 KV cache 切成固定 block，逻辑 token 映射到非连续物理 block，支持 copy-on-write 分叉。
-- 解决的是**内存管理**（内部/外部碎片 + 预留最大长度浪费 + prefix 共享），不改变 attention 数学结果。
-- 代价是 block table 查找、kernel 复杂度与 block size 取舍。
+**对本讲学习者的启示：** 工业界 2024–2026 的主线仍是本讲的两条公式：
+KV 容量 \(M_{\text{KV}}=2BLSKHb_e\)（催生分页、GQA/MLA、量化与稀疏化）
+和 arithmetic intensity（催生 continuous batching、chunked prefill 与
+PD 分离）。面试时从公式推导工程决策——为何分页、为何分离、为何量化
+「省显存不一定等比提速」——比罗列系统名更显深度；引用任何行业数字都
+应标注硬件/模型/SLO 前提，与第 11 节的实验方法论保持一致。
 
-**Q6：speculative decoding 的原理？为什么是无损的？**
+## 大厂面试真题与答题框架
 
-- 小 draft model 连续提议 \(k\) 个 token，target model 一次并行验证；候选 \(x\) 以 \(a(x)=\min(1,q(x)/p(x))\) 接受，拒绝后从残差 \(r\propto\max(q-p,0)\) 采样。
-- 这个 rejection sampling 修正使最终样本**严格服从 target 分布**，不是近似改 logits。
-- 加速条件：draft 成本低、接受率高、\(k\) 个 token 并行验证高效、额外开销可控。
+以下均为高频面试题（公开面经风格），不指向任何特定公司真题。
 
-**Q7：quantization 为什么能加速？weight-only / KV / W8A8 各解决什么？**
+**题目 1：为什么 prefill 通常 compute-bound，而 decode 通常 bandwidth-bound？**
 
-- decode 是 memory-bound，减少 bytes 比减少 FLOPs 更直接有效。
-- **weight-only**：减权重读取带宽，适合 decode；**KV int8/int4**：直接提长上下文容量；**W8A8**：利用 integer tensor core。
-- **陷阱**：压缩比 ≠ 速度比；若硬件无对应低比特 kernel，dequant 开销会让 int4 比 bf16 更慢。
+- 考点：arithmetic intensity / Roofline；prefill 与 decode 的 shape 差异。
+- 答题框架：
+  1. prefill 一次处理全部 prompt，shape \([B,S,d]\)，大 GEMM，MLP intensity 约 \(BS\)；
+  2. decode 每步 shape \([B,1,d]\)，GEMV 为主，却要读全部权重与 KV，intensity 约 \(B\)；
+  3. 用 Roofline 判断：prefill 落在屋顶右侧，decode 落在左侧；
+  4. 推论：优化方向不同——prefill 抓算力（chunked prefill、PD 分离），decode 抓字节（量化、GQA/MLA、大 batch 摊销权重读取）。
+- 加分项：attention intensity prefill 约 \(S/2\)、decode < 1；长上下文后 KV 读取可能取代权重成为 decode 主瓶颈。
+- 踩坑：绝对化——极短 prompt 的 prefill 也可能 bandwidth-bound。
 
-**Q8：goodput 与 throughput 的区别？**
+**题目 2：PagedAttention 解决什么？不解决什么？**
 
-- throughput 不区分 SLO 违约，可能通过牺牲延迟换 token 数。
-- goodput = 满足 TTFT/TPOT/E2E SLO 的有效请求或 token 吞吐，是容量规划的正确目标。
-- benchmark 应扫 offered load、画 goodput-latency 曲线，而不是只在饱和点报最高 tokens/s。
+- 考点：KV cache 内存管理；碎片来源。
+- 答题框架：
+  1. 传统为每请求预留 max_len 连续显存 → 内/外碎片，容量浪费大；
+  2. PagedAttention 把 KV 切成固定大小页，逻辑块经 block table 映射到非连续物理块，按需分配/释放；
+  3. 收益：消除碎片、动态扩容、prefix 跨请求共享、分叉生成 copy-on-write；
+  4. 边界：只做内存管理，attention 数学不变；block 查找与 kernel 复杂度是代价。
+- 加分项：联系 vLLM 参数 gpu_memory_utilization、swap-space；block size 的取舍。
+- 踩坑：把 PagedAttention 说成注意力算法创新，或与 continuous batching（调度策略）混为一谈。
 
-**Q9：chunked prefill 与 prefill-decode disaggregation 的区别？**
+**题目 3：PD 分离的收益与代价？**
 
-- **chunked prefill**：同一资源池内把长 prompt 切块与 decode 交错，限制每轮 prefill 工作量、保护 TPOT。
-- **disaggregation**：prefill 与 decode 分到不同 GPU pool 独立扩缩容，用 KV transfer 连接；收益来自 resource specialization（compute vs bandwidth），代价是 KV 网络传输与路由复杂度。
+- 考点：资源画像差异；goodput；分布式 trade-off。
+- 答题框架：
+  1. prefill compute-bound、decode bandwidth-bound，混部时大 prefill 推高 decode 的 TPOT 尾延迟；
+  2. 分离后两池独立扩缩容、按各自瓶颈选卡，稳定时延、提升 SLO goodput；
+  3. 代价：KV 跨实例传输（网络带宽/时延）、路由与 placement 复杂、pool 失衡、故障/重试语义；
+  4. 结论：高并发、SLO 严苛场景收益大；小规模低 QPS 不值得。
+- 加分项：提 SplitFuse 类动态切分作为中间路线（MindIE：splitChunkTokens 建议 512 倍数、cacheBlockSize 默认 128）。
+- 踩坑：忽略 KV transfer 成本，把 PD 分离当免费午餐。
 
-**Q10：为什么 decode 的 arithmetic intensity 低？**
+**题目 4：投机解码什么时候反而变慢？**
 
-- decode 每步 MLP 是 `[B,1,d]×[d,F]`，主要流量是读权重，intensity \(\sim B\) FLOPs/byte（`B` 小则极低）。
-- attention 每步读 \(S+t\) 的 KV 却只算一个 query，intensity \(<1\)，几乎纯带宽。
-- 所以 GQA、KV 量化、weight-only 量化之所以有效，是减少 bytes 而非 FLOPs。
+- 考点：speedup model；acceptance 与 draft 成本的权衡。
+- 答题框架：
+  1. 写成本模型：cost/token ≈ \((k c_d + c_t(k))/\mathbb{E}[\text{accepted}]\)；
+  2. 变慢情形：draft 串行成本占比高、接受率低、验证并行效率差；
+  3. 大 batch 下 target 已高效，speculation 边际收益下降甚至为负；
+  4. 树形验证与 KV 管理（缓存迁移 vs 重计算）的额外开销可能吞掉收益。
+- 加分项：无损性来自拒绝采样修正，输出严格服从 target 分布；typical acceptance 放松无损换速度。
+- 踩坑：只报 acceptance rate 不报端到端 latency；声称无损却用了 typical acceptance。
 
-### 15.3 手撕要点（KV cache 容量核算）
+**题目 5：continuous batching 为什么比 static batching 快？**
 
-面试让「算 KV cache 显存 / 最大并发」时，按公式逐步写：
+- 考点：调度粒度；head-of-line blocking。
+- 答题框架：
+  1. static：整批等最慢请求，短请求被拖住、槽位空转、padding 浪费；
+  2. continuous：以 iteration 为调度单位，完成即出、到达即入；
+  3. 异质长度下 GPU 利用率随负载平滑变化，行业口径吞吐约 2.5×；
+  4. 代价：调度器复杂、动态 shape（CUDA Graph 需 bucket 化）。
+- 加分项：Orca 首创 iteration-level scheduling；与 chunked prefill 配合防 prefill 阻塞 decode。
+- 踩坑：把吞吐提升归因于「批更大」——真实原因是消除空转与等待。
 
-```text
-KV cache（单 request，bf16）
-  M_KV = 2 * L * S * K * H * b_e
-       = 2 * 层数 * 上下文 * KV heads * head dim * 2 bytes
+**题目 6：GQA/MQA/MLA 各自如何省 KV cache？代价是什么？**
 
-最大并发（给定 KV 显存预算 M_budget）
-  B_max <= M_budget / (2 * L * S_avg * K * H * b_e)
-         再减去 weights / workspace / 碎片 / 安全余量
+- 考点：attention 结构；KV 容量公式中的 \(K\)。
+- 答题框架：
+  1. 公式 \(M_{\text{KV}}=2BLSKHb_e\) 中 KV heads 数 \(K\) 是杠杆；
+  2. MQA：\(K=1\)，省最多但表达受损；GQA：分组共享，质量/容量平衡，主流；
+  3. MLA：低秩压缩，KV cache −93.3%、最大吞吐 +576%（DeepSeek-V2 官方口径）；
+  4. 共同前提：质量须实测；MLA 另有 kernel 与训练复杂度。
+- 加分项：稀疏化路线——Minference 动态稀疏与检索式 head 压缩约 70% KV（实践口径）。
+- 踩坑：把 MLA 说成「GQA 的极端情况」——低秩压缩与 head 共享机制不同。
 
-例：L=40, K=8, H=128, S=4096, bf16
-  单 request = 2*40*4096*8*128*2 = 640 MiB
-  64 并发 = 40 GiB（尚未算权重）
+**题目 7：量化压缩 4× 为什么没快 4×？**
+
+- 考点：kernel coverage；dequant 开销；activation outlier。
+- 答题框架：
+  1. 显存/字节减少不等于时间等比减少：非量化算子、dequant、packing 都在关键路径；
+  2. weight-only 只省权重读取；W8A8 才可能吃到底层整数矩阵单元；
+  3. activation outlier 使 W8A8 困难，需 SmoothQuant 把难度平滑迁移到权重；
+  4. 数字锚点：INT4/INT8 权重量化减 50%–75% 显存；FP8 需 Hopper+。
+- 加分项：KV 量化单独核算；按 kernel coverage 报告而不是只报 bits。
+- 踩坑：不区分 weight/activation/KV 三类张量的精度配置。
+
+## 系统设计题
+
+**设计题 1：为 70B 模型（GQA）设计在线 serving 集群**
+
+- 需求澄清：SLO（TTFT p99、TPOT p99）、目标 QPS/并发、输入输出长度
+  分布、卡型与预算、是否多租户。
+- 规模估算（锚点数字）：
+  - 权重 bf16 约 140 GB → 单卡放不下，TP=4×80GB 起步（head 数须能被 TP 卡数整除）；
+  - 显存按权重 50%–70%、KV 20%–40%、临时张量 5%–10% 规划（实践口径）→ 4 卡 320GB 中 KV 预算约 64–128GB；
+  - 每请求 KV（80 层、8 KV heads、\(d_h=128\)、8K 上下文、bf16）约 2.5 GiB → 单实例并发约 25–50；
+  - 若对标前沿模型单用户 >200 tokens/s（2025–2026 行业口径），TPOT 需 ≤5ms——通常仅单用户/端侧可达，集群 SLO 应按业务实测定，再反推 batch 上限。
+- 架构：LB → router（prefix locality + queue length）→ vLLM 实例
+  （TP=4；PagedAttention + continuous batching + prefix cache）→
+  流量足够大时上 PD 分离（prefill 池 compute 导向、decode 池
+  bandwidth 导向，KV transfer 连接）。
+- trade-off 表：
+
+| 决策 | 选项 A | 选项 B | 取舍要点 |
+|---|---|---|---|
+| 并行度 | TP=4 + 多 replica | 更高 TP | TP 大则单请求快但通信占比升；replica 才扩吞吐 |
+| prefill 调度 | chunked prefill | 整段 prefill | chunk 保护 TPOT；太小则 TTFT/launch 开销升 |
+| 拓扑 | 混部 | PD 分离 | 分离稳定时延，但加 KV 传输与路由复杂度 |
+
+- 评测方案：open-loop 扫 offered load 画 goodput-latency curve；报告
+  p50/p95/p99 TTFT/TPOT、SLO goodput、峰值显存；prefix 命中率冷/热分开。
+- 追问预案：OOM → admission control + preemption/swap（swap-space）；
+  冷启动 → 权重加载 + compile/capture 预热；多租户 → quota 与优先级队列。
+
+**设计题 2：128K 长上下文推理服务的显存与调度设计**
+
+- 需求澄清：128K 是 p99 还是均值；输出长度；并发目标；质量红线
+  （retrieval/长文摘要）。
+- 规模估算：沿用上题配置（80 层、8 KV heads、\(d_h=128\)、bf16），
+  128K 每请求 KV 约 40 GiB；KV 预算 20%–40% 显存（实践口径）→
+  单实例并发仅 1–3 → 必须 KV 量化（int8 减半）+ 稀疏/检索压缩
+  （约 70% KV，实践口径）+ 多机并行，才能把并发拉回十级。
+- 架构：PagedAttention 按需分配；prefix cache 复用系统 prompt/共享
+  文档；chunked prefill 限制单 iteration prefill 量（防 128K prompt
+  独占计算）；超长序列推动多机并行成为必然（参照 Gemini 1.5 支持
+  1M–10M token 序列）。
+- trade-off 表：
+
+| 手段 | 收益 | 代价 |
+|---|---|---|
+| KV int8/int4 量化 | 容量约 ×2 | 长上下文误差累积，须测 retrieval/perplexity |
+| 稀疏/检索式压缩 | 约 −70% KV（实践口径） | 语义近似，任务相关 |
+| CPU offload/swap | 突发容量 | TPOT 尾部抖动 |
+| 多机并行 | 突破单机显存 | 通信与调度复杂度 |
+
+- 评测方案：TPOT 随 context 长度增长曲线；p99 TTFT（chunk 效果）；
+  长上下文质量（retrieval、长生成稳定性）；OOM/preemption 率。
+- 追问预案：eviction 策略（sliding window / heavy hitter / sink）；
+  prefix cache 失效（template/version 变化）；与投机解码组合时长
+  context 接受率变化。
+
+**设计题 3：给现有 chat 服务引入投机解码 + 量化的改造方案**
+
+- 需求澄清：目标是 TPOT 还是成本；质量红线（是否必须严格无损）；
+  当前 batch 水位；硬件是否 Hopper+（决定 FP8 可用性）。
+- 方案选型：drafter 三路线（蒸馏小模型如 7B、自起草 Medusa 附加头、
+  检索式）+ EAGLE 类动态草稿树；量化 W8A8 + SmoothQuant 或
+  W4A16/INT4（省 50%–75% 显存）。
+- 架构：树形 attention 验证（mask 隔离无效分支）+ 拒绝采样或
+  typical acceptance；KV 管理选缓存迁移或重计算；量化按 kernel
+  coverage 分阶段 rollout。
+- trade-off 表：
+
+| 维度 | 严格拒绝采样 | typical acceptance |
+|---|---|---|
+| 输出分布 | 严格等于 target | 近似 |
+| 速度 | 较慢 | 较快（端侧实践约 2×） |
+| 大 batch | 收益下降甚至为负 | 同样下降 |
+
+- 评测方案：分布一致性检验（token frequency / sequence likelihood）；
+  端到端 TPOT/吞吐（不是 acceptance rate）；量化质量回归
+  （perplexity、下游、罕见 token、长上下文）。
+- 追问预案：高并发自动降级关闭 speculation；draft 与 target 版本
+  同步；量化 + 投机叠加的误差交互。
+
+## 代码实现题
+
+**实现题 1：KV cache 字节数计算器（MHA/GQA/MQA/MLA 对比）**
+
+- 考察点：\(M_{\text{KV}}=2BLSKHb_e\) 的结构；GQA/MQA/MLA 改变的是哪一项。
+
+```python
+def kv_cache_bytes(layers, seq, kv_heads, head_dim, batch, bytes_per=2):
+    """M_KV = 2 (K and V) * B * L * S * K * H * bytes_per_element"""
+    return 2 * batch * layers * seq * kv_heads * head_dim * bytes_per
+
+
+def compare(layers=80, seq=8192, q_heads=64, kv_heads=8, head_dim=128, batch=1):
+    mha = kv_cache_bytes(layers, seq, q_heads, head_dim, batch)
+    gqa = kv_cache_bytes(layers, seq, kv_heads, head_dim, batch)
+    mqa = kv_cache_bytes(layers, seq, 1, head_dim, batch)
+    mla = kv_cache_bytes(layers, seq, 1, 512, batch)  # 低秩潜空间, 例 d_c=512
+    for name, v in [("MHA", mha), ("GQA", gqa), ("MQA", mqa), ("MLA", mla)]:
+        print(f"{name}: {v / 1024**3:.2f} GiB  ({v / mha:.2%} of MHA)")
+
+
+compare()
 ```
 
-**三个必踩坑**
+- 验收标准：与正文例对齐——\(B=64,L=40,S=4096,K=8,H=128\)、bf16 约
+  40 GiB；MLA 相对 MHA 的缩减与 −93.3% 官方口径同量级（取决于
+  \(d_c/d_h\) 配置）。
 
-1. **别忘乘 2**：K 和 V 各一份；MHA 时 `K = 所有 query heads`，GQA/MQA 才变小。
-2. **`S_avg` 不够**：p95/p99 上下文比均值更决定 OOM 风险，admission 要按 reserved max 或动态分配 + eviction。
-3. **KV cache 降低重算、不降低单步读取**：每步仍要读全部历史 KV，long-context 下 attention bandwidth 取代 weight bandwidth 成为瓶颈。
+**实现题 2：PagedAttention 块分配模拟器**
 
-### 15.4 高频追问与陷阱
+- 考察点：block table；按需分配/释放；内部碎片统计。
 
-| 追问 | 正确方向 |
-| --- | --- |
-| batch 越大越好吗？ | 否，throughput 升但 TTFT/TPOT/显存恶化 |
-| speculative 是近似采样吗？ | 否，正确 rejection correction 下是 target 精确样本 |
-| 量化位数减半就 2× 吗？ | 否，受 kernel、packing、反量化、非量化算子限制 |
-| KV cache 让 attention 变快吗？ | 它避免重算 K/V，但每步仍读全部历史 cache |
-| 只报 tokens/s 够吗？ | 否，须说明 input/output、并发、SLO、硬件 |
-| prefix cache 一定命中吗？ | 否，token/template/version 不一致会错误复用 |
+```python
+class BlockManager:
+    def __init__(self, num_blocks: int, block_size: int):
+        self.block_size = block_size
+        self.free = list(range(num_blocks))        # 空闲物理块池
+        self.tables: dict[str, list[int]] = {}     # req -> 物理块列表
+        self.lengths: dict[str, int] = {}          # req -> 已缓存 token 数
 
-## 16. 本讲小结
+    def _blocks_needed(self, length: int) -> int:
+        return (length + self.block_size - 1) // self.block_size
+
+    def append_tokens(self, req: str, n: int) -> bool:
+        new_len = self.lengths.get(req, 0) + n
+        blocks = self.tables.setdefault(req, [])
+        while len(blocks) < self._blocks_needed(new_len):
+            if not self.free:                      # 显存耗尽: 上层做抢占/拒绝
+                return False
+            blocks.append(self.free.pop())
+        self.lengths[req] = new_len
+        return True
+
+    def release(self, req: str) -> None:
+        self.free.extend(self.tables.pop(req, [])) # 请求结束, 块全部归还
+        self.lengths.pop(req, None)
+
+    def internal_fragmentation(self) -> float:
+        allocated = sum(
+            self._blocks_needed(l) * self.block_size for l in self.lengths.values()
+        )
+        if not allocated:
+            return 0.0
+        return 1 - sum(self.lengths.values()) / allocated
+```
+
+- 验收标准：随机长度请求下每请求内部碎片 < block_size；分配/释放
+  循环后空闲池完整回收；显存耗尽时 append_tokens 返回 False 且状态
+  一致；扩展点：prefix 共享 + copy-on-write。
+
+**实现题 3：continuous batching 调度循环骨架**
+
+- 考察点：iteration-level scheduling；步级进出；token 预算
+  （max_num_batched_tokens）。
+
+```python
+from collections import deque
+
+
+class Req:
+    def __init__(self, rid: str, prompt_len: int, max_new: int):
+        self.rid, self.prompt_len, self.max_new = rid, prompt_len, max_new
+        self.generated = 0
+        self.finished = False
+
+
+def scheduler_loop(waiting: deque, max_batched_tokens: int, max_batch: int) -> int:
+    running: list[Req] = []
+    steps = 0
+    while waiting or running:
+        # 1) 完成的请求步级退出, 槽位与预算立即释放
+        for r in running:
+            if r.generated >= r.max_new:
+                r.finished = True
+        running = [r for r in running if not r.finished]
+        # 2) decode 预算: 每个活跃请求本步消耗 1 个 token 位
+        budget = max_batched_tokens - len(running)
+        # 3) admission: 用剩余预算吸收新请求做 prefill (简化为一次灌入)
+        while (waiting and len(running) < max_batch
+               and waiting[0].prompt_len <= budget):
+            r = waiting.popleft()
+            budget -= r.prompt_len
+            running.append(r)
+        # 4) 执行一步: 活跃请求各 decode 1 个 token
+        for r in running:
+            r.generated += 1
+        steps += 1
+    return steps
+```
+
+- 验收标准：异质长度 workload 下平均在途请求数高于 static batching；
+  无请求饿死；budget 恒不被突破；扩展点：chunked prefill（把 prompt
+  拆多步灌入）与 preemption。
+
+## 15. 本讲小结
 
 推理包含可并行、偏 compute-bound 的 prefill，以及串行、偏 memory-bound 的 decode。KV cache 消除历史 K/V 重算，却把显存容量和带宽推到核心位置；GQA、量化、连续批处理和分页管理都是围绕这一瓶颈展开。Speculative decoding 则利用“并行验证比逐 token 生成高效”的不对称，在保持 target 分布不变的前提下换取速度。
 
@@ -730,3 +1006,7 @@ Generative Inference of Large Language Models.” *NeurIPS*, 2023.
   Models with a Single GPU.” *ICML*, 2023.
 - L. Zheng et al. “SGLang: Efficient Execution of Structured Language Model
   Programs.” arXiv:2312.07104, 2024.
+- [vLLM 官方文档（引擎参数与 PD 分离）](https://docs.vllm.ai)（访问日期 2026-10-04）
+- [DeepSeek-V2：MLA 低秩 KV 压缩](https://arxiv.org/abs/2405.04434)（访问日期 2026-10-04）
+- [Medusa：自起草多头投机解码](https://arxiv.org/abs/2401.10774)（访问日期 2026-10-04）
+- [EAGLE：动态草稿树投机解码](https://arxiv.org/abs/2401.15077)（访问日期 2026-10-04）

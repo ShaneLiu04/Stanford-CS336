@@ -50,13 +50,6 @@ wandb/
 !assignments/**/tests/_snapshots/**/*.npy
 !assignments/**/tests/_snapshots/**/*.npz
 
-# LaTeX build artifacts
-*.aux
-*.out
-*.toc
-*.fls
-*.fdb_latexmk
-
 # Archives and logs
 *.zip
 *.tar

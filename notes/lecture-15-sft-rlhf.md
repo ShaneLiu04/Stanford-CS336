@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_15.pdf"
-  - "../assignments/assignment5-alignment/"
+  - "../assignments/spring2026/assignment5-alignment/"
 ---
 
 # Lecture 15 — SFT 与 RLHF：从模仿到偏好优化
@@ -16,7 +16,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、对齐/后训练工程师与研究者
 
 ## 摘要
@@ -242,6 +242,10 @@ LM loss；Lecture 中常见的 response-only SFT 需要额外 mask。当前 DPO 
 - 标注者接触创伤性内容；需限量、支持退出并减少原文传播。
 - 对齐数据可能含个人对话和敏感请求，许可与同意应独立审计。
 - 把 DPO 的“无需 RL”误读为“无需偏好假设”——它继承了偏好数据的一切偏差 [[5]](#ref-5)。
+- 把“蒸馏小模型跑分高”误读为“RL 没用”：R1-Zero 证明纯 RL 可行（AIME
+  15.6%→86.7%），蒸馏优势的前提是教师显著强于学生、学生自身探索能力不足。
+- 把合成数据当免费午餐：三角色合成与两步安全过滤若缺少规则化校验层，错误
+  轨迹与有害样本会直接进入 SFT 目标，“合成”不等于“已质检”。
 
 ## 10. Checklist
 
@@ -269,19 +273,19 @@ LM loss；Lecture 中常见的 response-only SFT 需要额外 mask。当前 DPO 
 
 ## 11. 讨论：效度威胁与结论边界
 
-### 11.1 Construct validity
+### Construct validity
 
 - preference ≠ 真实意图：标注者的比较受长度、语气、格式捷径影响；
 - RM score 与人工 win rate 是不同构造，前者是代理；
 - “对齐”没有单一标量：helpfulness、harmlessness、诚实性可能彼此冲突。
 
-### 11.2 Internal validity
+### Internal validity
 
 - SFT/RM/PPO 阶段同时变化时无法归因；
 - judge 模型与被评模型同族会造成系统性偏好；
 - 单 seed 的 win rate 置信区间常宽于报告的差异。
 
-### 11.3 External validity
+### External validity
 
 - 特定 rubric 与人群下收集的偏好不外推到其他文化或领域；
 - 小模型上的 \(\beta\)/学习率结论不迁移到大模型；
@@ -290,121 +294,369 @@ LM loss；Lecture 中常见的 response-only SFT 需要额外 mask。当前 DPO 
 论文式表述应报告标注协议、judge 版本与偏差测试、评估的置信区间与失败样本，而不是
 只给“我们的方法 win rate 更高”。
 
-## 12. 面试备考（Interview Prep）
+## 面试要点速记
 
-> SFT/RLHF 是 LLM 面试的「对齐」高频题：面试官常从「SFT 的 loss mask」「DPO 和 RLHF 区别」
-> 切入，追到「PPO 里 KL 与 clip 的分工」「reward hacking 怎么检测」「DPO 为什么不用 reward model」。
-> 核心是沿「模仿 → 偏好 → 策略优化」理解每种方法的数据、目标与失败模式，并牢记
-> 「对 reward 优化 ≠ 对真实意图对齐」。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 12.1 一页速览卡（面试前 1 分钟）
+1. **Q：SFT 的 loss mask 怎么做？** 要点：只对 response token 计损
+   （response-only）；packed 场景须处理跨样本 attention 与边界 token。
+2. **Q：BT 模型与 RM loss？** 要点：\(P(y_w\succ y_l)=\sigma(r_w-r_l)\)，
+   loss = \(-\log\sigma(r_w-r_l)\)；pairwise accuracy 高不等于 reward
+   calibrated。
+3. **Q：PPO 中 KL 与 clip 的分工？** 要点：KL 约束限制对 reference 的整体
+   分布 drift；PPO clip 限制单步 token 级更新幅度；二者不可互相替代。
+4. **Q：DPO 一句话与常见坑？** 要点：KL-regularized 最优策略闭式代回，把 RL
+   化为 chosen/rejected log-odds 差的 logistic loss；坑：长度偏置、模板
+   泄漏、reference 冻结与 tokenizer 口径不一致。
+5. **Q：reward hacking 怎么检测？** 要点：RM 分与人工 win rate 的斜率分离、
+   长度/format 指标同步飙升、held-out RM 与训练 RM 分歧。
+6. **Q：蒸馏 vs 直接 RL，小模型选哪条路？** 要点：DeepSeek-R1 口径——
+   Qwen-32B 蒸馏版（800k 精选样本 SFT）性能超越同规模直接 RL 版；教师足够
+   强时蒸馏性价比高；直接 RL 的上限依赖基座自身探索能力。
+7. **Q：DPO 为什么能免 RM、免在线采样？** 要点：KL-regularized 偏好优化下
+   reward 可由最优策略闭式表示，隐式 reward = 两策略 logratio，偏好对直接
+   变成分类损失；但偏好数据偏差与 offline coverage 限制原样保留。
+8. **Q：工业界 SFT 数据从哪来？** 要点：真实用户 prompts（LMSYS/HelpSteer/
+   WildChat 类）+ 强教师生成响应（Qwen3-235B、DeepSeek-R1-0528）；安全与
+   工具调用垂类走专门合成管线 + 规则化校验过滤。
+9. **Q：reward hacking 的对策清单？** 要点：KL 参考约束、独立 held-out 评测、
+   reward-人工斜率监控、早停与 RM 迭代重训；训练框架需同时记录 reward/KL/
+   长度/entropy 曲线（如 verl 的多 worker 指标归集）。
 
-**核心主张**：后训练把「预测 token 的基座」变成「遵循指令、被偏好的助手」，主线是
-模仿(SFT) → 偏好(RM) → 策略优化(PPO/DPO)；任何「对齐提升」都要限定到 rubric、分布与评估协议。
+**必背数字**
 
-**必背数字与公式**
+- InstructGPT 管线：pretrain → SFT → RM → PPO；KL 系数 \(\beta\) 过小
+  → hacking、过大 → 不学习；LIMA：~1k 高质量样本即可激活对齐能力。
+- 工业界参照：Nemotron Nano 2 posttrain 共 90B tokens，其中 SFT 80B；
+  顺序 SFT → GRPO（强化指令遵循与对话）→ DPO（增强工具使用）→ RLHF
+  （再强化指令遵循）；推理 SFT 响应来自 DeepSeek-R1-0528。
+- 工业界参照：DeepSeek-R1 蒸馏 = 800k 精选样本（600k 推理 + 200k 通用）
+  SFT；Qwen-32B 蒸馏版性能超越同规模直接 RL 训练版。
+- 工业界参照：R1-Zero 纯 RL：AIME 15.6% → 86.7%（无冷启动 SFT、规则奖励）。
+- 工业界参照：工具调用三角色合成——Qwen3-235B-A22B 分饰 User-Agent /
+  Assistant-Agent / API-Server-Agent，规则化 tool-call 校验层只留成功轨迹。
+- 工业界参照：安全数据两步法 = 提示生成 + guard 模型过滤（Nemotron Content
+  Safety V2 / RedTeam2K / gretel-v1，响应由 DeepSeek-R1-0528 生成）。
 
-- SFT：\(\mathcal L_{\text{SFT}}=-\sum_t m_t\log\pi_\theta(y_t\mid x,y_{<t})\)（\(m_t\) 只盖 response token）。
-- RM：\(-\log\sigma(r_\phi(x,y_w)-r_\phi(x,y_l))\)。
-- PPO ratio \(\rho_t=\pi_\theta/\pi_{\text{old}}\)，clip 到 \(1\pm\epsilon\)。
-- RLHF 目标 \(\mathbb E[r_\phi-\beta\log(\pi_\theta/\pi_{\text{ref}})]\)。
-- DPO：对 chosen/rejected 的 reference-relative log-odds 差做 logistic loss。
-- LoRA \(W=W_0+BA\)；LIMA 约 **1k** 高质量样本即可激活对齐。
+## 行业现状与最新进展（2024–2026）
 
-**三句话答高频**
+### SFT 数据的工业配方：Nemotron Nano 2 口径
 
-1. SFT 建立任务接口，RM 压缩偏好成代理奖励，PPO 在线优化，DPO 直接做偏好分类。
-2. KL 约束控制对 reference 的整体 drift，PPO clip 控制单步 token 级更新，两者不等价。
-3. reward hacking 检测：RM 分与人工 win rate 斜率分离、长度/format 同步飙升、held-out RM 分歧。
+- Posttrain 共 90B tokens，其中 SFT 占 80B——SFT 仍是后训练 token 预算的
+  绝对大头，远未被 RL 取代。
+- 阶段顺序是多算法串联而非单选：SFT → GRPO（强化指令遵循与对话）→ DPO
+  （增强工具使用）→ RLHF（再强化指令遵循）。
+- 会话数据：LMSYS / HelpSteer2 / HelpSteer3 / WildChat-1M（55 万子集）的
+  真实 prompts，响应由 Qwen3-235B 生成；推理 SFT 响应来自 DeepSeek-R1-0528。
+- 安全数据：Nemotron Content Safety V2 / HarmfulTasks / RedTeam2K /
+  gretel-v1；两步法 = 提示生成 + guard 模型过滤，把红队流程自动化。
+- 工具调用：Qwen3-235B-A22B 分饰三角色——User-Agent（审视工具、提出查询、
+  判定任务成败）/ Assistant-Agent（调用工具、解读返回）/ API-Server-Agent
+  （校验参数、返回成功/错误）；外接规则化 tool-call 校验层，仅保留成功轨迹。
 
-### 12.2 高频面试题与答题框架
+### 蒸馏 vs 直接 RL：DeepSeek-R1 的对照
 
-**Q1：SFT 的 loss mask 怎么做？**
+- R1 四阶段：①冷启动 SFT（少量长 CoT）→ ②推理 RL（规则奖励）→ ③拒绝
+  采样 + 全场景 SFT（600k 推理 + 200k 通用）→ ④RLVR（规则奖励 + 多任务）。
+- R1-Zero 纯 RL：无冷启动、纯规则奖励，AIME 从 15.6% 提升到 86.7%。
+- 关键实证：Qwen-32B 蒸馏版性能超越同规模直接 RL 训练版——教师足够强时
+  蒸馏性价比高；蒸馏配方即 800k 精选样本直接 SFT，无需复杂 RL 栈。
 
-- 只对 response token 计损（response-only）：\(m_t=1\) 仅覆盖 response 位置，prompt 不计。
-- prompt 与 response 分开 tokenize 再拼接；shift 后 mask 的第一个 response 位置是 `prompt_length - 1`。
-- packing 提高利用率但须明确 EOS、跨文档 attention 与 prompt-token loss；数据质量 > 数量（LIMA）。
+| 维度 | 蒸馏 SFT（R1 口径） | 直接 RL（R1-Zero 口径） |
+| --- | --- | --- |
+| 数据 | 800k 教师生成精选样本（600k 推理 + 200k 通用） | 无标注，规则奖励驱动自采样 |
+| 算法 | 监督 SFT | 纯 RL + 规则奖励（无冷启动） |
+| 成本 | 教师推理 + 数据筛选，训练简单 | 大量 rollout + 训练稳定性成本 |
+| 上限 | 受教师能力封顶 | 基座足够强时可自我超越（AIME 15.6%→86.7%） |
+| 适用场景 | 小模型快速获得推理能力 | 大基座突破现有分布 |
 
-**Q2：Bradley–Terry 模型与 RM loss？**
+### RLHF 栈演进：PPO → DPO 与开源基建
 
-- 假设 \(P(y_w\succ y_l)=\sigma(r_\phi(x,y_w)-r_\phi(x,y_l))\)，loss \(=-\log\sigma(r_w-r_l)\)。
-- pairwise accuracy 高 ≠ reward calibrated，也不保证 OOD 可靠；需按任务/安全类别/长度评估并查 reward margin。
+- DPO（2023）直接用偏好对优化策略：隐式 reward = 两策略 logratio，免显式
+  RM 与在线采样，成为开源社区主流首选之一。
+- PPO 系（含 GRPO 等规则奖励变体）仍是在线探索与推理突破的主力；KL 参考
+  约束与 reward hacking 监控（reward-人工斜率、长度/format 飙升、held-out
+  RM 分歧）是生产标配。
+- 开源基建：verl（Volcano Engine RL 训练框架）采用 hybrid controller——
+  单控制器 + 多 worker 架构，支持多种 RL 算法与 vLLM/SGLang rollout，
+  降低自建 RLHF 栈的门槛。
 
-**Q3：PPO 里 KL 约束与 clip 的分工？**
+**对本讲学习者的启示：** InstructGPT 的三步范式（SFT → RM → PPO，2022）
+仍是理解一切变体的坐标系，但 2024–2026 的工业实践已变成"多算法串联 + 数据
+合成 + 规则化过滤"的组合拳：SFT 靠强教师蒸馏建立接口（80B tokens 量级），
+DPO 与 RLHF 各取所长分阶段强化，安全与工具能力靠专门的数据合成管线而非
+通用偏好数据。学习本讲时应把公式（loss mask、Bradley–Terry、KL 约束、DPO
+闭式）当作审阅这些工业配方的"质检工具"——每看到一个新配方都追问：数据从
+哪来、mask 对不对、reward 会不会被 hack、结论是否限定到评估协议。
 
-- **KL 约束**（\(\beta\log(\pi_\theta/\pi_{\text{ref}})\)）限制对 reference 的整体分布 drift，防 reward hacking。
-- **PPO clip**（\(\operatorname{clip}(\rho,1-\epsilon,1+\epsilon)\)）限制单次更新的 token 级幅度，是优化稳定性手段。
-- 两者角色相关但不等价：\(\beta\) 过小 hacking、过大不学习；clip 控制单步、KL 控制整体。
+## 大厂面试真题与答题框架
 
-**Q4：DPO 为什么不需要 reward model？常见坑？**
+以下为高频面试题（公开面经风格），非任何公司原题。
 
-- 在 KL-regularized 偏好优化下，最优策略可闭式表示 reward，代回后把 RL 化为 chosen/rejected 的 log-odds 差 logistic loss，免去显式 RM 与 online rollout。
-- **常见坑**：长度偏置（log-prob 求和）、模板泄漏（chosen/rejected 用不同模板）、reference 冻结 + tokenizer 口径不一致。
-- **注意**：DPO 免去「RL」，但没免去偏好假设、coverage 与数据偏差。
+**题目 1：SFT 的 loss mask 为什么要 mask 掉 prompt？不 mask 会怎样？**
+- 考点：response-only likelihood、数据契约、模板泄漏。
+- 答题框架：① SFT 的目标是学"给定 prompt 生成 response"的条件分布，
+  prompt 是条件不是目标；② 不 mask 等于同时学 prompt 分布，把模型容量花在
+  模仿用户输入上，且不同数据源的 prompt 分布差异会干扰响应风格；③ 工程上
+  prompt 与 response 分开 tokenize 再拼接，shift 后 mask 从
+  `prompt_length - 1` 起覆盖；④ packed 场景还要处理跨样本 attention 与 EOS。
+- 加分项：指出本仓库 `PackedSFTDataset` 是 full-sequence loss 的真实反例；
+  引 LIMA——质量与一致性比数量重要。
+- 踩坑：说"不 mask 也一样"；mask 起点 off-by-one 是最高频实现 bug。
 
-**Q5：reward hacking 怎么检测？**
+**题目 2：PPO 与 DPO 怎么取舍？**
+- 考点：在线 vs 离线偏好优化、RM、KL 约束、系统复杂度。
+- 答题框架：① 数据：PPO 需 RM + online rollout，DPO 只需 offline 偏好对；
+  ② DPO 把 KL-regularized 最优策略闭式代回，隐式 reward = 两策略 logratio，
+  免 RM 免采样；③ PPO 可探索当前策略的新输出，DPO 受 offline coverage
+  限制；④ 成本：PPO 需 critic/value 与 rollout 引擎，DPO 只需双模型前向；
+  ⑤ 实践不互斥——Nemotron Nano 2 顺序跑 GRPO → DPO → RLHF。
+- 加分项：指出 DPO 没有免去偏好假设，继承偏好数据的一切偏差；引 R1 说明
+  规则奖励在线 RL 仍是推理突破主力。
+- 踩坑：把 DPO 说成"没有 KL"——有，只是闭式进了损失；把二者当单选题。
 
-- RM 分数远超人类示范、但人工 win rate 未同步提升 → reward-human 斜率下降（overoptimization）。
-- 长度/format 指标与 reward 同步飙升；held-out RM 与训练 RM 分数分歧；KL 快速逼近上限而 capability 下降。
+**题目 3：reward hacking 是什么？如何检测与缓解？**
+- 考点：proxy reward 与真实意图的分离、诊断指标、KL 约束。
+- 答题框架：① 定义：policy 利用 RM 的系统性漏洞（变长、堆砌好词、自信
+  语气、模仿 RM 训练分布风格）而非真正提升质量；② 检测：RM 分与人工
+  win rate 的斜率分离、长度/format 与 reward 同步飙升、held-out RM 与
+  训练 RM 分歧、KL 逼近上限而 capability 下降；③ 缓解：KL 参考约束、
+  独立评测、早停、RM 迭代重训。
+- 加分项：引 InstructGPT——PPO 后模型 RM 分远超人类示范，但人工评估并未
+  同比例提升。
+- 踩坑：只拿 reward 曲线当"对齐提升"的证据。
 
-**Q6：RLHF 的完整管线？**
+**题目 4：为什么蒸馏小模型可能胜过直接 RL？**
+- 考点：蒸馏 vs RL 的上限与成本、教师质量前提。
+- 答题框架：① 实证：DeepSeek-R1 口径下 Qwen-32B 蒸馏版（600k 推理 +
+  200k 通用样本 SFT）超越同规模直接 RL 训练版；② 原因：小基座自身探索
+  能力弱，RL 难以自发涌现长 CoT，蒸馏直接继承教师推理轨迹；③ 前提：教师
+  显著强于学生；④ 大基座相反——R1-Zero 纯 RL 从 AIME 15.6% 到 86.7%。
+- 加分项：给出决策规则——基座小/预算紧 → 蒸馏；基座强 + 有规则奖励 → RL。
+- 踩坑：把结论过度外推成"RL 没用"。
 
-- `pretrain → SFT → preference/RM → PPO`（InstructGPT）。
-- 数据契约：preference pair 共享 prompt、randomize 顺序、记录 rubric 与 disagreement；RM 有独立 prompt-level split。
-- 报告：reward、KL、entropy、clip fraction、value loss、长度与人工 win rate，多 seed。
+**题目 5：写出 BT 模型下的 RM loss；pairwise accuracy 高就够了吗？**
+- 考点：Bradley–Terry、calibration、分布外可靠性。
+- 答题框架：① \(P(y_w\succ y_l)=\sigma(r_w-r_l)\)，loss =
+  \(-\log\sigma(r_w-r_l)\)；② accuracy 只看排序不看尺度，margin 才反映
+  置信度；③ 需按任务、安全类别、长度分组评估；④ train/test 必须
+  prompt-level split 防泄漏。
+- 加分项：提 overoptimization——RM 是 proxy，PPO 优化它必然偏离真实意图。
+- 踩坑：把 RM accuracy 当对齐质量本身。
 
-**Q7：SFT / RM / PPO / DPO 怎么选？**
+**题目 6：工业界 SFT 数据从哪来？纯人工标注吗？**
+- 考点：数据合成管线、教师蒸馏、质量控制。
+- 答题框架：① 真实用户 prompts（LMSYS/HelpSteer/WildChat 类公开集或自家
+  日志脱敏）；② 强教师生成响应（Qwen3-235B、DeepSeek-R1-0528 等）；③
+  垂类专门管线：安全数据两步法（提示生成 + guard 模型过滤）、工具调用
+  三角色模拟 + 规则化校验；④ 质量闸门：只留成功轨迹、去模板泄漏与冲突示范。
+- 加分项：给出量级数字——Nemotron Nano 2 posttrain 90B tokens 中 SFT 80B；
+  会话数据来自 WildChat-1M 的 55 万子集。
+- 踩坑：以为"合成 = 低质量"——决定质量的是校验层而非数据来源。
 
-- SFT：高质量 demonstrations，简单稳定但只模仿覆盖到的行为；RM：pairwise preferences，得可复用 score 但 hacking/失准；PPO：RM+online rollout，可探索新输出但系统复杂、方差高；DPO：offline pairs，简洁无 critic 但受 offline coverage/reference/长度偏差。
-- 先建 SFT + 固定评估，再按「是否有可靠在线 reward、生成预算、探索需求」选 PPO 或 DPO。
+**题目 7：DPO 实现里有哪些必查的坑？**
+- 考点：reference 冻结、log-prob 口径、数据契约。
+- 答题框架：① chosen/rejected 必须共享同一 prompt 与 template；② 只累计
+  response token 的 log-prob；③ reference 前向必须 no_grad 且 tokenizer/
+  template 与 policy 完全一致；④ 监控长度偏置与 rejected 过拟合；⑤ 报
+  held-out preference accuracy 而非只看训练 margin。
+- 加分项：指出直接求和造成长度偏好、但未经审计改成平均同样改变目标。
+- 踩坑：reference 未冻结（被优化器更新）时 loss 会"异常好"——这是 bug。
 
-**Q8：LoRA 是什么？**
+## 系统设计题
 
-- 冻结基座、只训练低秩增量 \(W=W_0+BA\)，\(B\in\mathbb R^{d\times r},A\in\mathbb R^{r\times d'},r\ll d\)。
-- 大幅降低 optimizer state 与显存，接近全参微调质量，便于多任务/多适配器管理。
+**设计题 1：为公司助手模型设计 SFT → 偏好优化 → 安全对齐的全流程数据与训练管线**
 
-**Q9：LIMA 的发现？**
+- 需求澄清：模型规模与算力预算？内网部署还是 API？垂类（代码/客服/办公）？
+  安全等级与拒答边界？评测基线与上线标准是什么？
+- 规模估算：参照 Nemotron Nano 2——posttrain 90B tokens（SFT 80B）量级；
+  自家场景可按 1–10B SFT tokens 起步；偏好对 10 万–100 万条量级；推理蒸馏
+  参照 R1 配方 800k 精选样本（600k 推理 + 200k 通用）。
+- 架构：① 数据层——用户真实 prompts（脱敏）+ 公开集（LMSYS/HelpSteer/
+  WildChat 类）+ 垂类合成，教师模型生成响应，安全数据走两步法（提示生成 +
+  guard 模型过滤）；② SFT 层——response-only mask + packing，capability/
+  safety/工具调用分桶按配比混合；③ 偏好层——先 DPO（离线、便宜）建立偏好
+  接口，再视预算上 GRPO/PPO（KL 约束 + reward hacking 监控面板）；④ 评测层
+  ——capability 与 safety 分轴、多 seed、人工盲测 + 独立 judge 偏差测试。
+- trade-off 表：
 
-- 约 1000 条高质量、多样、风格一致的示范即可让基座产生显著指令遵循能力。
-- 对齐能力大部分已存在于预训练分布，SFT 更像「激活接口」而非「注入知识」——数据质量 > 数量。
+| 决策 | 选项 A | 选项 B | 取舍 |
+| --- | --- | --- | --- |
+| 偏好算法 | DPO（离线偏好对） | PPO/GRPO（在线 + RM/规则奖励） | 成本与稳定性 vs 探索上限 |
+| 响应来源 | 强教师蒸馏 | 人工标注 | 规模与成本 vs 质量上限 |
+| 安全数据 | 两步合成（生成 + guard 过滤） | 纯红队人工 | 覆盖面与规模 vs 真实性 |
+| 训练顺序 | SFT→DPO→RLHF 分阶段 | 单阶段端到端 | 稳定可归因 vs 迭代速度 |
 
-**Q10：为什么「对 reward 优化」≠「对人的真实意图对齐」？**
+- 评测方案：held-out prompt-level split；reward 与人工 win rate 斜率监控；
+  长度/format 旁路指标；安全分轴（拒答率、过拒率）单独报告，不合并单分数。
+- 追问预案：出现 reward hacking 怎么办（加大 KL、早停、RM 迭代重训）；
+  helpful/harmless 冲突怎么管（rubric 显式加权、分轴报告）。
 
-- RM 是代理：偏好受长度、语气、格式捷径影响；RM 分数与人工 win rate 是不同构造。
-- helpfulness/harmlessness/诚实性可能冲突，不能压成单分数；任何结论都要限定 rubric、分布与评估协议。
+**设计题 2：设计工具调用能力的 SFT 数据合成平台（三角色模拟）**
 
-### 12.3 手撕要点（SFT mask 与 DPO loss）
+- 需求澄清：工具数量与 schema 复杂度？单轮还是多轮？要不要覆盖失败恢复
+  （工具报错后的重试轨迹）？目标模型规模与后训练预算？
+- 规模估算：参照 Nemotron Nano 2 三角色方案——Qwen3-235B-A22B 分饰
+  User-Agent（审视工具、提出查询、判定任务成败）/ Assistant-Agent（调用
+  工具、解读返回）/ API-Server-Agent（校验参数、返回成功/错误）；成功轨迹
+  按 10 万–100 万条量级规划，随工具 schema 数量线性扩展。
+- 架构：① 角色引擎——同一强模型多角色 prompting，角色间状态机管理轮次；
+  ② API 模拟层——mock server 按 schema 校验参数并返回成功/错误；③ 校验层
+  ——规则化 tool-call 校验（JSON schema 合法、参数类型正确、调用序正确、
+  User-Agent 判定任务成功），仅保留成功轨迹；④ 混合层——与通用对话数据
+  按比例混合，防止工具调用格式过拟合。
+- trade-off 表：
 
-面试让「写 SFT loss mask」或「推导 DPO」时，按公式写：
+| 决策 | 选项 A | 选项 B | 取舍 |
+| --- | --- | --- | --- |
+| API 层 | 真实调用 | mock server | 真实性 vs 可复现与成本 |
+| 轨迹筛选 | 只留成功轨迹 | 保留失败 + 恢复轨迹 | 数据干净 vs 学会纠错 |
+| 生成器 | 单模型分饰三角色 | 多异构模型分工 | 风格一致性 vs 多样性 |
 
-```text
-SFT（response-only）: L = -Σ_t m_t log π_θ(y_t | x, y_{<t})
-  m_t = 1 仅 response token；shift 后第一个 response 位置 = prompt_len - 1
+- 评测方案：held-out 工具集（训练未见 schema）；成功率、参数准确率、多轮
+  任务完成率分层报告；与真实用户日志分布做覆盖度对比。
+- 追问预案：合成轨迹分布偏窄（注入 User-Agent 主动性、随机化工具组合）；
+  模型模仿 mock 错误格式（错误信息也过 schema 校验）。
 
-RM: L = -log σ(r_w - r_l)
+**设计题 3：设计 reward hacking 的在线监控与熔断系统**
 
-DPO: L = -log σ( β [ log(π_θ(y_w|x)/π_ref(y_w|x))
-                       - log(π_θ(y_l|x)/π_ref(y_l|x)) ] )
-  只累计 response token log-prob；reference 前向 no_grad
+- 需求澄清：RL 算法（PPO/GRPO）？训练集群规模？可接受的误熔断率？有没有
+  独立评测预算（人工盲测/独立 RM）？
+- 规模估算：指标按 step 粒度采集；人工抽评按每 N step 抽百条量级；held-out
+  RM 维护一个独立 checkpoint，训练 RM 更新时同步评估分歧。
+- 架构：① 指标采集——reward、KL、entropy、clip fraction、长度、format
+  命中率；② 独立评测通道——held-out RM + 周期性人工盲测，计算 reward-人工
+  斜率；③ 熔断规则——斜率跌破阈值 / KL 逼近上限 / 长度飙升超带 → 自动降
+  学习率或停训；④ 可视化——单面板收口（参照 verl hybrid controller：
+  单控制器 + 多 worker 的指标归集思路）。
+- trade-off 表：
+
+| 决策 | 选项 A | 选项 B | 取舍 |
+| --- | --- | --- | --- |
+| 熔断动作 | 自动停训/降学习率 | 只告警人工决策 | 安全性 vs 打断训练 |
+| 独立评测 | 人工盲测 | held-out RM | 可信度 vs 延迟与成本 |
+| KL 约束 | 固定 \(\beta\) | 分阶段退火 | 稳定 vs 学习效率 |
+
+- 评测方案：回放历史 hacking 案例验证熔断召回；对正常训练做误报率压测。
+- 追问预案：KL 调大后学习停滞（\(\beta\) 分阶段退火）；无人工预算（多
+  judge 交叉 + 偏差测试，明示结论局限）。
+
+## 代码实现题
+
+**代码题 1：带 loss mask + EOS 的 SFT collator**
+
+- 题目：实现一个 collator，输入 batch 的 prompt/response 文本对，输出
+  `input_ids`、`labels`（prompt 与 padding 置 -100，response 计损，末尾补
+  EOS）、`attention_mask`。
+- 考察点：prompt/response 分开 tokenize 再拼接；mask 起点 off-by-one；
+  padding side 一致性；EOS 注入。
+
+```python
+import torch
+
+IGNORE_INDEX = -100
+
+def sft_collate(batch, tokenizer, max_len=2048):
+    # batch: list of {"prompt": str, "response": str}
+    input_ids_list, labels_list = [], []
+    for ex in batch:
+        # 1) prompt 与 response 分开 tokenize，避免 token 边界混淆
+        prompt_ids = tokenizer(ex["prompt"], add_special_tokens=False)["input_ids"]
+        resp_ids = tokenizer(ex["response"], add_special_tokens=False)["input_ids"]
+        resp_ids = resp_ids + [tokenizer.eos_token_id]  # 2) 补 EOS
+        seq = prompt_ids + resp_ids
+        # 3) mask 掉 prompt：只有 response 区间计损
+        labels = [IGNORE_INDEX] * len(prompt_ids) + list(resp_ids)
+        seq, labels = seq[:max_len], labels[:max_len]
+        input_ids_list.append(seq)
+        labels_list.append(labels)
+
+    maxlen = max(len(s) for s in input_ids_list)
+    pad_id = tokenizer.pad_token_id
+    input_ids = torch.full((len(batch), maxlen), pad_id, dtype=torch.long)
+    labels = torch.full((len(batch), maxlen), IGNORE_INDEX, dtype=torch.long)
+    attn = torch.zeros((len(batch), maxlen), dtype=torch.long)
+    for i, (s, l) in enumerate(zip(input_ids_list, labels_list)):
+        input_ids[i, : len(s)] = torch.tensor(s)  # right padding
+        labels[i, : len(l)] = torch.tensor(l)
+        attn[i, : len(s)] = 1
+    return {"input_ids": input_ids, "labels": labels, "attention_mask": attn}
 ```
 
-**三个必踩坑**
+- 验收标准：① labels 中 prompt 区间与 pad 区间均为 -100；② 每条样本
+  response 最后一个非 ignore token 是 EOS；③ 交叉熵只对非 ignore 位置求
+  均值；④ shift 后（labels[:, 1:] 对 inputs[:, :-1]）mask 对齐正确；⑤
+  单测覆盖空 response、超长截断、batch 内长度不齐三种边界。
 
-1. **SFT 别对 prompt token 计损**：否则声称 response-only 实际是 full-sequence。
-2. **chosen/rejected 必须共享 prompt**：用不同模板会学到模板差异而非偏好。
-3. **DPO 的 reference 必须冻结 + tokenizer 一致**：log-prob 口径不一致会污染 margin。
+**代码题 2：DPO 损失实现（含隐式 reward 与准确率）**
 
-### 12.4 高频追问与陷阱
+- 题目：给定 policy 与 frozen reference 的 chosen/rejected 序列级 log-prob，
+  实现 DPO loss、隐式 reward 与 preference accuracy。
+- 考察点：logratio 口径；reference no_grad；数值稳定；指标与 loss 分离。
 
-| 追问 | 正确方向 |
-| --- | --- |
-| DPO 是「无需 RL」吗？ | 是，但仍有偏好假设、coverage 与数据偏差 |
-| KL 过大/过小会怎样？ | 过小 reward hacking、过大几乎不学习 |
-| RM 分高就对齐了吗？ | 否，RM 是代理，可能被 hacking |
-| 把 helpful/harmless 压成单分数可以吗？ | 否，会掩盖对某群体的性能退化 |
-| 自动 judge 可信吗？ | 有长度/自信/同族偏好，需偏差测试 + 人工盲测 |
+```python
+import torch
+import torch.nn.functional as F
 
-## 13. 小结
+def dpo_loss(pol_chosen_lp, pol_rejected_lp,
+             ref_chosen_lp, ref_rejected_lp, beta=0.1):
+    """
+    *_lp: (B,) 序列级 log-prob，只对 response token 求和。
+    reference 分支必须由 no_grad 前向得到。
+    """
+    # 隐式 reward = policy 与 reference 的 logratio
+    chosen_rw = pol_chosen_lp - ref_chosen_lp
+    rejected_rw = pol_rejected_lp - ref_rejected_lp
+    logits = beta * (chosen_rw - rejected_rw)
+    loss = -F.logsigmoid(logits).mean()      # DPO 主损失
+    acc = (logits > 0).float().mean()        # preference accuracy
+    return loss, acc, chosen_rw.detach(), rejected_rw.detach()
+```
+
+- 验收标准：① reference 张量 requires_grad=False（或已 detach），否则
+  断言报错；② chosen/rejected 完全相同时 loss = log 2、acc = 0.5（数据 bug
+  探针）；③ 梯度只流向 policy 分支，reference 分支梯度为 None；④ 输出
+  的隐式 reward 可直接用于监控长度偏置（对 reward 与长度做相关分析）。
+
+**代码题 3：SFT 数据混合与打包（packing）脚本**
+
+- 题目：给定多个数据源（通用对话/推理/安全/工具调用）及目标配比，输出
+  packed 的连续 token stream，保证 EOS 分隔并记录每个样本的源归属。
+- 考察点：分层采样保持配比；EOS 边界；可复现随机性；per-source 统计。
+
+```python
+import random
+
+def pack_datasets(sources, tokenizer, seq_len=4096, seed=0):
+    # sources: {"通用": [texts], "推理": [texts], "安全": [texts], "工具": [texts]}
+    rng = random.Random(seed)
+    pool = []
+    for name, texts in sources.items():  # 1) 分源展开，保持配比
+        for t in texts:
+            ids = tokenizer(t, add_special_tokens=False)["input_ids"]
+            # 2) 每个样本末尾补 EOS 作为分隔
+            pool.append((name, ids + [tokenizer.eos_token_id]))
+    rng.shuffle(pool)
+
+    packs, cur, cur_srcs = [], [], []
+    for name, ids in pool:
+        if cur and len(cur) + len(ids) > seq_len:  # 3) 装不下则封包
+            packs.append({"input_ids": cur, "sources": cur_srcs})
+            cur, cur_srcs = [], []
+        cur.extend(ids)
+        cur_srcs.append(name)
+    if cur:
+        packs.append({"input_ids": cur, "sources": cur_srcs})
+    return packs
+```
+
+- 验收标准：① 每包长度 ≤ seq_len；② 相邻样本间必有 EOS；③ 各源占比与
+  输入配比偏差 < 2%（抽样校验）；④ 同 seed 输出逐字节一致；⑤ 输出
+  per-source token 统计供后续 loss 加权；⑥ 明确跨样本 attention 的取舍——
+  本实现允许共享，安全敏感场景需 attention mask 隔离（本仓库
+  `PackedSFTDataset` 同样面临该边界问题）。
+
+## 12. 小结
 
 SFT 建立模型的任务接口，RM 把成对偏好压缩成代理奖励，PPO 在线优化该奖励，DPO 则直接
 做 reference-relative 偏好分类。它们的核心区别是数据来自哪里、是否在线探索、如何限制
@@ -444,4 +696,8 @@ Adaptation of Large Language Models.” *ICLR*, 2022.
 
 - Stanford CS336, [Lecture 15 — Mid/post-training](https://github.com/stanford-cs336/lectures/blob/main/lecture_15.pdf)
 - [Alignment 主题导航](../experiments/topics/alignment.md)
-- [A5 Supplement — Safety & RLHF](../assignments/assignment5-alignment/cs336_spring2026_assignment5_supplement_safety_rlhf.pdf)
+- [A5 Supplement — Safety & RLHF](../assignments/spring2026/assignment5-alignment/cs336_spring2026_assignment5_supplement_safety_rlhf.pdf)
+- [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948)（访问日期 2026-10-04）
+- [Direct Preference Optimization: Your Language Model is Secretly a Reward Model](https://arxiv.org/abs/2305.18290)（访问日期 2026-10-04）
+- [verl — Volcano Engine RL 训练框架](https://github.com/volcengine/verl)（访问日期 2026-10-04）
+- [Stanford CS336 课程主页](https://cs336.stanford.edu)（访问日期 2026-10-04）

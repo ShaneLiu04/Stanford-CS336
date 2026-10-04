@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_07.py"
   - "../experiments/topics/systems.md"
-  - "../assignments/assignment2-systems/"
+  - "../assignments/spring2026/assignment2-systems/"
 ---
 
 # Lecture 07 — Collectives 与 Data Parallelism：通信语义、同步正确性与重叠调度
@@ -17,7 +17,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、分布式训练工程师与系统研究者
 
 ## 摘要
@@ -313,7 +313,7 @@ gradients [[8]](#ref-8)。公平比较需把 compression/decompression FLOPs、�
 
 仓库教学实现位于：
 
-- `assignments/assignment2-systems/cs336_systems/ddp.py`
+- `assignments/spring2026/assignment2-systems/cs336_systems/ddp.py`
 - `cs336_systems/sharded_optimizer.py`
 
 其 DDP 核心语义是：
@@ -471,7 +471,9 @@ gradient correctness 与 time-to-loss。Microbenchmark 带宽高不保证 overla
 - `no_sync` accumulation 阶段仍发 collective；
 - 只测 rank 0，忽略最慢 rank；
 - 把 Gloo/CPU 曲线当 NCCL/GPU 曲线；
-- 只算 bytes，不考虑小 bucket 的 latency 和拓扑拥塞。
+- 只算 bytes，不考虑小 bucket 的 latency 和拓扑拥塞；
+- 在 ZeRO-3/FSDP 下只比状态显存，忽略前向 all-gather 参数缓冲的峰值，误判 OOM 位置；
+- 误以为增大 local batch 能摊薄梯度通信——梯度 bytes 只由参数量决定（§7）。
 
 ## 11. Checklist
 
@@ -490,35 +492,43 @@ gradient correctness 与 time-to-loss。Microbenchmark 带宽高不保证 overla
 
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
-| 全部 ranks hang / DDP 挂起 | collective sequence / bucket/hook 生命周期 | shape/order 不一致、梯度未完成即被使用 |
+| 全部 ranks hang | collective sequence | shape/order 不一致 |
 | 仅某 rank OOM 后 hang | 最早异常 log | 其他 ranks 等 collective |
 | loss 比单卡大 \(p\) 倍 | reduction scaling | SUM 未除 world size |
 | ranks 参数逐步分叉 | wait/no_sync | optimizer 前未完成同步 |
-| overlap 图上没有重叠 / 扩展比远低于线性 | bucket ready order / 通信 2S | bucket 太大/顺序错误、计算通信未重叠 |
+| overlap 图上没有重叠 | bucket ready order | bucket 太大/顺序错误 |
 | 重叠后 backward 变慢 | HBM/SM contention | NCCL 与 compute 争资源 |
 | 小 tensor 带宽极低 | latency/message count | 过多 per-param collectives |
-| 多节点骤降 / 节点间扩展骤降 | topology/NIC | 错网卡、跨节点算法、未分级归约 |
+| 多节点骤降 | topology/NIC | 错网卡、跨节点算法 |
 | tied weight 梯度翻倍 | hooks | 同一 Parameter 重复注册 |
 | epoch 数据重复 | sampler | 未 shard 或未 `set_epoch` |
+
+### 故障排查速查
+
+| 现象 | 优先检查 | 常见根因 |
+|---|---|---|
+| DDP 挂起 | bucket/hook 生命周期 | 梯度未完成 all-reduce 即被使用 |
+| 扩展比远低于线性 | 通信量 \(2S\) 与 overlap | bucket 过小、计算通信未重叠 |
 | 各 rank 梯度不一致 | 未参与计算的参数 | 未正确处理 unused parameters |
 | 显存随 bucket 增长 | bucket_cap_mb 与 flatten | 分桶上限过大 |
 | ZeRO-1 显存未下降 | optimizer 分片是否生效 | 分片只作用于 optimizer state，参数/梯度仍在 |
+| 节点间扩展骤降 | 跨机带宽与拓扑 | 未做拓扑感知的分桶或分级归约 |
 
 ## 12. 讨论：效度威胁与结论边界
 
-### 12.1 Construct validity
+### Construct validity
 - bus bandwidth、algorithm bandwidth、application throughput 不是同一指标；
 - overlap percentage 不等于 step-time reduction；
 - weak scaling efficiency 不等于固定任务加速；
 - gradient equality 不保证相同 stochastic training trajectory。
 
-### 12.2 Internal validity
+### Internal validity
 - barrier/同步是否计时会改变结果；
 - 只测 rank 0 隐藏 straggler；
 - network contention、topology、NCCL env 是 confounders；
 - 增 world size 同时改变 global batch/LR 会混合 systems 与 optimization。
 
-### 12.3 External validity
+### External validity
 - Gloo/CPU 不代表 NCCL/GPU；
 - 单节点 NVLink 不外推跨节点 Ethernet/IB；
 - 小模型 bucket optimum 不外推大模型；
@@ -527,146 +537,338 @@ gradient correctness 与 time-to-loss。Microbenchmark 带宽高不保证 overla
 推荐结论限定 model、batch、topology、backend、message range 与统计协议，并公开 hang/OOM/failed
 runs，而不是只写“DDP scales linearly”。
 
-## 13. 面试备考（Interview Prep）
+## 面试要点速记
 
-> 分布式/数据并行是 LLM 面试的高频系统题：面试官常从「DDP 每步通信量多少」切入，追到
-> 「ring all-reduce 公式」「ZeRO 三阶段」「为什么 overlap 不一定免费」「梯度裁剪为什么放同步后」。
-> 核心是区分「数值语义正确」与「系统性能」，用 \(\alpha\)-\(\beta\) 模型与 16N 账本支撑判断。
-> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 13.1 一页速览卡（面试前 1 分钟）
+1. **Q：DDP 每步通信量是多少？** 要点：all-reduce 梯度 2S（ring 实现约
+   2(P−1)/P·S）；bucket 聚合小梯度、计算-通信 overlap 隐藏延迟。
+2. **Q：ZeRO-1/2/3 各分片什么、代价几何？** 要点：1=optimizer state
+   （16N → ~4N + 12N/P）；2=再分梯度；3=再分参数（~16N/P + 缓冲）；
+   ZeRO-3 通信由 2S 升为 3S（前/反向 all-gather + 梯度 reduce-scatter）。
+3. **Q：bucket 大小的权衡？** 要点：大桶通信效率高（摊薄延迟），但首个桶
+   就绪晚、峰值显存上升；`bucket_cap_mb` 需按模型调。
+4. **Q：梯度裁剪为何必须在 all-reduce 之后？** 要点：全局范数依赖完整梯度；
+   本地裁剪再归约会改变数学语义。
+5. **Q：ZeRO-3/FSDP 通信量为何是 3S？** 要点：前向 all-gather 参数、反向
+   再 all-gather 一次、梯度 reduce-scatter；通信约 1.5× DDP，换显存随 P 线性下降。
+6. **Q：异步 all-reduce 为什么不等于自动 overlap？** 要点：还需 buffer 生命周期
+   覆盖 `wait()`、跨 rank collective 顺序一致、optimizer 前等待全部 handle（§6）。
+7. **Q：FSDP2 与 FSDP 的区别？** 要点：FSDP2（torch 2.4）做 per-parameter
+   sharding + 参数重分片（动态调整分片粒度），易用性大幅提升；语义仍是 ZeRO-3。
+8. **Q：strong vs weak scaling 哪个更"好看"？** 要点：weak scaling 效率更高但
+   改变优化问题；strong scaling 受通信与串行项限制（§7.1），报告须区分二者。
 
-**核心主张**：DDP 的本质是**复制模型、切分数据、平均梯度**——解决吞吐、不解决容量；
-通信总 bytes 只是第一层，性能取决于消息粒度、\(\alpha/\beta\)、拓扑与能否和 backward 重叠。
+**必背数字**
 
-**必背数字与公式**
+- 16N 账本（L02）是 ZeRO 各阶段收益的分母；DDP 2S / ZeRO-3 3S 是
+  扩展性估算的基本量。
 
-- ring all-reduce 每 rank 网络量 \(2\frac{p-1}{p}S\)，时间 \(2(p-1)\alpha+2\frac{p-1}{p}\frac{S}{\beta}\)。
-- DDP 通信 \(2S\)；ZeRO-1/2 也约 \(2S\)；ZeRO-3 约 \(3S\)。
-- 显存（16P 口径）：DDP `16P`；ZeRO-1 `8P+8P/p`；ZeRO-2 `4P+12P/p`；ZeRO-3 `16P/p`。
-- all-reduce = reduce-scatter + all-gather；ring 大消息 bandwidth-optimal，tree 小消息 steps 少。
+**工业界参照**
 
-**三句话答高频**
+- ZeRO 显存（DeepSpeed 口径）：Stage-1 ≈ 12Φ/P + 4Φ；Stage-2 ≈ 14Φ/P + 2Φ；
+  Stage-3 ≈ 16Φ/P（Φ=参数量，P=DP 卡数）。
+- 混合精度账本分解：fp32 master 权重 4B + m/v 各 4B = 12B/参数训练状态；
+  bf16 参数+梯度 2+2B——合计 16B/参数。
+- 通信压缩与精度：1-bit Adam 梯度通信压缩约 5×；H100 FP8（配合 DeepSpeed）
+  显存省约 42%（量级）。
+- 激活优化：激活检查点显存降 30%–70%（选择性重计算）；SP+TP 联合下长序列
+  激活显存降约 5×；FlashAttention 使 1M tokens 长序列激活 O(n) 级。
+- 通信时延：NVLink/IB 单次通信时延约 ~1µs 量级；nccl-tests
+  （`all_reduce_perf`）是 ring vs tree 带宽比测的标准工具。
+- 框架版本锚点：FSDP2 随 torch 2.4 引入（per-parameter sharding）；
+  torchtitan 为 PyTorch 原生 4D 并行框架（持续完善阶段，未正式集成进 PyTorch）。
 
-1. DDP 复制模型、切分数据、平均梯度，解决吞吐不解决容量。
-2. ring all-reduce 每 rank 传 \(2(p-1)/p·S\)，大消息带宽最优、小消息被 latency 支配。
-3. ZeRO 把 DP 复制的状态分片：1/2 期通信几乎免费，3 期涨到 3S 换显存随 \(p\) 线性下降。
+## 行业现状与最新进展（2024–2026）
 
-### 13.2 高频面试题与答题框架
+### DDP → ZeRO → FSDP/FSDP2 的演进脉络
 
-**Q1：DDP 每步通信量是多少？ring all-reduce 的公式？**
+业界调研口径下的框架定位对照（本讲概念 ↔ 工业实践）：
 
-- 梯度 tensor 大小 \(S=P s_g\)；all-reduce 每 rank 约传 \(2S\)（收发各 \(S\)）。
-- ring 分 reduce-scatter + all-gather 两阶段，各 \(p-1\) 步、每步传 \(S/p\)：\(V=2\frac{p-1}{p}S\)。
-- 时间 \(T\approx 2(p-1)\alpha+2\frac{p-1}{p}\frac{S}{\beta}\)：大消息 bandwidth-bound，小消息 \(2(p-1)\alpha\) 主导。
+| 框架 | 定位 | 核心机制 | 与本讲概念的对应 |
+|---|---|---|---|
+| DeepSpeed | ZeRO 分阶段分片 + 多级卸载 | ZeRO-Offload/Infinity（CPU/NVMe），单卡可训千亿参数，以时间换空间 | §4.4 ZeRO 三阶段的工程化 |
+| Megatron-LM | 3D 并行训练框架 | TP+PP+DP + 激活检查点 + 序列并行（SP） | DP 是其中一维（Lecture 08 展开） |
+| PyTorch FSDP | 全参数分片（类 ZeRO-3） | 自动 bucket + 异构分片支持 | §5 bucketed overlap 的分片版 |
+| FSDP2（torch 2.4） | FSDP 的重写 | per-parameter sharding + 参数重分片（动态调整分片粒度）+ 易用性大幅提升 | 解决 flat buffer 与重分片痛点 |
+| torchtitan | PyTorch 原生 4D 并行全能框架 | DP/TP/PP/SP 组合，持续完善阶段，未正式集成进 PyTorch | 4D 并行参考实现 |
 
-**Q2：all-reduce 如何用 reduce-scatter + all-gather 实现？**
+易用性生态：Accelerate 提供分布式抽象层；LLaMA-Factory/MS-SWIFT 等微调封装
+底层依赖 PyTorch DDP/FSDP/Megatron/DeepSpeed。趋势是"分片默认化"——
+ZeRO-3/FSDP 从极限优化手段变成大模型训练的默认起点。
 
-- reduce-scatter：规约后每个 rank 只留结果的 \(1/p\) shard；
-- all-gather：每 rank 广播自己的 shard，最终每个 rank 都拿到完整规约结果。
-- 两阶段之和就是 all-reduce；ring 算法正是把这两阶段各自在环上做 \(p-1\) 步。
+### ZeRO 三阶段显存公式与取舍（DeepSpeed 口径）
 
-**Q3：ZeRO-1 / 2 / 3 各分片什么？显存与通信怎么变？**
+| 阶段 | 切分对象 | 每 rank 显存 | 通信量 | 取舍 |
+|---|---|---|---|---|
+| Stage-1 | optimizer states | ≈ 12Φ/P + 4Φ | ≈ 2S | 近乎免费的显存收益 |
+| Stage-2 | + gradients | ≈ 14Φ/P + 2Φ | ≈ 2S | 通信不变，仍非最终解 |
+| Stage-3 | + parameters | ≈ 16Φ/P | ≈ 3S | 显存随 P 线性下降，通信约 1.5× |
 
-- ZeRO-1 切 optimizer states（`8P+8P/p`）；ZeRO-2 再切 gradients（`4P+12P/p`）；ZeRO-3 再切 parameters（`16P/p`）。
-- 通信：ZeRO-1/2 约 \(2S\)（与 DDP 同级，显存收益近乎免费）；ZeRO-3 因 forward/backward 各要 all-gather 参数，通信涨到约 \(3S\)。
-- **洞察**：切分把「容量问题」转化为「collective 调度问题」，通信几乎不涨就能突破容量墙。
+公式与 §4.4 的 16P 账本一致：fp32 master 权重 4B + m/v 各 4B = 12B/参数
+优化器状态，加 bf16 参数+梯度 2+2B。进一步的压缩手段：1-bit Adam 梯度通信
+压缩约 5×；H100 FP8（配合 DeepSpeed）显存省约 42%。激活侧：激活检查点显存
+降 30%–70%（选择性重计算）；SP+TP 联合下长序列激活显存降约 5×；
+FlashAttention 使 1M tokens 长序列激活 O(n) 级。
 
-**Q4：DDP 等于 global batch 训练的条件？**
+### 通信原语实测工具链：nccl-tests
 
-- 各 rank local batch 相等（或按样本数加权）、loss reduction 口径一致、data shards 无重复、参数/optimizer state 初始一致、RNG 语义正确、regularization 按 global objective 定义。
-- 若 local batch \(B_r\) 不同，正确梯度是 \(\sum_r B_r g_r/\sum_r B_r\)，不是简单 rank mean。
-- 任一假设破坏（如最后一个不完整 batch、token normalization），都会破坏「除 world size」的简单语义。
+业界标准做法是用 [nccl-tests](https://github.com/NVIDIA/nccl-tests) 对 fabric
+做基准：`all_reduce_perf -b 512M -e 4G -f 2 -g 8` 扫消息大小，比较 ring vs
+tree 算法带宽。NCCL 集合通信覆盖 broadcast/all-gather/reduce-scatter/
+all-reduce 等；单次通信时延约 ~1µs（NVLink/IB 量级）。这正对应 §3 的
+α-β 模型与 §8 的 benchmark 规范：小消息看 tree（O(log p) 步），大消息看
+ring（bandwidth-optimal）。
 
-**Q5：为什么 all-reduce 是 SUM 还要再除 \(p\)？**
+**对本讲学习者的启示**：本讲的 collective 语义、2S/3S 通信量与 bucket
+overlap 并未过时——FSDP2、torchtitan 的调度内核仍是同一套 reduce-scatter/
+all-gather 原语，差异只在分片粒度（per-parameter）与自动调优程度。掌握
+§2–§5 的推导，即可读懂任意新框架的设计文档与 release notes。
 
-- DDP 目标是 global mean loss 的梯度：\(g=\frac1p\sum_r g_r\)。
-- 若只 all-reduce SUM 不除 \(p\)，有效学习率放大 \(p\) 倍，训练动态改变。
-- 常见做法是 loss 里已按 local mean 算，gradient hook 里再除 world size，避免二次缩放。
+## 大厂面试真题与答题框架
 
-**Q6：gradient bucket 的大小权衡？**
+以下为高频面试题（公开面经风格）。
 
-- bucket 大：摊薄 latency、algorithm bandwidth 高；但首个 bucket 就绪晚、峰值显存高。
-- bucket 小：\(\alpha\)/launch 主导，且无法与 backward 充分重叠。
-- 生产框架按逆向参数顺序组 bucket（后层梯度先就绪），首轮观察 ready order 再 rebuild；最优值随模型/硬件变，需按 `bucket_cap_mb` 扫。
+**题目 1：ZeRO-1/2/3 各解决什么问题、代价是什么？**
+- 考点：§4.4 容量上限、显存-通信权衡。
+- 答题框架：
+  1. 先摆 16B/参数账本：优化器状态 12B（fp32 master 4B + m/v 各 4B）+ bf16 参数/梯度 2+2B；
+  2. Stage-1 切优化器状态（≈12Φ/P+4Φ），Stage-2 再切梯度（≈14Φ/P+2Φ），Stage-3 再切参数（≈16Φ/P）；
+  3. 通信量：Stage-1/2 与 DDP 同级（2S），Stage-3 因前/反向 all-gather 升至约 3S；
+  4. 结论：切分把容量问题转化为 collective 调度问题。
+- 加分项：指出 FSDP 即 ZeRO-3 的系统化实现；FSDP2 进一步做 per-parameter sharding。
+- 踩坑：把 ZeRO-3 说成"通信量不变"；忽略 Stage-3 前向 all-gather 参数缓冲的峰值显存。
 
-**Q7：compute/communication overlap 为什么不一定免费？**
+**题目 2：DDP 的 all-reduce 通信量为什么是 2S？**
+- 考点：ring all-reduce 的两阶段分解。
+- 答题框架：
+  1. all-reduce = reduce-scatter + all-gather；
+  2. ring 两阶段各 p−1 步、每步 S/p，每 rank 发送量 2(p−1)/p·S ≈ 2S；
+  3. 大消息 bandwidth-bound，小消息被 2(p−1)α 主导——所以要 bucket；
+  4. 区分"每 rank 发送量"与全网链路流量两个口径。
+- 加分项：写出 T_ring ≈ 2(p−1)α + 2(p−1)/p·S/β；说明 bus bandwidth 归一化乘 2(p−1)/p。
+- 踩坑：把 2S 说成"每张卡收 2S"；忽略 S 是梯度 bytes（bf16 下即 2Φ）。
 
-- NCCL kernel 占用 SM、copy engine、HBM bandwidth 与 network injection。
-- 若 backward 本身 memory-bound，通信会争抢 HBM 拖慢 compute，overlap 后 compute kernel 变慢。
-- 应分别测 backward-only、communication-only、overlap timeline，判断是否真省时间。
+**题目 3：bucket 与 compute/communication overlap 为什么有效？**
+- 考点：§5 bucketed overlap、autograd 反向就绪顺序。
+- 答题框架：
+  1. naive 逐参数同步被 latency 主导（2(p−1)α × 参数个数）；
+  2. flat 单次 collective 消除 latency 但必须等全部梯度 ready，无法与 backward 重叠；
+  3. bucket 折中：某桶梯度全部 ready 即在独立 stream 发起异步 all-reduce，与更早层 backward 重叠；
+  4. 桶太小 → launch/latency 主导；太大 → ready 太晚、重叠减少、峰值显存上升。
+- 加分项：生产框架按首轮 ready order rebuild buckets；NCCL kernel 与 compute 争 SM/HBM，overlap 非免费（§5.2）。
+- 踩坑：认为 `async_op=True` 就自动 overlap——buffer 生命周期与顺序一致才是前提。
 
-**Q8：梯度裁剪为什么必须在 all-reduce 之后？**
+**题目 4：FSDP2 相比 FSDP 改进了什么？**
+- 考点：框架演进、per-parameter sharding。
+- 答题框架：
+  1. FSDP（类 ZeRO-3）用 flat parameter 块分片，需 flatten/reshard，与 `torch.compile` 等组合受限；
+  2. FSDP2（torch 2.4）改为 per-parameter sharding + 参数重分片（动态调整分片粒度）；
+  3. 好处：无需重写模块结构、组合性更好、易用性大幅提升。
+- 加分项：对照 torchtitan（PyTorch 原生 4D 并行，未正式集成进 PyTorch）说明官方路线。
+- 踩坑：把 FSDP2 说成新算法——它是同一 ZeRO-3 语义的实现重构。
 
-- 全局 clip 阈值依赖完整梯度的 norm；各 rank 本地裁剪再规约会改变数学语义（相当于不同的正则强度）。
-- 正确顺序：all-reduce 得到全局梯度 → 算全局 norm → clip → optimizer step。
+**题目 5：梯度裁剪为什么必须在 all-reduce 之后？accumulation 时怎么处理？**
+- 考点：全局语义、`no_sync`。
+- 答题框架：
+  1. clip 依赖全局梯度范数，本地裁剪再归约会改变数学语义；
+  2. accumulation 前 A−1 个 microbatch 用 `no_sync()` 跳过同步；
+  3. loss 除 A，clip 与 optimizer step 只在最后一次 backward 后执行一次；
+  4. 遗漏最后同步会让 ranks 分叉，错误可能数步后才显现。
+- 加分项：不同 local batch 应按 ΣB_r 加权而非简单除 world size（§4.1）。
+- 踩坑：把 no_sync 说成"异步训练"——它只是延迟同步，语义仍是全局 batch。
 
-**Q9：ring 与 tree all-reduce 怎么选？**
+**题目 6：如何设计一次可信的 NCCL all-reduce benchmark？**
+- 考点：§8 benchmark 规范、效度意识。
+- 答题框架：
+  1. 用 nccl-tests（如 `all_reduce_perf -b 512M -e 4G -f 2 -g 8`）扫消息大小；
+  2. warmup、event 划界、汇总最慢 rank p50/p95 而非只看 rank 0；
+  3. 记录拓扑、NCCL 算法/协议、dtype、CUDA/driver 版本；
+  4. 报 algorithm bandwidth 与 bus bandwidth 两种口径并写清公式。
+- 加分项：比较 ring vs tree 的小/大消息 regime；指出 Gloo/CPU 结果不能外推 NCCL/GPU。
+- 踩坑：只报 rank 0 平均时间；把 barrier 时间误算进 collective。
 
-- ring：大消息 bandwidth-optimal，每 rank 传 \(2(p-1)/p·S\)；小消息被 \(2(p-1)\alpha\) 支配。
-- tree：steps 约 \(O(\log p)\)，小消息更有优势，但每步消息和链路利用方式不同。
-- NCCL 会根据 topology、消息大小、channels 自动选 ring/tree/CollNet，不能只用 ring 公式解释所有算法。
+**题目 7：什么场景选 DeepSpeed、什么场景选 FSDP2/Megatron-LM？**
+- 考点：框架定位（业界调研口径）。
+- 答题框架：
+  1. 显存极限/单卡训超大模型 → DeepSpeed ZeRO-Offload/Infinity（CPU/NVMe 多级卸载，以时间换空间）；
+  2. PyTorch 生态内常规大模型训练 → FSDP2（per-parameter sharding、易用性大幅提升）；
+  3. 超大规模预训练追求极致吞吐 → Megatron-LM 3D 并行（TP+PP+DP+SP）；
+  4. 顶层可用 Accelerate 做抽象、LLaMA-Factory/MS-SWIFT 做微调封装。
+- 加分项：指出 torchtitan 是 PyTorch 原生 4D 并行参考实现（未正式集成进 PyTorch）。
+- 踩坑：无脑选"最新框架"而不做容量估算——应先算 16Φ/P 再选阶段。
 
-**Q10：strong 与 weak scaling 的区别？**
+## 系统设计题
 
-- **strong**：global batch 固定，设备增加 → 每 rank compute 下降、通信不变，最受 Amdahl 串行项限制。
-- **weak**：每 rank local workload 固定，global batch 随 \(p\) 增大 → 系统效率更高，但 optimization problem 改变。
-- 报告要区分二者，并给 time-to-quality；不能把 LR scaling 等 optimization intervention 的收益记作 systems scaling。
+**设计题 1：为 70B/150B 模型在 64 卡集群（8 节点 × 8 卡，NVLink + IB）设计 ZeRO/FSDP 配置（含 offload 决策）**
 
-**Q11：`no_sync` 的作用？**
+- 需求澄清：预训练还是微调？序列长度与 global batch 目标？显存优先还是吞吐优先？
+- 规模估算（混合精度，每参数训练状态 16B：fp32 master 4B + m/v 各 4B = 12B，加 bf16 参数+梯度 2+2B）：
+  - 70B：总状态 70G×16B = 1120 GB，DDP 复制完全不可行；ZeRO-3 @P=64 → 16Φ/P ≈ 17.5 GB/rank 状态；
+  - 150B：16Φ/P ≈ 37.5 GB/rank 状态，加激活与 all-gather 缓冲后逼近单卡 HBM 上限。
+- 架构：
+  - 70B：FSDP2/ZeRO-3，P=64，bf16 混合精度，选择性激活检查点（显存降 30%–70%），offload 关闭；
+  - 150B：方案 A = ZeRO-3 + CPU offload（以时间换空间）；方案 B = 引入 TP/SP
+    （Megatron-LM 3D，长序列激活显存降约 5×）；带宽充足时优先 B。
+- Trade-off 表：
 
-- gradient accumulation 的前 \(A-1\) 个 microbatch 若每次都 all-reduce，产生无意义通信。
-- `no_sync()` 只在最后一次 backward 同步；loss 仍要除 \(A\)，clip/step 只做一次。
-- 遗漏最后一次同步会让 ranks 从此分叉，错误可能数步后才显现。
+| 方案 | 状态显存/卡 | 通信量 | 风险 |
+|---|---|---|---|
+| ZeRO-3（70B） | ≈17.5 GB + 激活 | 3S ≈ 1.5× DDP | 激活峰值 OOM |
+| ZeRO-3 + offload（150B） | 更低 | 3S + PCIe 搬运 | step 时间显著上升 |
+| TP+PP+DP（150B） | TP 内再分片 | TP 通信多但留在 NVLink 域 | 工程复杂度高 |
 
-**Q12：怎么诊断 DDP hang？**
+- 评测方案：tokens/s、扩展效率 E_p、exposed communication 占比（Nsight + NCCL
+  timeline）、peak memory、最慢 rank p50/p95（§9 规范）、time-to-loss。
+- 追问预案：IB 带宽减半 → 降 DP 增 accumulation 或梯度压缩（1-bit Adam 约 5×，
+  需验证收敛）；CPU offload 成瓶颈 → 只卸载优化器状态、或改 NVMe offload
+  （ZeRO-Infinity 思路）；H100 平台可评估 FP8（配合 DeepSpeed 显存省约 42%）。
 
-- 给每个 collective 编号、rank-local log 记录 enter/exit；检查各 rank tensor shape/dtype/device/sequence 是否一致。
-- 常见根因是「较早的真正异常（如某 rank OOM）+ 其他 rank 后续 hang」，只看 hang rank 会误诊。
-- 设 process-group timeout、NCCL debug，最小化到两 rank / 单 collective。
+**设计题 2：为多租户训练平台选型并行框架**
 
-### 13.3 手撕要点（通信量核算）
+- 需求澄清：租户模型规模分布（7B–150B+）？任务类型（SFT/LoRA/全参预训练）？
+  硬件是否异构？平台运维团队规模？
+- 规模估算：7B 全参状态 7G×16B = 112 GB（DDP @8 卡每卡 14 GB 可行）；
+  70B 需 ZeRO-2/3；150B+ 需 ZeRO-3 + offload 或 3D 并行。
+- 架构（分层）：
+  1. 后端层：可插拔 PyTorch DDP/FSDP2、DeepSpeed、Megatron-LM；
+  2. 抽象层：Accelerate 式分布式抽象，用户声明模型规模与资源，平台映射到并行策略与 ZeRO 阶段；
+  3. 应用层：LLaMA-Factory/MS-SWIFT 式微调封装，屏蔽配置细节。
+- Trade-off 表：
 
-面试让「算 all-reduce 通信量 / 比较 ZeRO 显存」时，按 16P 账本逐项写：
+| 场景 | 推荐 | 理由 |
+|---|---|---|
+| 单机多卡微调 7B–13B | DDP/LoRA | 状态复制可承受，运维最简单 |
+| 全参微调 30B–70B | FSDP2（类 ZeRO-3） | per-parameter sharding、易用性大幅提升 |
+| 显存极限/单卡大模型 | DeepSpeed ZeRO-Offload/Infinity | CPU/NVMe 多级卸载，单卡可训千亿参数，以时间换空间 |
+| 千亿级预训练 | Megatron-LM 3D / torchtitan 参考实现 | TP+PP+DP+SP 组合 |
 
-```text
-设 P = 参数元素数，梯度 S = 4P bytes（fp32）
+- 评测方案：租户隔离性（显存配额、NCCL 通信争抢）、多任务并发吞吐、
+  fabric 巡检（nccl-tests 定期 `all_reduce_perf` 基线，检测 ring vs tree
+  带宽退化）、框架升级回归（梯度与单进程 reference 对比）。
+- 追问预案：租户要求可复现 → 固定 seed/NCCL 算法与版本；FSDP2 需 torch 2.4+ →
+  容器镜像锁定版本；故障恢复 → sharded checkpoint + world-size 迁移策略（§6.3）。
 
-DDP：
-  显存 = 16P（参数 4 + 梯度 4 + m 4 + v 4）
-  通信 = 2S（all-reduce，ring 每 rank 实际传 2(p-1)/p·S）
+## 代码实现题
 
-ZeRO-1（切 optimizer state）：
-  显存 = 8P + 8P/p（m/v 分片，参数+梯度仍全量）
-  通信 ≈ 2S
+**实现题 1：ZeRO 分片显存计算器**
 
-ZeRO-2（+ 切梯度）：
-  显存 = 4P + 12P/p
-  通信 ≈ 2S
+- 题目：给定参数量 Φ、DP 卡数 P（bf16 混合精度），输出 ZeRO 三阶段每 rank 显存估算。
+- 考察点：16B/参数账本、DeepSpeed 口径公式（12Φ/P+4Φ / 14Φ/P+2Φ / 16Φ/P）。
+- 骨架：
 
-ZeRO-3（+ 切参数）：
-  显存 = 16P/p
-  通信 ≈ 3S（fwd/bwd 各 all-gather 参数 + 梯度 reduce-scatter）
+```python
+def zero_stage_memory_bytes(phi: int, P: int) -> dict:
+    """DeepSpeed 口径 ZeRO 三阶段每 rank 显存（bytes，bf16 混合精度）。
+
+    phi: 参数元素数 Φ；P: DP 卡数。
+    账本：fp32 master 4B + m/v 各 4B = 12B 优化器状态；bf16 参数+梯度 2+2B。
+    """
+    OPT = 12 * phi
+    GRAD = 2 * phi
+    PARAM = 2 * phi
+    return {
+        "stage1": OPT / P + GRAD + PARAM,        # ≈ 12Φ/P + 4Φ
+        "stage2": (OPT + GRAD) / P + PARAM,      # ≈ 14Φ/P + 2Φ
+        "stage3": (OPT + GRAD + PARAM) / P,      # ≈ 16Φ/P
+        "ddp": OPT + GRAD + PARAM,               # 复制基线 16Φ
+    }
 ```
 
-**三个必踩坑**
+- 验收标准：P=1 时四项相等（≈16Φ）；各阶段随 P 单调下降；
+  Φ=70e9、P=64 时 stage3 ≈ 17.5 GB；预留激活显存参数的扩展接口。
 
-1. **别把「每 rank 发送量」当「总链路流量」**：ring 的 \(2(p-1)/p·S\) 是单 rank，总线带宽还要另算归一化。
-2. **SUM 要除 \(p\)**：all-reduce 只做 SUM，除 world size 由 loss/gradient 语义负责。
-3. **强扩展下通信不随 compute 下降**：local batch 变小，梯度 S 不变，通信占比反而上升。
+**实现题 2：带 bucket 与异步 all-reduce 的伪 DDP 训练步**
 
-### 13.4 高频追问与陷阱
+- 题目：实现按反向就绪顺序组桶、桶内梯度齐后立刻异步 all-reduce 的 DDP 训练步。
+- 考察点：§5 bucketed overlap、§6 hook 生命周期、buffer 所有权与 wait 边界。
+- 骨架：
 
-| 追问 | 正确方向 |
-| --- | --- |
-| 为什么梯度用 all-reduce 不用 reduce？ | 每个 rank 都要全局梯度做 optimizer step |
-| tied weight 怎么处理？ | 按对象 identity 去重，否则同一 storage 注册两次 hook |
-| 小消息为什么 all-reduce 慢？ | \(2(p-1)\alpha\) 主导，应 bucketize 而非逐参数 |
-| overlap 一定更快吗？ | 否，NCCL 与 compute 争 HBM/SM，memory-bound 时可能更慢 |
-| BatchNorm 在 DDP 下等价吗？ | 否，local statistics ≠ global；用 SyncBatchNorm 或改 RMSNorm |
-| 多节点为什么骤降？ | 跨节点带宽/拓扑，需分级归约与拓扑感知分桶 |
+```python
+import torch
+import torch.distributed as dist
 
-## 14. 小结
+class BucketedDDP:
+    """桶内梯度齐后立即异步 all-reduce，与更早层 backward 重叠。"""
+
+    def __init__(self, model, bucket_cap_bytes=int(25e6)):
+        self.world = dist.get_world_size()
+        self.params = [p for p in model.parameters() if p.requires_grad]
+        self.buckets = self._build_buckets(self.params, bucket_cap_bytes)
+        self.param_to_bucket = {id(p): b for b in self.buckets for p in b}
+        self.inflight = set()      # 已发起规约的桶 id
+        self.pending = []          # [(work, flat, bucket)]，持有 buffer 生命周期
+        for p in self.params:
+            p.register_post_accumulate_grad_hook(self._make_hook(p))
+
+    def _build_buckets(self, params, cap):
+        buckets, cur, cur_bytes = [], [], 0
+        for p in reversed(params):                 # 近似反向就绪顺序
+            nbytes = p.numel() * p.element_size()
+            if cur and cur_bytes + nbytes > cap:
+                buckets.append(cur)
+                cur, cur_bytes = [], 0
+            cur.append(p)
+            cur_bytes += nbytes
+        if cur:
+            buckets.append(cur)
+        return buckets
+
+    def _make_hook(self, param):
+        def hook(_unused):
+            bucket = self.param_to_bucket[id(param)]
+            if id(bucket) in self.inflight:
+                return
+            if any(p.grad is None for p in bucket):  # 桶未齐，等后续 hook
+                return
+            self.inflight.add(id(bucket))
+            flat = torch._utils.flatten_dense_tensors(
+                [p.grad / self.world for p in bucket])  # 先除 world size
+            work = dist.all_reduce(flat, op=dist.ReduceOp.SUM, async_op=True)
+            self.pending.append((work, flat, bucket))
+        return hook
+
+    def finish_step(self):
+        """optimizer step 前调用：等待全部 handle 并写回均值梯度。"""
+        for work, flat, bucket in self.pending:
+            work.wait()                              # wait 之后 flat 才可读
+            shards = torch._utils.unflatten_dense_tensors(
+                flat, [p.grad for p in bucket])
+            for p, g in zip(bucket, shards):
+                p.grad = g
+        self.pending.clear()
+        self.inflight.clear()
+```
+
+- 验收标准：与单进程 global-batch reference 梯度 allclose；profiler 中 NCCL
+  kernel 与 backward kernel 时间重叠（§5.2）；人为打乱某 rank 桶顺序 → hang，
+  验证顺序一致性要求（§6.2）；去掉 `/self.world` 且用 SUM → 梯度放大 P 倍（§4）。
+
+**实现题 3：ring all-reduce α-β 计算器并用 nccl-tests 校验**
+
+- 题目：实现 ring all-reduce 的通信量/时间估算，并输出两种带宽口径。
+- 考察点：ring 两阶段推导、latency/bandwidth 两个 regime、algorithm vs bus bandwidth。
+- 骨架：
+
+```python
+def ring_allreduce(S_bytes: float, p: int,
+                   alpha_s: float = 1e-6, beta_Bps: float = 2e11):
+    """α-β 模型：返回 (每 rank 发送量, 时间, algbw, busbw)。
+
+    alpha_s: 单步时延（NVLink/IB 量级 ~1µs）；beta_Bps: 有效带宽 bytes/s。
+    """
+    per_rank = 2 * (p - 1) / p * S_bytes             # V_rank = 2(p-1)/p·S
+    t = 2 * (p - 1) * alpha_s + per_rank / beta_Bps  # T_ring
+    algbw = S_bytes / t
+    busbw = algbw * 2 * (p - 1) / p                  # bus bandwidth 归一化
+    return per_rank, t, algbw, busbw
+```
+
+- 验收标准：p=2 时 V_rank = S；小消息时间由 2(p−1)α 主导、大消息由带宽项主导；
+  与 nccl-tests `all_reduce_perf -b 512M -e 4G -f 2 -g 8` 实测对比，并注明
+  线性模型忽略 congestion/协议切换的偏差边界（§3 局限）。
+
+## 13. 小结
 
 DDP 的本质是复制模型、切分数据、平均 gradient。collective 的总 bytes 只是第一层分析；真正性能取决于消息粒度、\(\alpha/\beta\)、拓扑和能否与 backward 重叠。异步 API 只有在 buffer 生命周期、collective 顺序和等待边界正确时才既安全又有效。当复制本身成为容量瓶颈时，ZeRO 表明“数据并行”与“状态切分”可以在同一 collective 框架内统一——这正是 Lecture 08 多维并行的入口。
 
@@ -717,5 +919,9 @@ Little.” *ICLR*, 2019. https://arxiv.org/abs/1805.09767
 - [PyTorch DistributedDataParallel](https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html)
 - [PyTorch distributed collectives](https://pytorch.org/docs/stable/distributed.html)
 - [NCCL tests performance notes](https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md)
-- [A2 Systems 官方题面](../assignments/assignment2-systems/cs336_assignment2_systems.pdf)
-- 本仓库：[A2 DDP/FSDP 报告](../assignments/assignment2-systems/report/main.pdf)
+- [A2 Systems 官方题面](../assignments/spring2026/assignment2-systems/cs336_assignment2_systems.pdf)
+- 本仓库：[A2 DDP/FSDP 报告](../assignments/spring2026/assignment2-systems/report/writeup.pdf)
+- [Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/abs/1909.08053)（访问日期 2026-10-04）
+- [PyTorch FSDP: Experiences on Scaling Fully Sharded Data Parallel](https://arxiv.org/abs/2304.11277)（访问日期 2026-10-04）
+- [microsoft/DeepSpeed](https://github.com/microsoft/DeepSpeed)（访问日期 2026-10-04）
+- [NVIDIA/nccl-tests](https://github.com/NVIDIA/nccl-tests)（访问日期 2026-10-04）

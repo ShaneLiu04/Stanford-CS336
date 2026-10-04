@@ -17,7 +17,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、评估平台工程师、LLM Evaluation 研究者
 
 ## 摘要
@@ -550,29 +550,33 @@ prompt、decoding 和 tool environment。否则"复现"可能读到错误协议�
 - **benchmark 饱和等于问题解决：** 可能是污染、格式 exploit 或难度不足。
 - **agent 分数是 LM 分数：** scaffold、工具、预算和重试同样贡献。
 - **只报平均值：** 隐藏 uncertainty、类别权重与严重失败。
+- **两家报告的榜单分数默认可比：** 2023 年底 Gemini 报 MMLU 用 CoT@32，
+  GPT-4 用 few-shot——协议错位即可制造“超越”。
+- **代码基准的测试用例足够强：** HumanEval+ 把用例扩约 80× 即检测到
+  更多未发现错误——弱测试系统性高估代码能力。
 
 ## 11. 讨论：效度威胁、伦理与决策边界
 
-### 11.1 Construct validity
+### Construct validity
 
 分数测的是"模型+协议+grader"的复合体。contamination、格式 exploit、
 judge 偏好都会让指标与构念脱钩；calibration、robustness 等辅助指标
 （HELM [[4]](#ref-4)）能提供构念三角验证。
 
-### 11.2 Internal validity
+### Internal validity
 
 协议微扰（shot 数、template、decoding）、checkpoint cherry-picking、
 parse failure 的静默丢弃都是研究者自由度；预注册与开发/最终集分离是
 标准防线。judge 的 non-determinism 未报告时，复现实验可能无法区分
 真实差异与噪声。
 
-### 11.3 External validity
+### External validity
 
 benchmark 分数到部署表现的迁移依赖用户分布、工具环境与失败代价的
 相似性。对高风险决策（医疗、法律、安全关键），应要求领域内私有评估
 与专家 rubric，而非外推通用榜单。
 
-### 11.4 伦理与激励
+### 伦理与激励
 
 leaderboard 会扭曲研究激励：为 0.5 分差异投入巨额算力、针对性清洗
 训练数据、隐藏失败切片。评估报告应公开不确定性、负结果与失败案例
@@ -609,122 +613,326 @@ leaderboard 会扭曲研究激励：为 0.5 分差异投入巨额算力、针对
 | agent 分数涨但成本翻倍 | 无成本控制 | accuracy–cost Pareto [[19]](#ref-19) |
 | "复现"结果与记录不符 | cache key 不完整 | key 加入协议全字段 |
 
-## 12. 面试备考（Interview Prep）
+## 面试要点速记
 
-> LLM 评估是面试的「统计+方法论」高频题：面试官常从「pass@k 无偏估计」切入，追到
-> 「MC 三种 adaptation 为什么排名会变」「LLM judge 三大偏差」「contamination 怎么检测」
-> 「为什么分数必须带区间」。核心是把评估当**测量设计**，牢记「一个分数是
-> (model, data, protocol, grader) 四元组的函数」。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 12.1 一页速览卡（面试前 1 分钟）
+1. **Q：pass@k 的无偏估计？** 要点：\(1-\binom{n-c}{k}/\binom{n}{k}\)（不重复
+   采样版本）；朴素 c/n 在小 c 时高估。
+2. **Q：multiple-choice 的三种 adaptation？** 要点：完整序列 LM scoring、
+   按选择长度归一化、逐字符补全打分；adapter 选择本身会改变模型排名。
+3. **Q：LLM judge 的三大偏差与对策？** 要点：position（双向取平均）、
+   verbosity（长度控制/回归校正）、self-preference（隐藏身份 + 人工校准）。
+4. **Q：contamination 怎么分层检测？** 要点：数据侧 n-gram/MinHash 匹配 →
+   模型侧 exchangeability/选项扰动 → time-travel（只用基准发布前数据训练
+   对照组）。
+5. **Q：为什么分数必须带区间？** 要点：seed 与采样噪声下，单点分数不可比；
+   Wilson/bootstrap 区间 + 多重比较校正是报告底线。
+6. **Q：两个模型的榜单分数能直接比吗？** 要点：分数是四元组函数——核对
+   data 版本、protocol（CoT@32 vs few-shot，参照 Gemini/GPT-4 的 MMLU
+   争议）、grader；必要时用第三方（HELM/OpenCompass）同协议结果交叉验证。
+7. **Q：什么时候用人工评测/Arena？** 要点：开放式生成、ecological
+   validity 优先、静态集饱和或污染时；人类双盲 → Elo/BT；成本高则
+   LLM-judge 初筛 + 盲测子集校准，按领域切片报告。
+8. **Q：如何为公司搭建评测体系？** 要点：L0 通用基准选型（MMLU 系、
+   GSM8K/MATH、LiveCodeBench、MMMU）→ L1/L2 场景化自定义指标（精准率/
+   召回率/编辑距离相似度）→ 私有题库防污染 + 与第三方对标。
+9. **Q：HumanEval 高分但线上代码能力差，为什么？** 要点：grader 太弱
+   （HumanEval+ 扩测约 80× 即暴露大量隐藏错误）、题目老旧易污染、
+   函数级补全 ≠ 仓库级任务。
 
-**核心主张**：评估是把抽象能力目标转成可审计测量的工程+统计过程；一个分数只在四元组
-\((\text{model},\text{data},\text{protocol},\text{grader})\) 固定时才有定义，先问「怎么测」再谈「多少分」。
+**必背数字**
 
-**必背数字与公式**
+- pass@k 公式；一个分数是 (model, data, protocol, grader) 四元组的函数——
+  面试中先问“怎么测”再谈“多少分”。
 
-- pass@k 无偏估计 \(\widehat{\text{pass@k}}=1-\binom{n-c}{k}/\binom{n}{k}\)。
-- PPL \(=e^{\bar\ell}\)，跨 tokenizer 须换 \(\text{bpb}=\frac{\bar\ell}{\ln2}\cdot\frac{T}{B_{\text{bytes}}}\)。
-- 二元标准误 \(\operatorname{SE}(\hat p)=\sqrt{\hat p(1-\hat p)/n}\)，小样本用 Wilson。
-- 校准误差 \(\operatorname{ECE}=\sum_b\frac{n_b}{n}|\operatorname{acc}(b)-\operatorname{conf}(b)|\)。
+**工业界参照**
 
-**三句话答高频**
+- MMLU：57 学科多选、总计 15,908 题（test ≈14,079）；衍生 MMLU-Pro
+  （约 12,000 题、10 选项、更难去噪）与 MMLU-Redux（5,700 题手工重标注，
+  NAACL 2025）。
+- GPQA Diamond：主集 448 题；领域专家（博士）正确率约 65%，跨学科非专家
+  约 34%——“Google-proof”设计。
+- HumanEval+：测试用例扩约 80× 后 pass rate 大幅下降——弱测试高估代码能力。
+- SuperGPQA：25,957 题、285 个研究生级学科——frontier 综合极限评测量级。
+- VSI-Bench：SOTA MLLM 空间推理最好仅 48.8%（Gemini-1.5 Pro）。
+- 可比性案例：Gemini CoT@32 vs GPT-4 few-shot（MMLU）——协议不对齐，
+  分数不可直接比。
 
-1. 一个分数是四元组函数——protocol/grader 一变，测的就是另一个量。
-2. LLM judge 三大偏差：position（双向取平均）、verbosity（长度回归）、self-preference（隐藏身份+人工校准）。
-3. contamination 分层检测：数据侧 n-gram/MinHash → 模型侧 exchangeability/选项扰动 → time-travel。
+## 行业现状与最新进展（2024–2026）
 
-### 12.2 高频面试题与答题框架
+### benchmark 谱系与演化：扩量、加难、去噪、防污染
 
-**Q1：pass@k 的无偏估计是什么？为什么？**
+| 基准 | 规模与形式 | 定位与要点 |
+|---|---|---|
+| MMLU | 57 学科多选，总计 15,908 题（test ≈14,079） | 最常用通识基准；接近饱和、污染面大 |
+| MMLU-Pro | 约 12,000 题，10 选项 | 更难、去噪，压缩猜测侥幸空间 |
+| MMLU-Redux | 5,700 题手工重标注 | 纠错去污染的“干净版 MMLU”（NAACL 2025） |
+| GPQA（Diamond） | 主集 448 题，博士级理工多选 | “Google-proof”：领域专家约 65%，跨学科非专家约 34% |
+| SuperGPQA | 25,957 题、285 个研究生级学科 | frontier 综合极限评测 |
+| HumanEval → HumanEval+ | 测试用例扩约 80× | 弱测试高估代码能力：扩测后 pass rate 大幅下降 |
+| HumanEval → LiveCodeBench | 按时间窗收集新题 | 时间切分防污染，DeepSeek-V3 等采用 |
 
-- 单次通过率 \(p\) 时，\(\text{pass@k}=1-(1-p)^k\)；但实现是每题采样 \(n\) 次、\(c\) 次通过。
-- Codex 无偏估计 \(\widehat{\text{pass@k}}=1-\binom{n-c}{k}/\binom{n}{k}\)：从 \(n\) 个样本不放回抽 \(k\) 个，全未命中概率是超几何比值，对 \(c\sim\mathrm{Binomial}(n,p)\) 取期望由 Vandermonde 恒等式得 \((1-p)^k\)。
-- 朴素 `c/n` 在小 \(c\) 时高估；应在 log 空间算组合数避免溢出；pass@k 随 \(k\) 递增，与 pass@1（单次质量）可背离。
+模型发布的“选测矩阵”（行业洞察整理）：MMLU 几乎必选（衍生
+MMLU-Pro/Redux/Multilingual-MMLU）；数学 GSM8K/MATH 必选；代码
+HumanEval → LiveCodeBench；多模态 MMMU 必选 + 各家百花齐放。
 
-**Q2：multiple-choice 的三种 adaptation？为什么排名会变？**
+### 数据污染与评测可比性
 
-- ① 生成式（生成选项字母/文本再解析）；② choice log-prob（每个选项条件似然取 argmax）；③ 排序式（比较选项相对似然）。
-- 三种 protocol 测的不是同一量，且模型对选项顺序高度敏感——换 protocol 或顺序排名会变。
-- 因此 protocol 必须预注册，不能事后挑对自己有利的作答方式。
+- **可比性案例**：2023 年底 Gemini 在 MMLU 上得分高于 GPT-4，但技术报告
+  显示其采用 CoT@32（思维链 + 32 次尝试取最好），而 GPT-4 报的是
+  few-shot——协议不同引发公正性质疑；同一测试集在论文中的结果也常因
+  prompt/metric 不同难以直接比较。
+- **行业对策**：污染检测工具、消融实验、有公信力第三方——HELM、
+  OpenCompass；信通院“方升”体系（2023-12 发布）以测试指标/方法/数据集/
+  工具四要素、32 个二级维度标准化评测。
+- Open LLM Leaderboard 聚合 ARC/HellaSwag/MMLU/TruthfulQA/WinoGrande/
+  GSM8K 六项，是开源模型选型的公开参照；静态集同样面临饱和与污染。
 
-**Q3：LLM-as-a-judge 的三大偏差与对策？**
+### 人类偏好与自动化评测
 
-- **position bias**：偏好先/后出现的答案 → 双向评估取平均、报告 swap 翻转率。
-- **length/verbosity bias**：更长被误判更好 → 长度回归控制（AlpacaEval-LC）、长度匹配对照。
-- **self-preference**：偏爱与自身同家族/同措辞的输出 → 隐藏模型身份、人工盲测校准。
-- 另有 style bias、sycophancy、reference leakage、non-determinism，需多 judge ensemble + 人工 adjudication。
+- **LMSYS Chatbot Arena**：用户双盲对比 → Elo/BT 排名，成为人类偏好
+  事实标准；但用户分布不受控，生态效度与内部效度互斥。
+- **LLM-as-judge**：single-answer/pairwise 协议 + 裁判模型普及化；
+  position/verbosity/self-preference 偏差审计成为发布标配环节。
+- **空间智能案例 VSI-Bench（李飞飞/谢赛宁）**：SOTA MLLM 空间推理不足，
+  最好的 Gemini-1.5 Pro 仅 48.8%——训练数据需补空间知识；说明新能力
+  维度会持续催生新基准。
 
-**Q4：contamination 怎么分层检测？**
+**对本讲学习者的启示**：本讲的四元组框架正是解读上述行业争议的工具——
+Gemini 案例是 protocol 环错位，HumanEval+ 是 grader 环太弱，
+LiveBench/LiveCodeBench 是 data 环的时间控制，Arena 是 data 分布真实但
+不受控。面试中用测量链逐环归因，比罗列榜单更能体现功底。
 
-- **数据侧**：exact hash、n-gram（GPT-3 用 13-gram）、MinHash/LSH、embedding 检索——给覆盖率，但召回受 paraphrase/翻译限制。
-- **模型侧**：verbatim completion、exchangeability 检验（基准顺序似然显著高于随机打乱）、选项顺序扰动、time-travel 探针（补全「数据集发布后才有」的信息）。
-- **对照构造**：同分布新题（GSM1k vs GSM8K）、按时间切分（LiveBench）。注意「没发现 overlap ≠ 没有污染」。
+## 大厂面试真题与答题框架
 
-**Q5：为什么分数必须带区间？paired comparison 为什么更有功效？**
+以下为高频面试题（公开面经风格），非任何公司真题。
 
-- seed/采样噪声下单点分数不可比；用 Wilson/bootstrap 区间 + 多重比较校正。
-- paired 设计（两模型在同一批题上）消除题目难度共同方差：McNemar 检验只用答案不同的题目，paired bootstrap 对每题差值重采样。
-- 「A 的 CI 与 B 的 CI 相交」≠「无法区分 A 与 B」；错误选重采样单位（如把同 prompt 的重复判断当独立）是区间过窄的最常见原因。
+**题目 1：如何检测训练数据对评测集的污染？**
+- 考点：contamination 分类学、数据侧/模型侧检测、证据边界。
+- 答题框架：
+  1. 先分类：exact 泄漏 / paraphrase 与题解讨论 / 选择闭环（用 test 分数选 checkpoint、prompt）；
+  2. 数据侧：normalized 13-gram 重叠（GPT-3 先例）、MinHash/LSH、embedding 检索，输出覆盖率报告；
+  3. 模型侧：verbatim completion、exchangeability 检验（顺序似然差）、选项扰动、time-travel 探针；
+  4. 对照构造：同分布新题（GSM1k 思路）或时间切分（LiveBench），比较新旧题分差；
+  5. 声明召回边界：“未检出 ≠ 未污染”。
+- 加分项：提到仅经发布渠道（arXiv 摘要等）即可检测到基准泄漏；建议同时报告去污染前后两套分数。
+- 踩坑：只跑 exact-match 就下结论；把模型侧信号当成训练数据来源的“证明”。
 
-**Q6：perplexity 为什么不能跨 tokenizer 直接比？**
+**题目 2：两个模型 benchmark 分数不可比，怎么办？**
+- 考点：分数是 (model, data, protocol, grader) 四元组的函数。
+- 答题框架：
+  1. 核对 data：同版本、同 split、同采样；
+  2. 核对 protocol：shots、prompt、decoding、采样预算——举 2023 年底 Gemini CoT@32 vs GPT-4 few-shot 的 MMLU 案例说明协议错位制造虚高；
+  3. 核对 grader：解析规则、judge 模型及版本；
+  4. 无法重测时，用第三方（HELM/OpenCompass）同协议结果交叉验证；
+  5. 给出带区间的配对结论（McNemar/paired bootstrap），而非只比点分。
+- 加分项：主动指出同一测试集在不同论文中因 prompt/metric 不同也难以直接比较。
+- 踩坑：直接拿两家技术报告的数字相减；忽视采样次数与预算差异。
 
-- \(\operatorname{PPL}=e^{\bar\ell}\)，单位是 token；不同 tokenizer 的 token 数不同，per-token PPL 标尺不同。
-- 换 bpb（每字节比特数）才可比；对 prompt-response 任务只在 response mask 上算 conditional PPL，避免 prompt 长度支配指标。
+**题目 3：什么情况下用人工评测/Arena，而不是静态 benchmark？**
+- 考点：ecological validity、开放式生成、偏好分布。
+- 答题框架：
+  1. 判据：答案开放、评价维度多（风格/安全/有用性）、静态集饱和或污染严重；
+  2. 人类双盲对比 → Elo/BT 排名，覆盖真实用户分布；
+  3. 成本高 → LLM-judge 初筛 + 人工盲测子集校准（judge–human 一致率、swap 翻转率）；
+  4. 按领域切片报告；Arena 总排名不保证每个领域可靠。
+- 加分项：Arena 用带 tie margin 与风格控制的 BT 变体而非朴素 Elo；统计单位按 prompt cluster 聚类。
+- 踩坑：把 Arena 排名当绝对能力刻度；把同一 prompt 的重复投票当独立样本。
 
-**Q7：Bradley–Terry 与 Elo 的区别？**
+**题目 4：为公司设计一个内部评测体系。**
+- 考点：评测维度分层、基准选型、防污染、可持续治理。
+- 答题框架：
+  1. L0 通用能力：公开基准（MMLU 系、GSM8K/MATH、LiveCodeBench、MMMU）做开源模型选型；
+  2. L1/L2 场景化：按业务定义能力（如代码检视、测试脚本生成），用精准率/召回率/编辑距离相似度等自定义指标做业务看护；
+  3. 防污染：私有题库、时间切分、定期轮换、开发/最终集分离；
+  4. 治理：预注册主指标、协议版本化、失败分析看板、与第三方（HELM/OpenCompass/信通院“方升”）对标。
+- 加分项：agent 场景报 accuracy–cost Pareto；per-example 记录可追溯。
+- 踩坑：只有 L0 榜单没有业务指标；用同一测试集反复选 checkpoint。
 
-- BT：离线 MLE，把模型参数化为潜在分数 \(s_i\)，\(P(A\succ B)=\sigma(s_A-s_B)\)；可复用传递性信息，对局集合内等价、可给 CI。
-- Elo：在线序贯更新，依赖对局顺序，tie 需特殊记分，不确定性难处理。
-- Chatbot Arena 用带 tie margin + 风格控制项的 BT 变体；朴素 Elo 对出场顺序/参赛集合/噪声更敏感。
+**题目 5：模型 HumanEval 分数很高，线上代码能力却差，怎么解释？**
+- 考点：弱测试高估、grader 强度、分布偏移。
+- 答题框架：
+  1. grader 环：HumanEval 原测试弱——HumanEval+ 把用例扩约 80× 即检测到更多未发现错误、pass rate 大幅下降；
+  2. data 环：题目老旧、污染概率高；
+  3. 分布：函数级补全 ≠ 真实仓库级任务；
+  4. 改进：LiveCodeBench 时间切分 + 仓库级任务（SWE-bench 类）+ 多 k 联合报告。
+- 加分项：点出“分数是 grader 的函数”这一通用原理。
+- 踩坑：不审计测量链，直接归因于“模型退步”。
 
-**Q8：calibration / ECE 是什么？为什么重要？**
+**题目 6：LLM-as-judge 有哪些系统性偏差？如何审计？**
+- 考点：position/verbosity/self-preference 偏差与人类校准。
+- 答题框架：
+  1. 列偏差：position、verbosity、style、self-preference、sycophancy、non-determinism；
+  2. 审计：swap 双向取平均并报翻转率；长度/风格控制（Length-Controlled AlpacaEval 思路）；隐藏模型身份；
+  3. 校准：盲测 human subset，分领域报告一致率（MT-Bench：GPT-4 judge 与人类约 85%）；
+  4. 允许 tie/abstain，保存原始 verdict 与 parse failure。
+- 加分项：从“事后报告偏差”到“估计量内消除偏差”的范式转变。
+- 踩坑：总体一致率高就断言无偏；只用单一 judge 且不固定版本。
 
-- ECE 把预测按置信度分桶，比较每桶平均置信度与实际正确率，是 reliability diagram 的数值摘要。
-- 校准对部署决策（阈值截断、selective prediction、abstain）至关重要；HELM 把它列为与 accuracy 并列的一级指标。
+**题目 7：pass@1 不变但 pass@k 上升，说明什么？**
+- 考点：覆盖 vs 单次质量；采样预算是协议的一部分。
+- 答题框架：
+  1. 定义：pass@k = 1-(1-p)^k，无偏估计用超几何比值；
+  2. 解读：多样性/覆盖提升，单次正确率未变；
+  3. 场景：多候选 + 重排/选择器管线受益；单轮对话场景未必；
+  4. 报告：多 k 联合报告，注明 n 与 temperature。
+- 加分项：实现细节——log 空间计算组合数防溢出。
+- 踩坑：把 pass@k 提升宣传为“能力提升”而不说明采样预算。
 
-**Q9：agent 评估为什么难？**
+## 系统设计题
 
-- 统计单位是 task，grader 是测试/规则（SWE-bench 用 fail-to-pass 单元测试），把分数限制在测试覆盖域内。
-- 模型、scaffold、工具、预算、重试都贡献分数，归因难；Kapoor 等指出榜单普遍忽略成本，prompt hack 可无代价抬分。
-- 应在 accuracy–cost Pareto 前沿上做成本受控比较，固定其余变量才能谈 base model 贡献。
+**设计题 1：为公司模型迭代设计自动化评测平台（“超自动化基准测试平台”方向）**
 
-**Q10：为什么「一个分数」不完整？**
+- 需求澄清：评对象是 checkpoint 还是线上系统？触发时机（每次训练完成 / nightly / 发版前）？预算与延迟约束？结果消费者是谁（研究员/产品/管理层）？
+- 规模估算：每次评测约 10–50 个 benchmark × 数千到数万题 × 每题 1–32 次采样；pairwise judge 再乘模型对数；按 token 计费估算单次全量成本，据此决定全量与抽样分层。
+- 架构：
+  1. 任务分发：benchmark registry（数据版本 + 协议配置 + grader 定义，全部 hash 固定）→ 生成评测任务 DAG；
+  2. 分布式执行：runner 集群消费任务；cache key 包含 (model, data, protocol, grader) 全字段，防止协议漂移读到旧结果；
+  3. 结果统计：per-example record 落库 → aggregator 计算 pass@k、Elo/BT、paired/cluster bootstrap；
+  4. 裁判模型：judge 服务（固定版本、双向 A/B + swap、rubric 版本化）；
+  5. 人工复核工作流：judge 与人类分歧样本、高风险切片进入标注队列，双盲 + 仲裁。
+- trade-off：
 
-- 分数是四元组函数：protocol、grader、数据、采样任一变化都在测另一个量。
-- 总分上涨可能只来自简单大类，小而高风险切片退化会被 macro/micro average 掩盖；失败分析（解析失败 vs 知识缺失 vs 推理断裂）比总分更有行动价值。
+| 决策 | 选项 A | 选项 B | 取舍 |
+|---|---|---|---|
+| 执行时机 | 每次提交全量 | 触发式 + nightly 增量 | 覆盖 vs 成本 |
+| 缓存 key | 协议全字段 | 仅 prompt | 正确性 vs 命中率 |
+| judge | 单强模型 | 多 judge ensemble | 成本 vs 偏差鲁棒 |
+| 题库 | 全公开 | 公开 + 私有轮换 | 外部可比 vs 防污染 |
 
-### 12.3 手撕要点（pass@k 与区间）
+- 评测方案：平台自身的“元评测”——用已知差异的模型对做回归测试验证统计功效；污染扫描纳入流水线；报告必须带 CI、切片与失败分析。
+- 追问预案：如何防内部题库泄漏（权限分级、轮换、canary）；新 benchmark 如何快速接入（registry schema + 适配器接口）；agent 任务如何报 accuracy–cost。
 
-面试让「推导 pass@k 无偏性」或「算区间」时，按公式写：
+**设计题 2：设计防污染的代码评测系统（LiveCodeBench 时间切分思路）**
 
-```text
-pass@k = 1 - (1-p)^k，无偏估计 = 1 - C(n-c,k)/C(n,k)
-  无偏性：E_c[C(n-c,k)/C(n,k)] = (1-p)^k   （超几何 + Vandermonde）
+- 需求澄清：评测 base model 还是带工具的 agent？支持哪些语言？是否允许执行不可信代码？
+- 规模估算：每月新增数百题；每题采样 n≈20 次执行 × 平均 10+ 测试用例；HumanEval+ 的教训是用例数量决定 grader 强度（扩约 80× 才暴露隐藏错误）。
+- 架构：
+  1. 题目采集：按时间窗收集发布日期晚于训练截止的题目，记录 provenance；
+  2. 测试增强：自动生成 + 人工审核用例，覆盖边界条件（参照 HumanEval+ 思路）；
+  3. 沙箱执行：资源限额、超时、网络隔离；输出 pass/fail + 失败日志；
+  4. 统计：pass@1/pass@k（log 空间无偏估计）+ 按 time window 切片报告；
+  5. 时间卫生：模型卡声明训练截止日期；旧窗口分数标注时效提示。
+- trade-off：
 
-二元指标区间：SE(p̂) = sqrt(p̂(1-p̂)/n)，小样本/边界用 Wilson
-配对比较：McNemar χ² = (|b-c|-1)²/(b+c)，b+c 小用精确二项
-bootstrap 单位：每题 / prompt cluster / 领域 stratified / task，别把相关样本当独立
+| 决策 | 选项 A | 选项 B | 取舍 |
+|---|---|---|---|
+| 题源 | 竞赛题（质量高） | 仓库真实 issue（生态效度） | 构念 vs 现实 |
+| 时间边界 | 严格按发布日切分 | 人工去污染 | 严格 vs 题量 |
+| 执行 | 本地容器沙箱 | 远程隔离集群 | 成本 vs 安全 |
+
+- 评测方案：用已知污染与干净模型对照验证窗口有效性；监控各窗口分数漂移作为污染预警。
+- 追问预案：网页转载破坏时间边界怎么办（provenance 审计 + 窗口轮换）；私有部署如何与公开榜单保持可比（同协议开源 runner）。
+
+**设计题 3：设计内部版 Chatbot Arena（人类偏好评测平台）**
+
+- 需求澄清：用户是内部员工还是真实用户？双盲匿名是否可行？投票量级与激励？
+- 规模估算：Elo/BT 收敛需要每模型数百到数千场对局；按模型对数 × 场次估算众包/内测成本。
+- 架构：双盲 UI → vote 日志（prompt、两个匿名响应、verdict、元数据）→ BT 离线拟合（tie margin + 风格控制项）+ bootstrap CI → 分领域/分语言切片榜单。
+- trade-off：
+
+| 决策 | 选项 A | 选项 B | 取舍 |
+|---|---|---|---|
+| 排名算法 | 朴素 Elo 在线更新 | BT 离线 MLE | 简单 vs 顺序鲁棒 |
+| 统计单位 | 每 vote 独立 | prompt cluster 聚类 | 便利 vs 统计正确 |
+| 用户 | 真实用户 | 内部专家 | 生态效度 vs 构念效度 |
+
+- 评测方案：与静态 benchmark 交叉验证排名合理性；监控新模型入场时的排名震荡（Elo 对出场顺序敏感）。
+- 追问预案：低投票量领域如何出榜（设最低场次数 + CI 重叠即并列）；如何防刷票与对抗性投票。
+
+## 代码实现题
+
+**实现题 1：n-gram 污染检测器（评测集 vs 训练语料 13-gram 重叠）**
+
+- 题目：给定评测集与训练语料，用 13-gram 重叠（GPT-3 先例）输出每道评测题的污染标记与语料级覆盖率。
+- 考察点：文本规范化、n-gram 索引、内存效率、召回边界意识。
+- Python 骨架：
+
+```python
+import re
+from collections import defaultdict
+
+N = 13
+
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+def ngrams(text: str, n: int = N):
+    toks = normalize(text).split()
+    return {" ".join(toks[i:i + n]) for i in range(len(toks) - n + 1)}
+
+def build_index(corpus_docs):
+    idx = defaultdict(list)          # ngram -> doc ids
+    for doc_id, doc in enumerate(corpus_docs):
+        for g in ngrams(doc):
+            idx[g].append(doc_id)
+    return idx
+
+def scan(eval_examples, corpus_index, threshold: int = 1):
+    flagged = []
+    for ex_id, ex in enumerate(eval_examples):
+        grams = ngrams(ex)
+        hits = sum(1 for g in grams if g in corpus_index)
+        if hits >= threshold:
+            flagged.append({"example_id": ex_id, "ngram_hits": hits,
+                            "total_ngrams": len(grams)})
+    return flagged
 ```
 
-**三个必踩坑**
+- 验收标准：注入的已知重叠样本召回 100%；对大小写/空白规范化鲁棒；结果可按 example_id 追溯；输出覆盖率报告而非仅布尔结论。
 
-1. **pass@k 别用朴素 `c/n`**：小 \(c\) 时高估；用无偏公式并在 log 空间算组合数。
-2. **PPL 别跨 tokenizer 比**：换 bpb，且只在 response mask 上算 conditional PPL。
-3. **别把同 prompt 的重复判断当独立样本**：错选重采样单位导致区间过窄。
+**实现题 2：pass@k 无偏估计**
 
-### 12.4 高频追问与陷阱
+- 题目：给定每题 n 次采样中的通过次数 c，实现无偏 pass@k 并避免溢出。
+- 考察点：超几何比值、log 空间数值稳定性、无偏性来源。
+- Python 骨架：
 
-| 追问 | 正确方向 |
-| --- | --- |
-| 测试集越大越真实吗？ | 否，样本量降低方差，不能修复构念偏差 |
-| judge 给理由就可信吗？ | 否，fluent rationale 不是判定正确性的证明 |
-| 高 human correlation 代表无偏吗？ | 否，总体相关可共存于领域偏差 |
-| fresh benchmark 不会污染吗？ | 否，公开后会迅速进入后续训练/调参闭环 |
-| benchmark 饱和等于解决吗？ | 否，可能是污染、格式 exploit 或难度不足 |
-| agent 分数是 LM 分数吗？ | 否，scaffold/工具/预算/重试同样贡献 |
+```python
+import math
+from functools import lru_cache
 
-## 13. 本讲小结
+@lru_cache(maxsize=None)
+def log_comb(n: int, k: int) -> float:
+    return math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
+
+def pass_at_k(n: int, c: int, k: int) -> float:
+    if n - c < k:          # 失败样本不足 k 个 → 任取 k 个必含通过
+        return 1.0
+    return 1.0 - math.exp(log_comb(n - c, k) - log_comb(n, k))
+
+def mean_pass_at_k(results, k: int) -> float:
+    return sum(pass_at_k(n, c, k) for n, c in results) / len(results)
+```
+
+- 验收标准：与暴力枚举 \(\binom{n}{k}\) 组合的精确值一致（小 n 对照）；c=0 时返回 0；n-c<k 时返回 1；大 n 不溢出。
+
+**实现题 3：Arena Elo 更新模拟**
+
+- 题目：模拟双盲对战流上的 Elo 在线更新，并演示其对局顺序敏感性。
+- 考察点：期望胜率公式、K 因子、在线 vs 离线估计差异。
+- Python 骨架：
+
+```python
+def expected(ra: float, rb: float) -> float:
+    return 1.0 / (1.0 + 10 ** ((rb - ra) / 400))
+
+def update_elo(ra, rb, score_a, k=32):
+    ea = expected(ra, rb)
+    return (ra + k * (score_a - ea),
+            rb + k * ((1 - score_a) - (1 - ea)))
+
+def simulate(matches, ratings=None, k=32):
+    ratings = dict(ratings or {})
+    for a, b, score_a in matches:   # score_a: 1 win / 0.5 tie / 0 loss
+        ra, rb = ratings.get(a, 1200), ratings.get(b, 1200)
+        ratings[a], ratings[b] = update_elo(ra, rb, score_a, k)
+    return ratings
+```
+
+- 验收标准：交换对战顺序后最终分数不同（演示顺序敏感性）；score=0.5 时双方分值变化等量反向；K 越大单场影响越大。
+
+## 本讲小结
 
 评估是把抽象目标转成可审计测量的工程与统计过程。一个分数只在
 \((\text{model},\text{data},\text{protocol},\text{grader})\) 四元组固定
@@ -834,3 +1042,5 @@ Reporting." *ACM FAT\**, 2019. [arXiv](https://arxiv.org/abs/1810.03993)
 - [HELM 官方站点与排行榜](https://crfm.stanford.edu/helm/)。
 - [A3 scaling 实验目录](../experiments/catalog/a3-scaling.md)：validation
   loss 作为评估指标的边界。
+- [Stanford CS336 课程主页](https://cs336.stanford.edu/)（访问日期 2026-10-04）。
+- [CS336 lectures 仓库](https://github.com/stanford-cs336/lectures)（访问日期 2026-10-04）。

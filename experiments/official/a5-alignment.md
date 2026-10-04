@@ -111,6 +111,6 @@ Supplement 完全可选，转向 Llama 3.1 8B 的通用对话对齐：MMLU/GSM8K
 
 - 主 handout 与 supplement 均为 `26.0.0`。
 - [`UPSTREAM.md`](../../UPSTREAM.md) 仅记录固定 commit `c2734a26308710949fe13226960a1e8cece94b7e`，没有导入官方源码：同步时该版本未发现许可证。不要复制、再发布或把本地实现描述成官方快照。
-- 本地目录是非课程提交的独立实现；adapter/测试/报告可能有自学扩展，需对照 PDF。
+- 本地目录是 AI-assisted、非课程提交的独立实现；adapter/测试/报告可能有自学扩展，需对照 PDF。
 - HF model access、FlashAttention、vLLM/NCCL 和 Modal shared volume 都可能随版本或权限变化，应固定 revision 与环境。
 - 本仓库报告：[PDF](../../assignments/spring2026/assignment5-alignment/report/writeup.pdf) · [资产说明](../../assignments/spring2026/assignment5-alignment/report/README.md) · [验证记录](../../assignments/spring2026/assignment5-alignment/VERIFICATION.md)。

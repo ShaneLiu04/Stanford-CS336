@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_11.pdf"
   - "../experiments/topics/scaling-laws.md"
-  - "../assignments/assignment3-scaling/report/main.tex"
+  - "../assignments/spring2026/assignment3-scaling/report/main.tex"
 ---
 
 # Lecture 11 — Scaling Laws II：联合拟合、不确定性与外推
@@ -17,7 +17,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、ML Systems 工程师、Scaling Laws 研究者
 
 ## 摘要
@@ -449,6 +449,10 @@ method spread、extrapolation ratio、boundary rate、held-out error 和目标�
 - **指数是模型常数：** 它依赖数据、架构、优化 recipe、范围与口径。
 - **删掉“不服从 law”的点：** 除非有预先定义的失败标准，否则可能正是在删反证。
 - **把 proxy exponent 搬到 B200：** 本仓库 proxy 是方法验证，不是官方环境替代。
+- **把 Chinchilla 1:20 当普适配方：** tokens/param 是部署经济性决策
+  （Llama-3 8B ≈1875 tok/param 的过训练是理性偏离），不是自然常数。
+- **混淆 test-time compute 与预训练算力：** 二者是并列的 scaling 轴，
+  推理期算力（更长思考/搜索/验证）不能直接折算进 \(C=6ND\)。
 
 ## 12. Checklist
 
@@ -478,146 +482,351 @@ method spread、extrapolation ratio、boundary rate、held-out error 和目标�
 
 ## 13. 讨论：效度威胁、伦理与决策边界
 
-### 13.1 Construct validity
+### Construct validity
 
 Training loss 不等于 downstream utility、安全性或人类偏好；tokenizer 改变后 per-token loss
 不可直接比较。Theoretical FLOPs 不等于能源、时间或成本。应使用 bits-per-byte、统一
 evaluation 与 measured runtime 作为互补指标。
 
-### 13.2 Internal validity
+### Internal validity
 
 规模往往与 batch、learning rate、regularization、data order、hardware 和 training stability
 共变；任何一个未控制变量都可能伪装成 scaling。Checkpoint cherry-picking、静默删除失败
 runs 和事后改变 fit range 会产生研究者自由度偏差。
 
-### 13.3 External validity
+### External validity
 
 同一 family 内的插值结果不保证外推到新 architecture、MoE、长上下文、合成数据、RL
 post-training 或新硬件。数百倍 compute extrapolation 应表达为 scenario，而非承诺。
 公开复现还表明，原论文细节和数据不足会使精确指数难以独立恢复 [[13]](#ref-13)。
 
-### 13.4 资源与责任
+### 资源与责任
 
 Scaling 预测会驱动高成本决策。报告应包含预计 GPU-hours、能源/碳、数据治理、潜在重复
 训练成本及较小 baseline。统计上“最优”不自动意味着社会或经济上值得训练。
 
-## 14. 面试备考（Interview Prep）
+## 面试要点速记
 
-> Scaling II 是 LLM 面试的「统计+外推」进阶题：面试官常从「联合 law 怎么求闭式解」切入，
-> 追到「emergent abilities 是真的吗」「数据受限怎么办」「推理算力怎么改最优配置」
-> 「远距离外推怎么控风险」。核心是把「统计区间」与「函数形式风险」分开陈述，别拿狭窄
-> bootstrap 区间制造确定感。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 14.1 一页速览卡（面试前 1 分钟）
+1. **Q：emergent abilities 是真的吗？** 要点：Wei 等报告跨任务不连续跃迁；
+   Schaeffer 等证明选用非线性/不连续指标（如 exact match）可制造“涌现”
+   表象，换连续指标往往平滑——结论依赖指标构造，这是面试的标准辩证题。
+2. **Q：数据受限下的 scaling？** 要点：Muennighoff 等——重复 ~4 epochs 内
+   近似等效新数据，之后边际收益骤降；数据受限时最优模型更小。
+3. **Q：推理算力如何改变最优配置？** 要点：Sardana & Frankle——部署期推理
+   占大头时，compute-optimal 模型应显著小于 Chinchilla（训练更小模型、
+   更长服务期摊薄）。
+4. **Q：远距离外推的风险控制？** 要点：profile likelihood、leave-one-tier-out
+   报告参数不确定性；不超出拟合支撑集一个数量级以上。
+5. **Q：test-time compute 会不会取代预训练 scaling？** 要点：不会——二者是
+   并列算力轴。o1 用 RL 优化解题过程（拆解/规划/校验后作答），R1 纯 RL 下
+   AIME 2024 准确率 15.6%→86.7%；预训练给基座能力，推理算力换推理深度。
+6. **Q：为什么 Llama-3 8B 敢训 15T tokens？** 要点：过训练
+   （≈1875 tok/param）偏离 Chinchilla 1:20 是理性决策——推理经济性成为
+   与训练最优并列的选型轴；生命周期成本 = 训练 + 推理总量。
+7. **Q：MoE 怎么改写 scaling law 口径？** 要点：\(C=kN^pD^q\) 中的 \(N\)
+   必须区分 total/active parameters，routing/通信成本另计；DeepSeek-V3 =
+   671B MoE / 14.8T tokens；跨论文抄指数前先对齐 \(N\) 口径。
+8. **Q：数据质量与规模哪个更重要？** 要点：不是二选一——重复 ~4 epochs
+   后边际收益骤降，高质量 token 成新瓶颈；FineWeb/DataComp-LM 把 data
+   recipe 当独立变量；跨规模换 recipe 观测的是复合效应，不能归因 scale。
 
-**核心主张**：scaling law 的价值不是连线，而是用有限 pilot runs 支持高成本训练决策；真正难的是
-确认有限实验是否支持该函数形式，并把 winner selection、seed、拟合、外推的不确定性一起传播。
+**必背数字**
 
-**必背数字与公式**
+- 4 epochs 重复上限；Chinchilla 1:20 是“训练算力最优”而非“生命周期最优”；
+  inference-aware 最优 N:D 随部署强度下移。
 
-- 联合 law \(L(N,D)=E+A/N^\alpha+B/D^\beta\)。
-- 闭式最优：\(N_{\mathrm{opt}}\propto C^{\beta/(\alpha+\beta)},\ D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)，指数和为 1。
-- 最优 loss \(L_{\mathrm{opt}}-E=KC^{-\gamma}\)，其中 \(\gamma=\frac{\alpha\beta}{\alpha+\beta}\)。
-- tokens-per-parameter \(\propto C^{(\alpha-\beta)/(\alpha+\beta)}\)，仅 \(\alpha=\beta\) 时与 compute 无关。
-- 数据重复约 **4 epochs** 后边际收益骤降（Muennighoff）；extrapolation ratio \(\rho_C=C_{\text{target}}/C_{\max,\text{obs}}\)。
+**工业界参照（2024–2026）**
 
-**三句话答高频**
+- Llama-3 8B = 15T tokens（≈1875 tok/param）：过训练换推理经济性。
+- DeepSeek-V3 = 671B MoE / 14.8T tokens：稀疏激活改写 \(N\) 口径。
+- DeepSeek-R1（2025-01）纯 RL（规则奖励、无冷启动）：AIME 2024 准确率
+  15.6%→86.7%，自发涌现 aha moment（重新评估、分配更多思考时间）。
+- o1（2024）：RL 优化解题过程——回答前完成问题拆解、步骤规划与推理校验；
+  GPT-5 将快速模型/深度推理/实时路由整合为统一系统。
+- 重复数据 ~4 epochs 临界（Muennighoff）；高质量 token 成新瓶颈。
+- 行业判断：能力提升重心从参数扩张转向“后训练对齐 + 测试时计算 +
+  工具调用 + 外部数据 + 自动化工作流”的系统化扩展。
 
-1. emergent abilities 依赖指标构造：离散指标（exact match）制造「涌现」表象，换连续指标往往平滑。
-2. bootstrap 必须重跑完整 pipeline（选 winner + 拟合 + 外推），只 bootstrap 末端回归会严重低估不确定性。
-3. 远距离外推的风险来自函数形式而非回归标准误；用 extrapolation ratio + leave-one-tier-out 表达。
+## 行业现状与最新进展（2024–2026）
 
-### 14.2 高频面试题与答题框架
+### 涌现能力的再审视
 
-**Q1：联合 law 怎么求 \(N_{\mathrm{opt}},D_{\mathrm{opt}},L_{\mathrm{opt}}\) 的闭式解？**
+- Wei 等提出 emergent abilities（跨任务不连续跃迁）→ Schaeffer 等
+  “指标幻觉”质疑：非线性/不连续指标（exact match、阈值判定）可从
+  平滑 loss 中制造骤变表象。
+- 业界转向：连续指标（loss、平滑 pass@k、校准概率）+ 严格误差棒
+  （多 seed、bootstrap CI）；报告能力变化时同时画 loss 与离散 metric。
+- 与本讲呼应：3.3 节的 measurement threshold crossing 正是争论的技术内核；
+  换指标不是否定能力，而是把“结论条件于指标构造”写进报告规范。
 
-- 代入 \(D=C/(6N)\) 到 \(L=E+A/N^\alpha+B/D^\beta\)，对 \(N\) 求导令零。
-- 得 \(N_{\mathrm{opt}}=\left(\frac{\alpha A}{\beta B6^\beta}\right)^{1/(\alpha+\beta)}C^{\beta/(\alpha+\beta)}\)，同理 \(D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)。
-- 两 compute 指数和为 1 是 \(C=6ND\) 约束的直接结果。
+### 新 scaling 轴全景（2024–2026）
 
-**Q2：\(L_{\mathrm{opt}}\) 的 compute exponent \(\gamma=\alpha\beta/(\alpha+\beta)\) 怎么来的？**
+- **MoE 稀疏激活 scaling：** total/active parameters 分离，\(C=kN^pD^q\)
+  的 \(N\) 口径必须写明；DeepSeek-V3 = 671B MoE / 14.8T tokens。
+- **测试时计算（test-time compute）：** o1（2024）通过 RL 优化解题过程——
+  回答前完成问题拆解、步骤规划与推理校验；o3/o4-mini 延伸到工具使用与
+  多模态；GPT-5 将快速模型/深度推理/实时路由整合为统一系统。
+- **纯 RL 长思考：** DeepSeek-R1（2025-01）规则奖励、无冷启动，AIME 2024
+  准确率 15.6%→86.7%，自发涌现 aha moment（重新评估、分配更多思考时间）。
+- **更长思考/搜索/验证/动态算力分配：** RL reasoning（Snell 等）把
+  “每题投入多少推理算力”变成新决策变量。
+- **扩散 DiT 与视频生成：** scaling 轴从语言 loss 扩展到视觉/视频生成
+  质量曲线。
 
-- 一阶条件给出最优点两项满足 \(\alpha A N^{-\alpha}=\beta B D^{-\beta}\)。
-- 代回 loss 得 \(L_{\mathrm{opt}}-E=KC^{-\gamma}\)，其中 \(\gamma=\alpha\beta/(\alpha+\beta)\)。
-- 这连接了 loss surface 与 IsoFLOP envelope：理想可加 law 下 envelope 也应是带 floor 的 power law；若斜率不一致，需查 finite grid / 优化失败 / 模型错设。
+### 数据质量与重复
 
-**Q3：emergent abilities 是真的吗？**
+- Muennighoff：重复数据最多 ~4 epochs 价值接近新鲜数据，之后急剧衰减；
+  高质量 token 成新瓶颈。
+- FineWeb、DataComp-LM（DCLM）开启“过滤配比时代”：data recipe 是独立
+  研究变量，不再是默认恒定条件。
+- 对 scaling law 的冲击：\(D^{-\beta}\) 假设条件于 dedup/mixture；跨规模
+  换 recipe 观测到的是复合效应（见 9.1 节）。
 
-- **Wei et al.**：报告跨任务、跨规模的离散能力跃迁；**Schaeffer et al.**：用非线性/离散指标（如 exact match）会制造「涌现」表象，换连续概率型指标往往平滑。
-- **辩证结论**：现象依赖指标构造与测量尺度——应同时画 loss、连续指标、离散任务指标，区分「底层能力突变」与「measurement threshold crossing」。
+### 六阶段演进对照（行业深度报告口径 2026-08）
 
-**Q4：数据受限下的 scaling 怎么做？**
+| 阶段 | 时间 | 代表工作 | 核心认知 |
+|---|---|---|---|
+| 0 | 2017–2019 | Hestness 等 | 误差幂律前史 |
+| 1 | 2020 | Kaplan、GPT-3、Henighan | 预训练幂律确立、参数主导 |
+| 2 | 2021–2022 | Gopher、PaLM、Wei 涌现 | 大模型跃迁叙事 + Schaeffer 指标幻觉质疑 |
+| 3 | 2022–2023 | Chinchilla、LLaMA | 计算最优（70B/1.4T 优于 280B Gopher）+ 部署经济性 |
+| 4 | 2023–2024 | Muennighoff、Chung 等、FineWeb/DataComp-LM | 数据质量与重复瓶颈 |
+| 5 | 2024–2026 | MoE、o1/R1、Snell、DiT、视频生成 | 多变量时代：测试时算力、RL reasoning |
 
-- Muennighoff et al.：重复约 **4 epochs** 内近似等效新数据，之后边际收益骤降。
-- 数据受限时最优模型更小、且要按 unique data \(U\) 与 epochs \(e=D/U\) 扩展 law，而非把 consumed tokens 当独立信息。
+**对本讲学习者的启示：** scaling law 从“单变量（参数）幂律”演进为
+“多变量决策模型”——预训练参数扩张不再是唯一轴；当前行业判断，能力提升
+重心转向“后训练对齐 + 测试时计算 + 工具调用 + 外部数据 + 自动化工作流”
+的系统化扩展。本讲的联合拟合、不确定性分层与外推诊断，正是把每个新轴
+（test-time compute、MoE 激活口径、数据 epochs）纳入同一严谨框架的方法论。
 
-**Q5：推理算力如何改变最优配置？**
+## 大厂面试真题与答题框架
 
-- Sardana & Frankle：当部署期推理占大头时，compute-optimal 模型应**显著小于 Chinchilla**——训练更小模型、更长服务期摊薄推理成本。
-- 即「训练算力最优」≠「生命周期成本最优」；Chinchilla 1:20 是训练视角，不是 serving 视角。
+以下为高频面试题（公开面经风格），非任何公司真题。
 
-**Q6：远距离外推怎么控风险？**
+**题目 1：如何拟合并外推一条 loss scaling 曲线？**
+- 考点：非线性拟合流程、数值稳定性、外推纪律
+- 答题框架：① 参量化（\(A=e^a\) 等保证正性）+ 几何均值归一化；
+  ② 多初值 bounded least squares，失败 run 多时换 Huber loss；
+  ③ residual 对 \(\log N/\log D/\log C\) 作图查结构；
+  ④ leave-one-tier-out 验证 held-out tier 预测；
+  ⑤ 报告 extrapolation ratio \(\rho_C\) 与 bootstrap CI，明确区间不含模型错设
+- 加分项：区分四层不确定性；提 profile likelihood 判不可识别
+- 踩坑：log-log polyfit 一把梭；in-sample RMSE 小就承诺 300× 外推
 
-- 报告 extrapolation ratio \(\rho_C=C_{\text{target}}/C_{\max,\text{obs}}\)（越大，函数形式风险越主导）。
-- 用 leave-one-tier-out（留整个 compute tier，而非随机留 run）、profile likelihood、多方法敏感性（joint vs IsoFLOP、floor vs broken law）。
-- 不要把 bootstrap 95% 区间命名为「总不确定性」——它不含函数形式与分布外风险。
+**题目 2：外推会在哪里失败？**
+- 考点：失败模式枚举
+- 答题框架：① coverage 不足——optimum 落 grid 边界；② floor 不可识别——
+  远离渐近线时 \(E,\alpha\) 耦合；③ regime shift——大 tier 换 recipe/hardware；
+  ④ 模型错设——真实 law 带 bend/floor，加性三参数撑不住；
+  ⑤ 噪声结构——tier 内相关使 CI 过窄
+- 加分项：每类失败配一个诊断动作（boundary audit、leave-largest-out、
+  broken law 对比）
+- 踩坑：把外推失败归咎于“数据点不够多”，忽视函数形式风险
 
-**Q7：bootstrap 为什么要重跑完整 pipeline？**
+**题目 3：test-time compute 与预训练 scaling 是什么关系？**
+- 考点：新 scaling 轴的理解
+- 答题框架：① 定义：推理期投入更多算力（更长思考、搜索、验证、动态分配）；
+  ② 证据：o1 用 RL 优化解题过程（拆解/规划/校验后作答），R1 纯 RL 下
+  AIME 2024 准确率 15.6%→86.7%；③ 关系：与预训练 \(C=6ND\) 并列的独立
+  算力轴，不是替代——预训练给基座能力，测试时算力换推理深度；
+  ④ 选型：小模型+大推理算力 vs 大模型一次作答，按部署强度与延迟预算权衡
+- 加分项：GPT-5 将快速模型/深度推理/实时路由整合为统一系统；Snell 等
+  的动态算力分配
+- 踩坑：把测试时算力折算进预训练 FLOPs 混为一谈
 
-- 目标不是只估最后一条回归线的误差，而是传播 run/seed 噪声 → 每档 winner 选择 → scaling fit → 目标外推。
-- 若只 bootstrap 末端回归，会假装同 tier 点独立、丢失 winner selection 与清洗的不确定性，区间过窄。
-- 正确做法：以 compute tier 为 cluster 重采样，每个 replicate 重新 select_optima + 重拟合 + 重预测。
+**题目 4：Kaplan 与 Chinchilla 结论为何不同？**
+- 考点：方法论差异溯源
+- 答题框架：① 估计器不同：Kaplan 联合参数化外推 vs Chinchilla IsoFLOP
+  envelope 直接找 minimum；② 混杂：LR schedule 是否随 token 数调、训练
+  是否充分、数据重复、tokenizer；③ 覆盖范围与 winner 提取方法；
+  ④ 结论：不是对错之分，是“条件于 recipe 的最优配置”不同
+- 加分项：Besiroglu 等复现尝试表明精确指数难独立恢复
+- 踩坑：只答“Kaplan 错了”
 
-**Q8：Kaplan 与 Chinchilla 为什么结论不同？**
+**题目 5：数据受限时 scaling 决策怎么改？**
+- 考点：Muennighoff 结论 + 配置修正
+- 答题框架：① 重复 ~4 epochs 内近似等效新数据，之后边际收益骤降；
+  ② 有效 tokens 封顶 → 最优模型更小（\(D\) 受限时 \(N_{\mathrm{opt}}\) 下移）；
+  ③ 换轴：数据质量（过滤、去重、配比）成为新杠杆；
+  ④ 报告口径：unique/total tokens 分开记
+- 加分项：FineWeb/DataComp-LM 把 data recipe 当独立变量
+- 踩坑：拿 total token 数当信息量
 
-- 不能简化为「旧论文错、新论文对」：差异来自实验覆盖范围、LR schedule 是否调优、训练充分度、数据重复、tokenizer、模型定义与 optimum 提取方法。
-- Kaplan 偏向更大模型更少 tokens；Chinchilla 的密集 IsoFLOP sweep 直接找固定 compute 的 minimum。
+**题目 6：给一个高 QPS 问答产品选模型规模，怎么选？**
+- 考点：inference-aware scaling
+- 答题框架：① 生命周期成本 = 训练 + 推理总量；部署重时小模型+过训练
+  （Llama-3 8B = 15T tokens ≈1875 tok/param）胜过 Chinchilla 大模型；
+  ② 部署强度 → inference-aware N:D 下移（Sardana & Frankle）；
+  ③ 若瓶颈是单题难度而非吞吐 → test-time compute 小模型方案（o1/R1 路线）；
+  ④ 用 wall-clock 模型把理论 FLOPs 折算成 B200-hours
+- 加分项：把“训练最优”与“生命周期最优”分开陈述
+- 踩坑：只看 Chinchilla 1:20
 
-**Q9：tokens-per-parameter 是普适常数吗？**
+**题目 7：emergence 之辩你怎么收尾？**
+- 考点：指标构造意识
+- 答题框架：① Wei：跨任务跃迁；Schaeffer：非线性/不连续指标可造涌现表象；
+  ② 正解：结论条件于指标构造——同时报告 loss、连续概率指标、离散指标
+  + 误差棒；③ 工程含义：评测选连续指标可提前预判能力，而非等“涌现”
+- 加分项：联系本讲诊断速查表的 threshold crossing 条目
+- 踩坑：站队“涌现是假/是真”而不给适用条件
 
-- \(D_{\mathrm{opt}}/N_{\mathrm{opt}}\propto C^{(\alpha-\beta)/(\alpha+\beta)}\)，只有 \(\alpha=\beta\) 时才与 compute 无关。
-- 「20 tokens/parameter」是特定实验范围 + recipe 下的经验近似，不应机械迁移到新 tokenizer/data/context/optimizer。
+## 系统设计题
 
-**Q10：怎么判断联合 law 的参数不可识别？**
+**设计题 1：设计一个外推到 10× 算力的预测实验**
+- 需求澄清：10× 相对哪个 tier？预测 loss 还是 \(N_{\mathrm{opt}}/D_{\mathrm{opt}}\)？
+  容忍误差多少？wall-clock 与 GPU 预算？
+- 规模估算：小模型代理 grid——3–4 个 log-spaced compute tiers，
+  每 tier 3–5 个 \((N,D)\) 点覆盖 U 形两侧；多初值 K≈10；
+  cluster bootstrap B≈200；外推目标点 \(\rho_C=10\)
+- 架构：① run manifest（理论 FLOPs + measured runtime）；
+  ② joint fit + IsoFLOP envelope 双估计器；③ cluster bootstrap 重跑
+  select_optima + fit；④ leave-one-tier-out 验证；
+  ⑤ 目标预算预测 + 区间 + 方法 spread
+- Trade-off 表：
 
-- 观测远离 floor 时，很多 \(E,\alpha\) 组合能给出相似预测。
-- 诊断：Hessian/profile likelihood 是否平坦、多初值是否得到不同参数但相似 RMSE、去掉一个 compute tier 后参数是否剧变、是否碰 bounds。
-- 结论：预测可能比单个参数更稳定，也可能相反，两者都要检查。
+| 决策 | 选项 A | 选项 B | 取舍 |
+|---|---|---|---|
+| 估计器 | joint law | IsoFLOP | 样本效率 vs 假设强度；两者都跑报 spread |
+| 外推验证 | leave-one-tier-out | synthetic recovery | 真实 held-out vs estimator 校验 |
+| 报告口径 | 点估计 | 多方法 ensemble | 简洁 vs 诚实 |
 
-### 14.3 手撕要点（联合 law 闭式解）
+- 评测方案：held-out tier 预测误差 <25%；joint 与 IsoFLOP 在目标预算处
+  相差 <2×；boundary rate = 0
+- 追问预案：optimum 落 grid 边界 → 扩 tier；两估计器分叉 → 报 method
+  spread 不平均；被问“为何信 10× 外推” → 引 \(\rho_C\) + 四层不确定性分层
 
-面试让「从联合 law 推导 compute-optimal」时，按链写：
+**设计题 2：推理产品选型——小模型过训练 vs 大模型 Chinchilla**
+- 需求澄清：QPS 与部署时长？单题难度分布？延迟预算？蒸馏/量化是否可用？
+- 规模估算：过训练档参照 Llama-3 8B = 15T tokens（≈1875 tok/param）vs
+  Chinchilla 1:20；DeepSeek-V3 = 671B MoE / 14.8T tokens 展示稀疏激活
+  第三条路；总推理 tokens = QPS × 时长 → 生命周期成本曲线
+- 架构：① 成本模型：训练一次 + 推理 per-token × 量；② 小模型曲线族
+  （不同过训倍数）+ 大模型 Chinchilla 点；③ 难度主导 → 加 test-time
+  compute 档（更长思考/验证）；④ 交叉点分析（部署强度阈值）
+- Trade-off 表：
 
-```text
-L(N,D) = E + A/N^α + B/D^β,   C = 6ND -> D = C/(6N)
+| 方案 | 训练成本 | 单位推理成本 | 能力上限 | 适用 |
+|---|---|---|---|---|
+| 小模型过训练（≈1875 tok/param） | 低 | 低 | 中 | 高 QPS、易任务 |
+| Chinchilla 大模型 | 高 | 高 | 高 | 低 QPS、难任务 |
+| 小模型 + test-time compute | 中 | 中（可变） | 中高 | 中 QPS、难题为主 |
 
-L(N|C) = E + A N^{-α} + B (6N/C)^β
-dL/dN = -αA N^{-α-1} + βB 6^β C^{-β} N^{β-1} = 0
-=> N_opt^{α+β} = (αA/βB 6^β) C^β
-=> N_opt ∝ C^{β/(α+β)},  D_opt ∝ C^{α/(α+β)}
+- 评测方案：按任务难度分层报准确率/延迟/成本 Pareto；难度分桶看
+  小模型+推理算力是否补齐差距
+- 追问预案：延迟预算紧 → 推理算力上限受制，回小模型过训练；被问
+  “Chinchilla 还适用吗” → 答它是训练算力最优，推理经济性是并列选型轴
 
-一阶条件: αA N^{-α} = βB D^{-β}
-=> L_opt - E = K C^{-γ},  γ = αβ/(α+β)
+**设计题 3：数据受限下的 scaling 实验（unique tokens 上限固定）**
+- 需求澄清：unique tokens 上限？允许 epochs 数？质量过滤预算？
+- 规模估算：epochs 取 0.5/1/2/4/8 档位扫（4 为 Muennighoff 临界），
+  模型 2–3 档；固定 compute 下比较“更多 epochs vs 更小模型”
+- 架构：有效 tokens 曲线拟合（epoch 增益衰减项）+ 过训练配置搜索；
+  unique/total tokens 分开入 manifest
+- Trade-off 表：
+
+| 杠杆 | 收益来源 | 衰减点 |
+|---|---|---|
+| 更多 epochs | 重复曝光 | ~4 epochs 后边际收益骤降 |
+| 更小模型 | 与有效 tokens 匹配 | 容量下限 |
+| 更强过滤/配比 | 质量/覆盖平衡 | 过滤过狠损害领域覆盖 |
+
+- 评测方案：held-out loss + 下游分桶；跨规模保持同一 data recipe
+  （否则是复合效应）
+- 追问预案：被问“4 epochs 后还能涨吗” → 边际收益骤降，转向数据质量/
+  合成数据（口径：据 Muennighoff）
+
+## 代码实现题
+
+**实现题 1：三参数幂律 \(L(N)\) 拟合 + bootstrap 置信区间**
+
+题目：给定 runs \((N_i,L_i)\)，拟合 \(L(N)=E+A/N^{\alpha}\)，输出参数 CI
+与目标 \(N\) 处预测区间。
+考察点：正性参量化、多初值、cluster bootstrap、区间解读。
+
+```python
+import numpy as np
+from scipy.optimize import least_squares
+
+def loss_law(theta, N):
+    E, logA, alpha = theta
+    return E + np.exp(logA) * N ** (-alpha)
+
+def fit_power_law(N, L, n_starts=10):
+    N0 = np.exp(np.mean(np.log(N)))      # 几何均值归一化，稳定 Jacobian
+    rng = np.random.default_rng(42)
+    best = None
+    for _ in range(n_starts):
+        x0 = np.array([
+            max(np.min(L), 0.0) * rng.uniform(0.5, 0.9),
+            np.log(max(np.max(L) - np.min(L), 1e-8)),
+            rng.uniform(0.2, 1.0),
+        ])
+        res = least_squares(
+            lambda t: loss_law(t, N / N0) - L, x0,
+            bounds=([0.0, -np.inf, 1e-3], [np.inf, np.inf, 10.0]),
+        )
+        if best is None or res.cost < best.cost:
+            best = res
+    return best.x, N0
+
+def bootstrap_ci(N, L, n_boot=200, target_N=None):
+    tiers = np.unique(N)                  # 按 N 分层重采样，保留相关结构
+    params, preds = [], []
+    for _ in range(n_boot):
+        idx = np.concatenate([
+            np.random.default_rng(int(t)).choice(
+                np.where(N == t)[0], size=int((N == t).sum()), replace=True)
+            for t in tiers
+        ])
+        theta, N0 = fit_power_law(N[idx], L[idx])
+        params.append(theta)
+        if target_N is not None:
+            preds.append(loss_law(theta, target_N / N0))
+    params = np.asarray(params)
+    lo, hi = np.percentile(preds, [2.5, 97.5])
+    return params, lo, hi                 # 区间不含函数形式错设
 ```
 
-**三个必踩坑**
+验收标准：多初值收敛到同一 cost；bootstrap CI 随 B 收敛；参数碰 bounds
+时不报普通渐近 CI；输出注明区间条件于所选函数形式。
 
-1. **`L_\infty+Ax^{-\alpha}` 不能整体取 log 做线性回归**：加法项改变曲率，只能对幂律主项近似。
-2. **bootstrap 必须重跑 winner selection**：只重采样 optima pairs 会丢失离散 minimum 的不确定性。
-3. **CI 不含函数形式风险**：小 RMSE + 窄 bootstrap 不保证 300× 外推可靠。
+**实现题 2：外推残差诊断脚本（外推崩坏检测）**
 
-### 14.4 高频追问与陷阱
+题目：给定拟合参数与 runs，输出残差对 \(\log C\) 的结构化诊断与告警。
+考察点：残差结构识别、外推距离、告警阈值设计。
 
-| 追问 | 正确方向 |
-| --- | --- |
-| 小 RMSE 保证外推准吗？ | 否，插值拟合与 300× 外推是不同任务 |
-| emergent 是能力突变吗？ | 未必，可能是离散指标的 threshold crossing |
-| 数据重复有用吗？ | ~4 epochs 内近似等效新数据，之后骤降 |
-| 训练最优 = 生命周期最优吗？ | 否，推理占大头时训练更小模型更省 |
-| 指数是自然常数吗？ | 否，依赖架构/数据/recipe/范围/口径 |
-| 删掉不服从的点可以吗？ | 除非预先定义失败标准，否则可能在删反证 |
+```python
+import numpy as np
 
-## 15. 本讲小结
+def extrapolation_diagnostics(N, D, L, pred_fn, C_targets, C_max_observed):
+    C = 6.0 * N * D
+    resid = L - pred_fn(N, D)
+    report = {
+        "rho_C": [ct / C_max_observed for ct in C_targets],
+        "resid_logC_corr": float(np.corrcoef(np.log(C), resid)[0, 1]),
+        "tier_bias": {},
+        "alerts": [],
+    }
+    # 按 compute tier 看偏差符号：某一档全偏正/偏负 = 结构性失配
+    std = float(np.std(resid))
+    for t in np.unique(C):
+        mask = C == t
+        bias = float(np.mean(resid[mask]))
+        report["tier_bias"][f"{t:.2e}"] = bias
+        if abs(bias) > 3 * std:
+            report["alerts"].append(f"tier {t:.2e} 系统性偏差 {bias:+.4f}")
+    # 最大档预测偏乐观 + residual 随 log C 增大 → 外推崩坏预警
+    if report["resid_logC_corr"] > 0.5:
+        report["alerts"].append("residual 随 log C 增大：law 在大 compute 端错设")
+    return report
+```
+
+验收标准：在合成数据（带 floor 的真实 law 用无 floor 模型拟合）上触发
+alert；对 iid 噪声数据不误报；输出可直接贴进实验报告（含 \(\rho_C\)）。
+
+## 14. 本讲小结
 
 联合 law 把容量受限与数据受限写成一个 loss surface，并在 \(C=6ND\) 下给出 compute-optimal 闭式比例。真正困难的不是求导，而是确认有限实验是否支持该函数形式，以及如何把 winner selection、seed、拟合和外推的不确定性一起传播。远距离预测应以多方法敏感性和外推距离为中心，而不是用狭窄 bootstrap 区间制造确定感。
 
@@ -665,5 +874,9 @@ arXiv:2404.10102, 2024.
 ## 延伸阅读
 
 - Stanford CS336, [Lecture 11 — Scaling Laws](https://github.com/stanford-cs336/lectures/blob/main/lecture_11.pdf).
-- [A3 报告源码](../assignments/assignment3-scaling/report/main.tex)。
+- [A3 报告源码](../assignments/spring2026/assignment3-scaling/report/main.tex)。
 - [Scaling Laws 主题导航](../experiments/topics/scaling-laws.md)。
+- [Muennighoff et al., Scaling Data-Constrained Language Models](https://arxiv.org/abs/2305.16264)（访问日期 2026-10-04）。
+- [The Llama 3 Herd of Models](https://arxiv.org/abs/2407.21783)（访问日期 2026-10-04）。
+- [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)（访问日期 2026-10-04）。
+- [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948)（访问日期 2026-10-04）。

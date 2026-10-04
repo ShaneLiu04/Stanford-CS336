@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_05.pdf"
   - "../experiments/topics/systems.md"
-  - "../assignments/assignment2-systems/"
+  - "../assignments/spring2026/assignment2-systems/"
 ---
 
 # Lecture 05 — GPUs、TPUs 与性能模型：从算术强度到端到端吞吐
@@ -17,7 +17,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、性能工程师与系统研究者
 
 ## 摘要
@@ -309,8 +309,8 @@ time-to-quality、energy-to-quality 与失败/OOM runs。共享云环境还需�
 
 ## 5. 代码与实验映射
 
-- A2 统一入口：`assignments/assignment2-systems/scripts/benchmark_systems.py`
-- 报告：`assignments/assignment2-systems/report/main.tex`
+- A2 统一入口：`assignments/spring2026/assignment2-systems/scripts/benchmark_systems.py`
+- 报告：`assignments/spring2026/assignment2-systems/report/main.tex`
 - 原始数据：`report/results/raw/`
 - 系统导读：`experiments/topics/systems.md`
 
@@ -399,7 +399,9 @@ launch→bandwidth→compute 不同 regime。
 - 认为 BF16 会让全部训练显存减半；
 - 将 `reserved` 当成模型真实占用；
 - 用 CPU/Gloo 正确性结果推断 GPU/NCCL 性能；
-- 只优化很快的 microkernel，却不确认其 end-to-end 占比。
+- 只优化很快的 microkernel，却不确认其 end-to-end 占比；
+- 用 sparse 峰值（如 H100 BF16 1979 TFLOPS）当 roofline 分母，高估 compute ceiling；
+- 跨机 all-reduce 直接用单卡 NVLink 带宽估算，忽略拓扑层级与 contention。
 
 ## 10. Checklist
 
@@ -419,34 +421,41 @@ launch→bandwidth→compute 不同 regime。
 | GPU utilization 低 | CPU timeline/data loader | launch gap、I/O、同步 |
 | utilization 高但 TFLOP/s 低 | kernel mix/AI | elementwise、memory-bound |
 | GEMM 未上 tensor core | dtype/shape/instruction | alignment、autocast、layout |
-| occupancy 低 / SM 占用率低 | registers/shared/block | tile 太大、spill、block 过小 |
+| occupancy 低 | registers/shared/block | tile 太大、spill |
 | occupancy 高仍慢 | stall reasons | dependency、HBM、bank conflict |
 | 第一次 iteration 很慢 | warm-up/compile | JIT、autotune、allocator |
 | BF16 无显存收益 | state breakdown | FP32 master/moments、activations |
 | reserved 持续很高 | allocator snapshot | fragmentation/caching |
-| 多卡 scaling 差 / 扩展近线性失效 | topology/NCCL timeline | exposed all-reduce、跨 PCIe 通信、未用 NVLink |
-| microkernel 快、模型不变 | end-to-end share | Amdahl's law |
+| 多卡 scaling 差 | topology/NCCL timeline | exposed all-reduce、imbalance |
+| microkernel 快、模型不变 | end-to-end share | Amdahl’s law [[14]](#ref-14) |
+
+### 故障排查速查
+
+| 现象 | 优先检查 | 常见根因 |
+|---|---|---|
 | 实测带宽远低于峰值 | 访存合并（coalescing）与对齐 | 非连续 stride、跨 stride 读 |
+| SM 占用率低 | grid/block 配置 | block 过小、寄存器溢出导致降占用 |
 | kernel 时间不随规模线性 | L2 命中率 | cache 命中主导而非带宽 |
+| 多卡扩展近线性失效 | 通信占比与互联层次 | 跨 PCIe 通信、未用 NVLink 域内聚合 |
 | TPU 与 GPU 数值不一致 | 累加顺序与精度容差 | systolic 阵列累加顺序差异属预期 |
 | 吞吐周期性骤降 | SM clock 与功耗曲线 | 热节流降频，检查 clock 采样 |
 | roofline 预测失准 | 峰值参数取值（boost vs sustained） | 用 sustained 而非理论峰值作分母 |
 
 ## 11. 讨论：效度威胁与结论边界
 
-### 11.1 Construct validity
+### Construct validity
 - GPU utilization、occupancy、MFU、TFLOP/s、tokens/s 是不同指标；
 - theoretical FLOPs 不包含 data movement/communication；
 - peak allocated 不等于 process VRAM；
 - synthetic microbenchmark 不等于 time-to-quality。
 
-### 11.2 Internal validity
+### Internal validity
 - 异步计时、未 warm-up、compile/autotune 混入会系统性偏差；
 - power/clock/thermal 与共享租户造成 run-to-run variance；
 - 不同 shape/dtype/kernel version 是 confounders；
 - profiler instrumentation 改变 runtime。
 
-### 11.3 External validity
+### External validity
 - 单 GPU 结果不外推多节点；
 - RTX 6000D 不代表 B200/TPU；
 - 一个 sequence/batch 的 kernel 最优参数不泛化；
@@ -455,129 +464,366 @@ launch→bandwidth→compute 不同 regime。
 论文式表述应限定硬件、软件、shape 与 measurement protocol，优先报告 confidence interval
 和完整失败点，而不是无条件“X× 更快”。
 
-## 12. 面试备考（Interview Prep）
+## 面试要点速记
 
-> GPU/性能模型是 ML Systems 面试的必考项：面试官常从「A100 带宽多少」切入，追到
-> 「为什么 GEMM 适合 GPU」「occupancy 高为什么不一定快」「怎么用 Roofline 判断瓶颈」。
-> 核心是建立 `FLOPs / bytes / parallelism / latency` 的统一账本，用硬件数量级支撑判断。
-> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 12.1 一页速览卡（面试前 1 分钟）
-
-**核心主张**：加速器优化的统一原则是**让昂贵的数据搬运被更多有效计算摊销**——性能上界是
-`min(峰值算力, 带宽 × 算术强度)`，从算法 shape 预测，再用 profiler 证据修正。
+1. **Q：A100/H100 关键数字？** 要点：A100 80GB：HBM ~2TB/s、bf16 tensor ~312
+   TFLOPS（dense）、NVLink 600GB/s；H100 SXM：HBM3 3.35TB/s、bf16 ~990
+   TFLOPS（dense）、NVLink 900GB/s。峰值算力/带宽之比决定 roofline 拐点。
+2. **Q：为什么 GPU 适合 GEMM？** 要点：tensor core 在寄存器级完成小矩阵乘、
+   shared memory tiling 保证数据复用、高 arithmetic intensity。
+3. **Q：内存层次的数量级？** 要点：SMEM / L2 / HBM 带宽差 1–2 个数量级、
+   延迟差更多；kernel 优化的本质是最大化复用、减少远端访存。
+4. **Q：TPU 与 GPU 的本质差异？** 要点：systolic 阵列面向大规模批量 GEMM、
+   软件栈封闭、控制流与稀疏性弱；统一 HBM；选型取决于 workload 形态。
+5. **Q：为什么 decode 是带宽瓶颈？** 要点：每 step 读全部 weights+KV 而 FLOPs 仅
+   2P，强度 ≈ 1–2 FLOPs/byte，远低于拐点（~300）；tokens/s 上界 ≈ 聚合 HBM 带宽
+   ÷ 模型字节数；batching 摊销权重读取。
+6. **Q：Roofline 拐点怎么算、代际怎么变？** 要点：拐点 = dense 峰值算力 ÷ HBM
+   带宽；H100 BF16 ≈ 295、B200 ≈ 281、H200 ≈ 206 FLOPs/byte；两代拐点接近但
+   绝对性能翻倍，H200 靠带宽下压拐点利于 decode。
+7. **Q：机内与跨机通信差在哪？** 要点：NVLink 域内 900GB/s（H100）/1.8TB/s
+   （B200）、时延 ~1µs 级；跨机 IB/RoCE 带宽低一个量级；TP/EP 锁域内、DP/PP
+   出域，梯度分桶 + overlap；GB200 NVL72 把 NVLink 域扩到 72 卡。
+8. **Q：怎么评估一届硬件的性价比？** 要点：不看 peak 排行榜，看实测
+   TFLOPS/GPU（如 70B TP=8：H200 454.6 vs B200 815.2）、能耗比（H100 ≈1.41
+   vs B200 ≈2.25 TFLOPS/W，FP8/INT8 口径）与互连拓扑是否匹配并行策略。
 
 **必背数字**
 
-- **A100 80GB**：HBM 约 2 TB/s、bf16 tensor core 约 312 TFLOPS（dense）、NVLink 600 GB/s。
-- **H100 SXM**：HBM3 约 3.35 TB/s、bf16 约 990 TFLOPS、NVLink 900 GB/s。
-- **roofline 拐点**（A100 bf16）：\(I^\*=312\text{e}12 / 2\text{e}12 \approx 156\) FLOPs/byte。
-- 内存层次带宽：register > shared/L1 > L2 > HBM，相邻差约 1–2 个数量级。
-- GEMM 的 arithmetic intensity \(O(n)\)；逐元素算子 \(O(1)\)。
+- roofline 拐点（A100 bf16）≈ 312e12 / 2e12 ≈ 156 FLOPs/byte；
+  occupancy = 活跃 warp / 最大 warp。
 
-**三句话答高频**
+**工业界参照（2024–2026，SXM/官方标称口径）**
 
-1. GEMM 越大越 compute-bound（复用强）；elementwise、decode 偏 memory-bound（复用低）。
-2. occupancy 高只代表候选 warp 多，不等于算满；compute-bound 时加 occupancy 无收益。
-3. tensor core 有固定 micro-tile shape，`M,N,K` 不对齐、尾块占比高就会 underutilize。
+- H100 SXM：BF16 dense 989 TFLOPS、HBM3 3.35TB/s、NVLink4 900GB/s、TDP 700W；拐点 ≈ 295 FLOPs/byte。
+- B200：BF16 dense 2.25 PFLOPS、HBM3e 8TB/s、NVLink5 1.8TB/s、TDP 1000W；拐点 2250/8 ≈ 281 FLOPs/byte。
+- GB200 NVL72：72×B200 + 9 个 Switch Tray（57.6Tb×9 = 518.4Tb）无阻塞全互联，机柜内铜连接。
+- 实测（LLaMA2-70B，TP=8）：H200 454.6 → B200 815.2 TFLOPS/GPU（+79.3%）。
+- 能耗比：H100 ≈ 1.41、B200 ≈ 2.25 TFLOPS/W（FP8/INT8 口径）。
+- MLPerf Training：B200 对 H200，GPT-3 175B 预训练 ~2.0×、Llama-70B LoRA 微调 ~2.2×。
 
-### 12.2 高频面试题与答题框架
+## 行业现状与最新进展（2024–2026）
 
-**Q1：A100 / H100 的关键数字？roofline 拐点怎么算？**
+### Hopper→Blackwell：规格与算力/带宽演进
 
-- A100 80GB：HBM 约 2 TB/s、bf16 tensor core 约 312 TFLOPS、NVLink 600 GB/s；H100 SXM：HBM3 3.35 TB/s、bf16 约 990 TFLOPS、NVLink 900 GB/s。
-- 拐点 \(I^\*=C_{\max}/BW\)：A100 bf16 ≈ `312e12 / 2e12 ≈ 156` FLOPs/byte。
-- \(I<I^\*\) memory-bound，\(I>I^\*\) compute-bound；低于拐点的算子优化方向是减 bytes/fusion。
+| 指标（SXM/官方标称） | A100 | H100 SXM | H200 SXM | B200 |
+|---|---|---|---|---|
+| BF16/FP16 tensor dense | 312 TFLOPS | 989 TFLOPS | 989 TFLOPS | 2.25 PFLOPS |
+| BF16 tensor sparse | — | 1979 TFLOPS | 同 H100 | 4.5 PFLOPS |
+| FP8/INT8 dense | — | 3.958 PFLOPS | 同 H100 | 4.5 PFLOPS（sparse 9 PFLOPS） |
+| HBM 容量/带宽 | 80GB HBM2e / 2TB/s | 80GB HBM3 / 3.35TB/s | 141GB HBM3e / 4.8TB/s | 192GB HBM3e / 8TB/s |
+| NVLink | NVLink3 600GB/s | NVLink4 900GB/s | 900GB/s | NVLink5 1.8TB/s |
+| TDP | 400W | 700W | 700W | 1000W（208b 晶体管，2×104B die） |
+| Roofline 拐点（BF16） | ≈156 | ≈295 | ≈206（989/4.8） | ≈281（2250/8） |
 
-**Q2：为什么 GPU 适合 GEMM？tensor core 和 tiling 怎么配合？**
+关键观察：H100→B200 拐点几乎不动（295→281），但算力与带宽绝对值均约翻倍——两代延续
+compute/bandwidth 同比例扩展；H200 靠 4.8TB/s 带宽把拐点压到 ~206，更适合 decode、MoE
+等带宽敏感负载。FP4（B200 dense 9 PFLOPS）进一步把低精度上限推高，但收敛与精度风险由
+用户承担。
 
-- GEMM 的 FLOPs \(O(n^3)\)、搬运 \(O(n^2)\)，arithmetic intensity \(O(n)\)，越大越 compute-bound。
-- **tiling**：把 A/B 切成 tile 放入片上（register/shared memory），让多个输出复用，强度随 tile 边长增长。
-- **tensor core**：在寄存器级完成固定 micro-tile MMA，配合正确的 dtype/layout/alignment 才能达到峰值；`M,N,K` 很小或尾块占比高会 underutilize。
+### NVLink/NVSwitch 与机柜级互连
 
-**Q3：内存层次的数量级？为什么重要？**
+- GB200（Grace+Blackwell Superchip）：2×Blackwell GPU + NVLink5，TDP 2700W；
+- GB200 NVL72：72 颗 B200 + 9 个 Switch Tray（57.6Tb×9 = 518.4Tb）无阻塞全互联，
+  机柜内走铜（成本与功耗低于光模块）；
+- 柜间扩展需第二层 NVSwitch（NVL36×2 方案），第二层光互连（AOC）与有源铜（AEC，~3m）并存；
+- 含义：单机 8 卡不再是并行天花板，“NVLink 域”从节点级扩大到机柜级，TP/EP 可在 72 卡
+  域内低损耗扩张；跨机 all-reduce 仍受第二层互连带宽与时延约束。
 
-- register（最快、线程私有）> shared memory/L1 > L2 > HBM（最慢最大），相邻层级带宽差约 1–2 个数量级、延迟差更多。
-- kernel 优化的本质是**最大化片上复用、减少远端访存**；FlashAttention 的价值就是减少 HBM 往返。
-- 层级化 roofline：一个 kernel 可能相对 HBM compute-bound，却受 shared-memory 带宽或 register 依赖限制。
+### 实测案例：B200 vs H200 训练吞吐
 
-**Q4：TPU 与 GPU 的本质差异？**
+- LLaMA2-70B，TP=8，单节点：H200 454.6 TFLOPS/GPU vs B200 815.2 TFLOPS/GPU
+  （+79.3%），迭代耗时 -86.7%；双/四节点 B200 约 810–814 TFLOPS/GPU，多机扩展损耗小；
+- MLPerf Training 口径：B200 对 H200，GPT-3 175B 预训练 ~2.0×、Llama-70B LoRA 微调 ~2.2×；
+- 解读：峰值算力 2.25PFLOPS/989TFLOPS ≈ 2.3×，但实测 1.8–2.2×——差距来自 HBM 带宽、
+  通信与 kernel 成熟度，印证本讲“vendor peak ≠ end-to-end”的观点。
 
-- **GPU**：SIMT + warp/block/SM，暴露细粒度细节，kernel 生态成熟、控制流/稀疏灵活。
-- **TPU**：systolic array + XLA 编译器静态调度，对规则大矩阵与 SPMD sharding 友好；控制流、稀疏与不规则 gather 较弱。
-- **结论**：不是谁更快，而是 workload 形态决定——规则大 batch GEMM 偏 TPU，灵活稀疏/细粒度优化偏 GPU。
+### TPU 对照（概念，不引新数字）
 
-**Q5：occupancy 是什么？为什么高 occupancy 不一定快？**
+本讲 TPU 内容仍然适用。拓扑差异速记：TPU v4 以 pod 为单位组织，ICI（机内/近邻高速）
+与 DCN（跨 pod）双网络分工；GPU 侧则是 NVLink/NVSwitch（域内）+ InfiniBand/RoCE（跨机）。
+两者都在把“高带宽域”做大、把昂贵流量留在域内。
 
-- occupancy = 活跃 warp / SM 最大 warp，受 registers、shared memory、block 数共同限制。
-- 高 occupancy 只表示有更多候选 warp 可供 latency hiding，不保证 ILP、cache hit 或 tensor-core utilization。
-- 若已 compute-bound，加 occupancy 无收益；register spill 时**降低** occupancy 反而更快。要看 stall reason 而非单一百分比。
+**对本讲学习者的启示**：代际升级中拐点几乎不变，说明算术强度的判断标准稳定——先用
+Roofline 拐点给自己的 workload 定位，再选硬件；选型时对比的是“你的强度落在哪一段”，
+而不是 peak TFLOPS 排行榜。互连与并行策略必须联合设计：NVLink 域扩大（NVL72）改变
+TP/EP 的可行切分，跨域通信预算决定 PP/DP 配比。
 
-**Q6：memory coalescing 是什么？为什么重要？**
+## 大厂面试真题与答题框架
 
-- 同一 warp 连续访问相邻地址，可合并成少量 cache-line transaction；错误 stride、转置后非连续访问会放大 HBM 流量。
-- 布局（AoS/SoA）、`contiguous()`（本身会触发拷贝）都要在 profiler 里确认，而非默认正确。
+以下为高频面试题（公开面经风格），非任何公司真题。
 
-**Q7：为什么训练偏 compute-bound、decode 偏 memory-bound？**
+**题目 1：给定模型规模与序列长度，估算一次 GEMM 的算术强度，并判断 compute 还是 bandwidth bound**
+- 考点：Roofline、GEMM FLOPs/bytes 公式、拐点计算。
+- 答题框架：1) 写出 GEMM shape（M,K,N），FLOPs ≈ 2MKN；2) 估算最低 bytes
+  ≈ s(MK+KN+MN)（s 为每元素字节数，BF16 取 2）；3) 算强度 I = F/Q，方阵时 I = Θ(n)；
+  4) 与硬件拐点比较（H100 BF16 ≈ 295、B200 ≈ 281 FLOPs/byte）；5) 下结论并说明
+  实际 bytes 会被 tile 重叠、cache miss 放大，需 profiler 验证。
+- 加分项：指出小 batch/短序列时 M 维塌缩、强度骤降；提到 hierarchical roofline
+  （HBM bound ≠ shared-memory bound）。
+- 踩坑：用 sparse 峰值（如 H100 BF16 1979 TFLOPS）当分母；忘记输出写入的 MN 项。
 
-- 训练/大 batch：大 GEMM 复用强、arithmetic intensity 高 → compute-bound。
-- decode：每步 query 极少（matrix-vector/small GEMM），却要反复读取整段 weights + KV cache → bandwidth-bound。
-- 所以不能用训练 MFU 预测 serving tokens/s；decode 优化方向是压 KV cache/权重读取，而非提算力。
+**题目 2：为什么 LLM decode 阶段是带宽瓶颈？**
+- 考点：decode 的访存模式、强度 vs 拐点、tokens/s 上界。
+- 答题框架：1) decode 每 step 只处理 1 个 token，GEMM 退化为 GEMV，FLOPs ≈ 2P；
+  2) 但每 step 要读全部 weights（+KV cache），bytes ≈ 2P（BF16）；3) 强度 ≈ 1
+  FLOPs/byte，远低于拐点（~300）；4) 因此 tokens/s 上界 ≈ HBM 带宽 / 模型字节数
+  （H200 4.8TB/s / 140GB ≈ 34 tokens/s 量级）；5) 缓解：batching 摊销权重读取、
+  weight-only 量化减 bytes。
+- 加分项：指出 batching 提高强度但受 KV cache 显存与 latency SLO 约束；
+  提 continuous batching。
+- 踩坑：说“GPU 利用率低所以是带宽瓶颈”——利用率不是证据，带宽实测才是。
 
-**Q8：latency hiding 怎么工作？什么限制它？**
+**题目 3：Roofline 拐点怎么算？H100 和 B200 的拐点各是多少？**
+- 考点：拐点公式与代际比较。
+- 答题框架：1) 拐点 I* = 峰值算力 / 带宽；2) H100 BF16 = 989 TFLOPS / 3.35TB/s
+  ≈ 295 FLOPs/byte；3) B200 = 2250/8 ≈ 281；4) 指出两代拐点接近但绝对性能翻倍，
+  说明 NVLink/HBM 与算力同比例演进；5) H200 拐点 ≈ 206，对带宽敏感负载更友好。
+- 加分项：把拐点变化映射到选型建议（decode/MoE 选大带宽、dense 大 GEMM 选大算力）。
+- 踩坑：把 NVLink 带宽当 HBM 带宽；混淆 dense/sparse 口径。
 
-- 某 warp 等待 memory/dependency 时，scheduler 切到 ready warp，用并发隐藏延迟。
-- 可驻留 warp 数受 threads/registers/shared memory/block limit 的最小项限制；software pipelining 把「加载下一 tile」与「计算当前 tile」重叠。
-- stage 太少藏不住延迟，太多耗 shared/register 降 occupancy，需联合调参。
+**题目 4：A100→H100→B200 关键数字与代际演进逻辑？**
+- 考点：硬件代际账本、数字敏感度。
+- 答题框架：1) 报三组关键数（BF16 dense、HBM 带宽、NVLink）：A100 312/2TB/s/600GB/s，
+  H100 989/3.35TB/s/900GB/s，B200 2.25PFLOPS/8TB/s/1.8TB/s；2) TDP 400→700→1000W；
+  3) 总结演进逻辑：算力×带宽×互连同比例扩张 + 低精度位数下探（FP16→FP8→FP4）；
+  4) 用实测收尾：B200 对 H200 训练吞吐 ~1.8–2.2×，低于峰值比 2.3×。
+- 加分项：提能耗比（H100 ≈1.41 → B200 ≈2.25 TFLOPS/W，FP8/INT8 口径）与
+  GB200 NVL72 机柜级互连。
+- 踩坑：只背峰值算力，答不出带宽与互连；把 HBM3 与 HBM3e、NVLink4/5 混为一谈。
 
-**Q9：怎么判断一个 kernel 慢在哪里？**
+**题目 5：为什么 all-reduce 要尽量在 NVLink 域内完成？跨机怎么办？**
+- 考点：拓扑感知通信、α-β 模型、并行策略选择。
+- 答题框架：1) NVLink 域内 900GB/s（H100）/1.8TB/s（B200），时延 ~1µs 级；
+  跨机 IB/RoCE 带宽低一个量级；2) 通信时间 ≈ α + bytes/β，跨机 β 是短板；
+  3) 策略：TP/EP 放域内（通信量大、时延敏感），PP/DP 跨机（通信量相对小）；
+  4) 跨机用梯度分桶 + 通信/反向传播 overlap；5) 机柜级 NVLink 域（GB200 NVL72，
+  518.4Tb 无阻塞）把“域”从 8 卡扩到 72 卡。
+- 加分项：提 NCCL 的 topology-aware ring/tree 算法选择；用 nccl-tests 实测 bus bandwidth。
+- 踩坑：认为 all-reduce 时间只由总带宽决定，忽略 contention 与 bucket size。
 
-- 先算 shape/dtype 的理论 FLOPs、最低 bytes 与 arithmetic intensity，猜 bound。
-- 再 profile：kernel 数、duration、launch gap、achieved bandwidth、tensor-core utilization、occupancy、stall reason。
-- 用证据证伪假设：若猜 memory-bound，应看到高 achieved bandwidth + 低 compute utilization；否则假设有误。
+**题目 6：MFU 是什么？怎么从 tokens/s 算到 MFU？**
+- 考点：MFU 定义、模型 FLOPs 利用率计算链。
+- 答题框架：1) MFU = 实测 TFLOPS/GPU ÷ 理论峰值（注意 dense 口径，H100 BF16 取
+  989 而非 1979）；2) 实测 TFLOPS = 6·P·tokens/s ÷ GPU 数（乘法/加法各计一次，
+  forward 2P、backward 4P）；3) 代数字示例：70B 模型、8×H200、454.6 TFLOPS/GPU
+  → MFU ≈ 454.6/989 ≈ 46%；4) 说明 MFU 的用途与局限：不反映通信/数据管道等待，
+  也不能外推到 serving tokens/s。
+- 加分项：区分 MFU 与 HBWU（显存带宽利用率）——decode 更应看后者。
+- 踩坑：用 sparse 峰值或 FP8 峰值给 BF16 训练算 MFU；把 BF16 显存收益误算进 FLOPs。
 
-**Q10：为什么 bf16 不一定让显存减半？**
+**题目 7：GB200 NVL72 的机柜级互连对并行策略设计意味着什么？**
+- 考点：拓扑与并行策略联合设计。
+- 答题框架：1) NVL72 = 72×B200 + 9 Switch Tray，518.4Tb 无阻塞，柜内铜连接；
+  2) NVLink 域从 8 卡扩到 72 卡 → TP=16/32、大 EP 的通信损耗大幅下降；
+  3) 跨柜用第二层 NVSwitch（NVL36×2），第二层 AOC/AEC 并存，跨柜带宽仍低于柜内；
+  4) 策略：通信密集维度（TP/EP）锁在柜内，DP/PP 出柜；5) 估算示例：TP=8 单节点
+  B200 实测 815.2 TFLOPS/GPU，双/四节点仍 ~810–814，说明扩展损耗可控。
+- 加分项：提机柜供电/散热（GB200 TDP 2700W/NVL72 整柜功耗 MW 级）是选型约束。
+- 踩坑：只看 GPU 数不算互连层级；假设跨柜与柜内等带宽。
 
-- bf16 只降低 parameter/gradient/activation 的 dtype；Adam moments、master weight 常仍为 fp32。
-- 训练态 16N 规则里，fp32 的 m/v + master 占 12N，bf16 只省了参数+梯度的 2N→4N 部分。
-- 报告 memory reduction 要写全 state breakdown，不能只按「dtype 减半」估计。
+## 系统设计题
 
-### 12.3 手撕要点（Roofline 计算）
+**设计题 1：为 70B 模型（BF16 训练）做训练集群 GPU 选型与互连设计（H100 vs B200）**
+- 需求澄清：模型 70B、序列 4–8k、目标 tokens/s 与预算上限、是否容忍 FP8、
+  机房供电/机柜限制、扩展规模（单节点 vs 多节点）。
+- 规模估算：显存账本 16P bytes（FP32 AdamW）≈ 1.1TB → 至少 TP=8 或 ZeRO 分片；
+  实测参照：LLaMA2-70B TP=8，H200 454.6、B200 815.2 TFLOPS/GPU；若目标 MFU >45%，
+  B200 单节点即可，H100/H200 需更多节点补偿。
+- 架构：单节点 8×B200（NVLink5 1.8TB/s 域内 TP=8）+ 跨节点 DP/PP（IB/RoCE）；
+  或 GB200 NVL72 柜内 TP/EP、柜间 DP。梯度通信用分桶 + overlap。
+- Trade-off 表：
 
-面试让「算某个 kernel 是 compute-bound 还是 memory-bound」时，按固定步骤：
+| 维度 | 8×H200 节点集群 | 8×B200 节点集群 | GB200 NVL72 |
+|---|---|---|---|
+| 单 GPU BF16 dense | 989 TFLOPS | 2.25 PFLOPS | 2.25 PFLOPS |
+| HBM 带宽 | 4.8TB/s | 8TB/s | 8TB/s |
+| NVLink 域 | 8 卡 / 900GB/s | 8 卡 / 1.8TB/s | 72 卡 / 518.4Tb 无阻塞 |
+| 能耗比（FP8/INT8 口径） | ≈1.41 TFLOPS/W | ≈2.25 TFLOPS/W | ≈2.08（GB200） |
+| 供电/改造 | 700W/卡，较易 | 1000W/卡 | 2700W/superchip，机柜级改造 |
 
-```text
-1. FLOPs F：matmul [M,K]@[K,N] -> F ≈ 2 M K N
-2. bytes Q：读 A + 读 B + 写 C ≈ s(MK + KN + MN)   （理想一次读入）
-3. arithmetic intensity I = F / Q
-4. 拐点 I* = C_max / BW
-5. I < I* -> memory-bound；I > I* -> compute-bound
+- 评测方案：固定 tokens 与 loss 目标，报告 time-to-quality 与 energy-to-quality；
+  MFU（dense 口径）、all-reduce exposed time（Nsight/NCCL timeline）、多节点
+  扩展曲线（8→16→32 卡）；用 nccl-tests 校准 bus bandwidth。
+- 追问预案：预算受限→H200 靠带宽优势保 decode/微调，训练密度用更多节点换；
+  FP8 可用→B200 FP8 4.5 PFLOPS 可再提吞吐，但需 per-tensor scale 与收敛验证；
+  断点续训/弹性→DP 维度可缩放，TP 维度不可。
 
-例子（A100 bf16，s=2）：
-  方阵 n=1024 GEMM：F=2·1024³≈2.1e9，Q≈2·3·1024²≈6.3e6
-  I ≈ 340 FLOPs/byte > 156 -> compute-bound
-  elementwise ReLU（n 元素）：F≈n, Q≈2n·s -> I ≈ 0.25 -> memory-bound
+**设计题 2：70B 模型推理集群的带宽预算与部署方案**
+- 需求澄清：并发请求数、每请求 token 数、TTFT/TPOT SLO、精度要求
+  （BF16 vs weight-only INT8/INT4）、预算与卡型。
+- 规模估算：weights BF16 ≈ 140GB → 单卡放不下，TP=2（H200 141GB）勉强、
+  常规 TP=4/8；decode tokens/s 上界 ≈ 聚合 HBM 带宽 / 140GB：单节点 8×H200
+  ≈ 38TB/s / 140GB ≈ 273 tokens/s（总吞吐上界，无 batch 摊销时每请求 ≈ 带宽/权重）；
+  B200 单节点 8×8TB/s = 64TB/s，上界约翻倍。
+- 架构：prefill/decode 分离（prefill compute-bound 用大算力卡，decode
+  bandwidth-bound 用大带宽卡）；decode 侧 continuous batching 提高权重复用；
+  KV cache 显存预算 = 并发数 × 序列长 × KV bytes，决定最大 batch。
+- Trade-off 表：
+
+| 方案 | 显存压力 | decode 吞吐 | 时延 SLO | 备注 |
+|---|---|---|---|---|
+| TP=8 BF16 | 低（权重分片） | 高（聚合带宽） | 好（通信 ~1µs 域内） | 通信每 step 都发生 |
+| TP=2 + 多实例 | 中 | 中 | 中 | 实例间独立扩展 |
+| weight-only INT8 | 权重减半 | 上界≈×2 | 好 | 需量化校准与 outlier 处理 |
+| prefill/decode 分离 | 需 KV 传输 | 最优 | 最优 TTFT | 系统复杂度高 |
+
+- 评测方案：分负载报告 TTFT、TPOT、tokens/s/GPU、HBWU（实测 HBM 带宽/峰值）；
+  扫 batch 与并发，标注 SLO 违约率；对比 vLLM 类 continuous batching 基线。
+- 追问预案：长上下文主导→KV cache 超 weights，优先 paged/分页 KV 与量化 KV；
+  突发流量→decode 实例横向扩，prefill 弹性；精度投诉→回退 BF16 关键层。
+
+**设计题 3：多机扩展的通信子系统的评估与设计（α-β 模型落地）**
+- 需求澄清：并行策略（TP/PP/DP/EP 配比）、消息大小分布、可接受 exposed time 占比、
+  网络预算（IB/NVLink 层级）。
+- 规模估算：DP 梯度同步 bytes ≈ 2P（BF16 梯度）≈ 140GB/step（70B），
+  分桶后单桶 ~百 MB 级；通信时间 ≈ α + bytes/β；域内 β 取 NVLink（900GB/s/1.8TB/s），
+  跨机取 IB（低一个量级）。
+- 架构：通信量大的 TP/EP 限制在 NVLink 域（节点内或 NVL72 柜内）；DP 梯度
+  bucket 化 + 与 backward overlap；PP 切在跨机边界，用 micro-batch 填 bubble。
+- Trade-off 表：
+
+| 手段 | 降低什么 | 代价 |
+|---|---|---|
+| bucket + overlap | exposed 通信时间 | 实现复杂、依赖图约束 |
+| TP 域内收缩 | 跨机大消息 | 单卡显存压力上升 |
+| PP 跨机 | 跨机消息频次 | bubble、micro-batch 调参 |
+| 梯度压缩/FP8 通信 | bytes | 精度风险、需收敛验证 |
+
+- 评测方案：nccl-tests 实测 bus bandwidth/时延基线；Nsight/NCCL timeline 量
+  exposed vs overlapped 时间；扩展曲线（8→32→72 卡）看 scaling 效率拐点。
+- 追问预案：overlap 不生效→检查依赖与 stream 优先级；scaling 骤降→先看
+  straggler 与负载不均，再看网络；跨机时延抖动→检查拥塞控制与拓扑冲突。
+
+## 代码实现题
+
+**实现题 1：Roofline 计算器**
+- 题目：给定峰值算力、HBM 带宽与 kernel 的 FLOPs/bytes（或 shape 推导），估算
+  运行时间上限与瓶颈类型；内置 H100/B200 预设。
+- 考察点：Roofline 公式落地、dense/sparse 口径意识、单位换算。
+
+```python
+from dataclasses import dataclass
+
+PRESETS = {  # SXM/官方标称（dense 口径）
+    "A100": dict(peak_flops=312e12, bw=2.0e12),
+    "H100": dict(peak_flops=989e12, bw=3.35e12),
+    "H200": dict(peak_flops=989e12, bw=4.8e12),
+    "B200": dict(peak_flops=2.25e15, bw=8.0e12),
+}
+
+@dataclass
+class Roofline:
+    peak_flops: float  # FLOP/s，dense 口径
+    bw: float          # bytes/s
+
+    @classmethod
+    def from_preset(cls, gpu: str) -> "Roofline":
+        return cls(**PRESETS[gpu])
+
+    @property
+    def ridge(self) -> float:  # 拐点 FLOPs/byte
+        return self.peak_flops / self.bw
+
+    def analyze(self, flops: float, bytes_: float):
+        assert flops > 0 and bytes_ > 0
+        t_compute = flops / self.peak_flops
+        t_memory = bytes_ / self.bw
+        intensity = flops / bytes_
+        bound = "compute" if intensity >= self.ridge else "memory"
+        return {
+            "intensity_flops_per_byte": round(intensity, 1),
+            "ridge_point": round(self.ridge, 1),
+            "bound": bound,
+            "t_lower_bound_s": max(t_compute, t_memory),
+            "t_compute_s": t_compute,
+            "t_memory_s": t_memory,
+        }
+
+def gemm_flops_bytes(m: int, k: int, n: int, elem_bytes: float = 2):
+    flops = 2 * m * k * n
+    bytes_ = elem_bytes * (m * k + k * n + m * n)  # 每输入读一次、输出写一次
+    return flops, bytes_
+
+if __name__ == "__main__":
+    r = Roofline.from_preset("B200")
+    f, b = gemm_flops_bytes(4096, 4096, 4096)  # 方阵：I=Θ(n)
+    print(r.analyze(f, b))   # 预期 compute bound（I≈1365 > 拐点≈281）
+    f2, b2 = 2 * 70e9, 2 * 70e9  # decode 一步：读全部权重，I≈1
+    print(r.analyze(f2, b2))  # 预期 memory bound
 ```
 
-**三个必踩坑**
+- 验收标准：H100 拐点输出 ≈295、B200 ≈281、H200 ≈206；4096 方阵判 compute bound、
+  decode 判 memory bound；非法输入（flops/bytes ≤ 0）报错而非返回 NaN。
 
-1. **峰值用 sustained 不用 boost**：boost clock 只在短时，长期受热/功耗限制。
-2. **Q 只是理想下界**：tile 重叠、cache eviction、非合并访问、中间写回都会放大实际 bytes。
-3. **拐点随 dtype 变**：bf16 峰值与 fp32 峰值不同，拐点也不同，别混用。
+**实现题 2：MFU 计算脚本（tokens/s → TFLOPS/GPU → MFU）**
+- 题目：输入模型参数量、实测 tokens/s、GPU 数与卡型，输出每 GPU TFLOPS 与 MFU。
+- 考察点：6P 近似（fwd 2P + bwd 4P）、dense 峰值口径、单位换算。
 
-### 12.4 高频追问与陷阱
+```python
+PRESET_PEAK_BF16_DENSE = {"A100": 312e12, "H100": 989e12,
+                          "H200": 989e12, "B200": 2.25e15}
 
-| 追问 | 正确方向 |
-| --- | --- |
-| occupancy 低就减寄存器吗？ | 不一定，spill 才减；compute-bound 时反而无需高 occupancy |
-| tensor core 为什么需要对齐？ | 固定 micro-tile 尺寸，M/N/K 或 layout 不对齐会 underfill |
-| GPU utilization 100% 说明算满吗？ | 否，memory/launch-bound 也能让设备一直忙 |
-| BF16 显存减半了吗？ | 否，Adam fp32 状态与 master weight 仍占大头 |
-| reserved 是真实占用吗？ | 否，含 allocator 缓存池；看 allocated 才是 live |
-| 跨卡直接按峰值倍数估加速吗？ | 否，通信/拓扑/软件成熟度都会改变，需实测 |
-| microkernel 快模型就快吗？ | 否，Amdahl：只快非瓶颈部分收益有限 |
+def mfu(params: float, tokens_per_s: float, num_gpus: int, gpu: str,
+        attn_flops: float = 0.0) -> dict:
+    peak = PRESET_PEAK_BF16_DENSE[gpu]  # dense 口径，勿用 sparse
+    total_flops_per_s = (6 * params + attn_flops) * tokens_per_s
+    per_gpu_tflops = total_flops_per_s / num_gpus / 1e12
+    return {
+        "tflops_per_gpu": round(per_gpu_tflops, 1),
+        "mfu_pct": round(100 * (per_gpu_tflops * 1e12) / peak, 1),
+    }
 
-## 13. 小结
+if __name__ == "__main__":
+    # 参照实测：LLaMA2-70B TP=8，B200 815.2 TFLOPS/GPU
+    print(mfu(params=70e9, tokens_per_s=7260, num_gpus=8, gpu="B200"))
+    # 6*70e9*7260/8/1e12 ≈ 3812? -> 校验口径：815.2 对应 MFU≈36.2%
+    print(mfu(params=70e9, tokens_per_s=1.0, num_gpus=8, gpu="B200"))
+```
+
+- 验收标准：参数量/卡数/tokens/s 任意缩放结果正确；峰值表只含 dense 口径并在
+  注释标明；输出同时给 TFLOPS/GPU 与 MFU 百分比；除零（num_gpus=0 或 tokens/s=0）
+  显式报错。
+
+**实现题 3：decode 吞吐上界估算器（bandwidth-bound 视角）**
+- 题目：给定卡型/卡数（TP）、模型字节数与 KV cache 带宽开销，估算 decode
+  tokens/s 上界与 batch 摊销后的吞吐。
+- 考察点：decode 强度 ≈ 1 的直觉量化、batching 对权重复用的摊销。
+
+```python
+PRESET_BW = {"A100": 2.0e12, "H100": 3.35e12, "H200": 4.8e12, "B200": 8.0e12}
+
+def decode_upper_bound(params: float, tp: int, gpu: str,
+                       kv_bytes_per_token: float = 0.0,
+                       batch: int = 1) -> dict:
+    assert tp > 0 and batch > 0
+    per_gpu_bw = PRESET_BW[gpu]
+    agg_bw = per_gpu_bw * tp
+    weight_bytes = 2 * params  # BF16 权重，TP 已分摊在 agg_bw 中
+    # 每 step 搬运：权重（batch 摊销）+ batch×KV
+    step_bytes = weight_bytes + batch * kv_bytes_per_token
+    step_time_lb = step_bytes / agg_bw
+    tokens_per_s = batch / step_time_lb
+    return {
+        "step_time_lb_s": round(step_time_lb, 6),
+        "tokens_per_s_upper": round(tokens_per_s, 1),
+        "intensity_flops_per_byte": round((2 * params * batch) / step_bytes, 2),
+    }
+
+if __name__ == "__main__":
+    # 70B BF16，8×H200：无 KV、batch=1
+    print(decode_upper_bound(70e9, tp=8, gpu="H200"))
+    # batch=32 时权重被摊销，吞吐≈×32（KV 可忽略时）
+    print(decode_upper_bound(70e9, tp=8, gpu="H200", batch=32))
+```
+
+- 验收标准：batch=1 时强度输出 ≈1–2（远低于拐点 ~300，佐证 memory bound）；
+  batch 增大时 tokens/s 上界近似线性上升直至 KV 项主导；TP 增大等价于聚合带宽
+  线性增大；注明这是下界时间/上界吞吐，实际受并行效率和重叠影响。
+
+## 12. 小结
 
 加速器优化的统一原则是让昂贵的数据搬运被更多有效计算摊销。GPU/TPU 的接口不同，但都必须围绕 shape、布局、片上复用、低精度和通信建立资源账本。在模型规模增速持续超过带宽增速的背景下，这一原则只会越来越重要 [[11]](#ref-11)。Roofline 用于提出假设，benchmark 与 profiler 用于推翻或验证假设。
 
@@ -640,4 +886,7 @@ https://doi.org/10.1145/1465482.1465560
 - [PyTorch Profiler](https://pytorch.org/docs/stable/profiler.html)
 - [Nsight Systems User Guide](https://docs.nvidia.com/nsight-systems/UserGuide/index.html)
 - [JAX Scaling Book：TPU performance](https://jax-ml.github.io/scaling-book/)
-- [A2 Systems 官方题面](../assignments/assignment2-systems/cs336_assignment2_systems.pdf)
+- [A2 Systems 官方题面](../assignments/spring2026/assignment2-systems/cs336_assignment2_systems.pdf)
+- [NCCL Tests（all-reduce/bus 带宽实测工具）](https://github.com/NVIDIA/nccl-tests)（访问日期 2026-10-04）
+- [CS336 课程主页](https://cs336.stanford.edu)（访问日期 2026-10-04）
+- [vLLM 文档（continuous batching 与推理性能）](https://docs.vllm.ai)（访问日期 2026-10-04）

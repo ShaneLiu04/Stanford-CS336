@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_03.pdf"
-  - "../assignments/assignment1-basics/"
+  - "../assignments/spring2026/assignment1-basics/"
 ---
 
 # Lecture 03 — Architectures 与 Hyperparameters：从建模假设到可训练系统
@@ -16,7 +16,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、模型架构工程师与 LLM 研究者
 
 ## 摘要
@@ -518,7 +518,7 @@ wall-clock 中并非完全可忽略。
 
 | 概念 | 路径 / 符号 | 测试 / 实验 |
 |---|---|---|
-| Embedding / Linear | `assignments/assignment1-basics/cs336_basics/model.py` | `test_embedding`、`test_linear` |
+| Embedding / Linear | `assignments/spring2026/assignment1-basics/cs336_basics/model.py` | `test_embedding`、`test_linear` |
 | RMSNorm fp32 reduction | 同文件：`RMSNorm.forward` | `test_rmsnorm` |
 | RoPE cache/rotation | 同文件：`RotaryEmbedding` | `test_rope` |
 | SDPA + causal mask | 同文件：`scaled_dot_product_attention`、`CausalMultiHeadSelfAttention` | attention snapshots |
@@ -543,6 +543,10 @@ wall-clock 中并非完全可忽略。
 10. **将 NoPE 仍能训练解释为“不需要位置”。** Causal boundary 泄露部分顺序信号，但距离表达受限。
 11. **只比较相同步数。** Batch 或 context 不同会导致 tokens/FLOPs 不同。
 12. **根据单 seed 小实验宣布普遍最佳架构。** 差异可能小于 seed noise 或系统误差。
+13. **RoPE 逆频率用 BF16 计算。** 逆频率从 1 到 1/10000 跨多个数量级，BF16 尾数
+    仅 8 位；工业实现（Qwen 官方技术报告口径）逆频率矩阵用 FP32。
+14. **大词表下盲目 weight tying。** 中文 15 万+ 词表时 Vd 两侧各达数亿参数，
+    tied/untied 必须匹配总参数、单独调初始化后再比较。
 
 ## 11. 实践 Checklist
 
@@ -564,20 +568,28 @@ wall-clock 中并非完全可忽略。
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
 | loss 近似 \(\log V\) 且不降 | shift/mask/optimizer | 标签未右移、未来泄漏或未 step |
-| 训练初期 NaN / loss 尖峰 | init/LR/norm dtype | residual scale、fp16 reduction、lr 与深度不匹配 |
-| 深层模型比浅层差很多 / 不收敛 | pre/post norm、warm-up、gamma init | 梯度路径不稳定、DeepNorm 类缩放未按深度调整 |
-| loss 停在高位平台 | normalization 位置 | pre-LN/post-LN 选择与初始化不配套 |
+| 训练初期 NaN | init/LR/norm dtype | residual scale、fp16 reduction |
+| 深层模型比浅层差很多 | pre/post norm、warm-up | 梯度路径不稳定 |
 | attention 输出全相同 | softmax 轴、mask | 沿 query/head 归一化 |
-| 长上下文突然退化 / 外推差 | RoPE cache/外推/base | 超出训练长度、frequency mismatch、base 过小 |
+| 长上下文突然退化 | RoPE cache/外推 | 超出训练长度、frequency mismatch |
 | SwiGLU 参数暴涨 | hidden-size matching | 沿用 \(4d\) 未按 \(8d/3\) 调整 |
 | checkpoint 后 tying 失效 | parameter alias | load 时创建了两份 Parameter |
-| 参数量与论文对不上 | 统计口径（embedding、bias、tied） | 未说明是否计 embedding 或权重共享 |
 | GPU utilization 下降 | GEMM shape/heads | width/head dimension 不友好 |
 | 消融结论反复 | seed/tuning budget | 差异小于 noise、超参不公平 |
 | PPL 看似更低但不可比 | tokenizer/data | vocabulary 或 bytes/token 不同 |
+
+### 故障排查速查
+
+| 现象 | 优先检查 | 常见根因 |
+|---|---|---|
+| 训练发散/loss 尖峰 | 初始化尺度与学习率 | 残差流未缩放、lr 与深度不匹配 |
+| loss 停在高位平台 | normalization 位置 | pre-LN/post-LN 选择与初始化不配套 |
+| 参数量与论文对不上 | 统计口径（embedding、bias、tied） | 未说明是否计 embedding 或权重共享 |
+| 长序列外推差 | RoPE base 与训练长度 | base 过小；需 position interpolation/YaRN |
 | batch 增大吞吐不升 | attention 二次项与激活显存 | 序列长度主导，考虑 FlashAttention |
 | 微调后基座能力受损 | 学习率与全参数更新 | 改用 LoRA 或更小 lr |
 | 生成重复退化 | 采样参数与数据检查 | 温度/重复惩罚设置；排除训练数据退化 |
+| 深层网络不收敛 | 残差路径与 gamma 初始化 | DeepNorm 类缩放未按深度调整 |
 
 ## 12. 作业关联
 
@@ -592,14 +604,14 @@ wall-clock 中并非完全可忽略。
 
 ## 13. 讨论：效度威胁与架构结论边界
 
-### 13.1 Construct validity
+### 14.1 Construct validity
 
 - parameter count、training FLOPs、wall-clock 与 inference cost 是不同预算；
 - validation loss 不等价于 downstream capability、robustness 或 safety；
 - context benchmark 的 retrieval 成功不等价于普遍 long-context reasoning；
 - “相同 hidden size”不代表不同 FFN/attention 结构参数或 FLOPs 相同。
 
-### 13.2 Internal validity
+### 14.2 Internal validity
 
 - 架构变更常同时改变初始化、LR optimum、kernel shape 与可用 batch；
 - best-of-sweep 会产生 selection bias，尤其不同配置 tuning runs 数量不等；
@@ -607,208 +619,407 @@ wall-clock 中并非完全可忽略。
 - 单 seed 差异可能小于 initialization/data-order variance；
 - early stopping/checkpoint selection 必须统一。
 
-### 13.3 External validity
+### 14.3 External validity
 
 - 小模型上 SwiGLU/NoPE/tying 排名未必迁移到 billion-scale；
 - 单一语言/领域的最佳 vocabulary/context 不代表多语言/code；
 - 单 GPU hardware efficiency 不代表多卡 communication efficiency；
 - 训练吞吐最佳的架构未必 inference latency/energy 最佳。
 
-### 13.4 研究结论的推荐表述
+### 14.4 研究结论的推荐表述
 
 避免：“Pre-norm 永远优于 post-norm。”
 推荐：“在固定参数、token budget、optimizer 与三 seeds 的本实验中，pre-norm 达到更低
 validation loss 和更稳定 gradient norm；该结论限于当前规模与 tuning budget。”
 
-## 14. 面试备考（Interview Prep）
+## 面试要点速记
 
-> Transformer 架构是 LLM 面试最高频、也是最能拉开差距的考点：从「画出 attention」一路追到
-> 「为什么 pre-norm」「为什么 sqrt(d_h)」「SwiGLU 参数怎么匹配」「位置外推怎么做」。本讲把
-> 这些默认值逐个拆到公式与形状，下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织，
-> 每题用 **定义 → 为什么/原理 → 公式 → 工程落地 → 边界** 的框架。
+**高频问题与答题要点**
 
-### 14.1 一页速览卡（面试前 1 分钟）
+1. **Q：pre-LN vs post-LN？** 要点：pre-LN 残差流直通、深层训练稳定；post-LN
+   表达略强但对 warmup 与初始化敏感。现代大模型默认 pre-LN/RMSNorm。
+2. **Q：RoPE 相对绝对位置编码的优势？** 要点：只依赖相对位置、通过旋转内积
+   实现、外推性质更好；超长上下文需增大 base 或用 PI/YaRN。
+3. **Q：为什么 SwiGLU 取代 ReLU FFN？** 要点：门控乘性调制提升表达；相同参数
+   预算下 loss 更优；三矩阵结构（约 8d²/层，保持与双矩阵 FFN 等参）。
+4. **Q：非嵌入参数量怎么估？** 要点：每层 attention 4d² + FFN 8d² = 12d²，
+   总量 ≈ **12·l·d²**；embedding 另计 l·v（tied 可省输出侧）。
+5. **Q：tied vs untied embedding？** 要点：tied 省 \(Vd\) 参数，大词表（如 15 万+）
+   下收益可观，但同一矩阵要兼顾查表与分类器双角色，初始化难两全；Qwen 官方技术
+   报告口径为 untied（以空间换性能），比较时必须匹配总参数。
+6. **Q：RoPE 逆频率为什么用 FP32？** 要点：\(\theta^{-2i/d_h}\) 从 1 到 1/10000
+   跨多个数量级，BF16 尾数仅 8 位，量化误差直接进旋转角；工业实现（Qwen 官方技术
+   报告口径）逆频率矩阵用 FP32，旋转后再 cast 回低精度。
+7. **Q：QK-Norm / Z-loss 治什么病？** 要点：QK-Norm 对每 head 的 Q/K 做 RMSNorm，
+   抑制 attention logit 增长与熵坍缩；Z-loss 惩罚归一化项漂移，用于大规模训练稳定。
+   二者买的是 stability，不是容量。
+8. **Q：为什么 Llama-3 8B 用 15T tokens（约 1875 tokens/param）？** 要点：远超
+   Chinchilla 训练最优的约 20 tokens/param，属“推理经济性”过训——训练一次、推理
+   摊薄；compute-optimal ≠ deployment-optimal。
 
-**核心主张**：现代 decoder-only LM block 有一组稳健起点——pre-norm、RMSNorm、RoPE、SwiGLU、
-bias-free linear，它们都同时回答「表示能力 / 优化稳定性 / shape复杂度 / 硬件效率」四个问题，
-而不是拍脑袋的默认值。
+**必背数字**
 
-**必背数字与公式**
+- N≈12ld²（非嵌入）；RoPE base 10k → 长上下文 500k 级；RMSNorm 去均值中心化、
+  计算更省；QK-norm 抑制 logit 增长与注意力熵坍缩。
+- 工业界参照：Llama 系「四件套」= Pre-RMSNorm + SwiGLU + RoPE + GQA（GQA 自
+  Llama-2 34B/70B、Llama-3 8B/70B 起用，KV 共享降参数与 KV cache）。
+- 工业界参照：SwiGLU 配套 d_ff ≈ 8/3·d；n_heads 随 d_model 缩放，d_head 常保持 64–128。
+- 工业界参照：Qwen 训练配方——AdamW β1=0.9、β2=0.95、ε=1e-8；cosine 衰减到
+  峰值 LR 的 10%；BFloat16 混合精度。
+- 工业界参照：Qwen 1.8B→72B：层数 24→80、heads 16→64、hidden 2048→8192；
+  词表 15 万+，预训练 2.2T tokens，上下文最大 32K。
+- 工业界参照：Llama-3 405B 用 15T tokens、128K 上下文、多模态支持；8B 用
+  15T tokens ≈ 1875 tokens/param（Chinchilla 训练最优约 20）。
 
-- 参数量 \(N\approx12Ld^2\)（`d_ff=4d`：单层 QKV+out `4d²` + SwiGLU `8d²`）。
-- 每 token 每层 FLOPs：QKV+O `8Td²` + attention `4T²d` + SwiGLU `24Td²`（`f=4d`）。
-- attention 缩放：\(\operatorname{Var}(q^\top k)\approx d_h\)，故除以 \(\sqrt{d_h}\)。
-- SwiGLU 参数匹配：`3·f_GLU = 2·f_FFN`，若 `f_FFN=4d` 则 `f_GLU≈8d/3`。
-- RMSNorm：`x/RMS(x)·g`，无均值中心化、无 bias，参数仅 `d` 个 gain。
+## 行业现状与最新进展（2024–2026）
 
-**三句话答高频**
+### Llama 系「四件套」如何成为默认配置
 
-1. pre-norm 让残差流直通（Jacobian 含 identity），深层训练稳定；post-norm 对初始化/warm-up 敏感。
-2. RoPE 用旋转矩阵把相对位置注入 QK 点积：\(\tilde q_m^\top \tilde k_n = q_m^\top R_{n-m}k_n\)。
-3. SwiGLU 用门控乘性调制提表达，但必须按参数量匹配，否则「公平比较」是伪命题。
+2024–2026 年的开源 Dense 模型几乎不再逐项消融以下组合，而是直接作为起点
+（经验默认值，非数学定律）：
 
-### 14.2 高频面试题与答题框架
+| 组件 | 工业默认 | 作用 | 采纳节点 |
+|---|---|---|---|
+| Normalization | Pre-RMSNorm（替代 LayerNorm） | 去均值中心化、计算更省，训练更稳更快 | Llama-1 起全系 |
+| FFN | SwiGLU（GLU + Swish/SiLU） | 相近预算下优于 GeLU/ReLU FFN | Llama-1 起全系 |
+| 位置编码 | RoPE | 相对位置注入 QK 点积，长序列友好 | Llama-1 起全系 |
+| KV 组织 | GQA | 组内共享 K/V，降参数与 KV cache | Llama-2 34B/70B、Llama-3 8B/70B 起用 |
 
-**Q1：画出 decoder-only Transformer 一个 block 的数据流？pre-norm 与 post-norm 的区别？**
+「四件套」之上仍有一层二阶工程决策，Qwen 的差异化选择（官方技术报告口径）是典型样本：
 
-- **数据流**：`x → RMSNorm → causal attention → +x → RMSNorm → SwiGLU → +x`（每层两个 residual）。
-- **pre-norm**：`y = x + Attn(Norm(x))`；**post-norm**：`y = Norm(x + Attn(x))`。
-- **为什么 pre-norm 更好训练**：Jacobian 是 \(I + \partial F/\partial x\)，identity 项给梯度一条不经过子层的直通路径；post-norm 把 norm Jacobian 放在 residual 之后，连续多层相乘时更依赖初始化与 warm-up。
-- **边界**：pre-norm 是经验默认值非定律；DeepNorm 通过缩放残差分支 + norm gain 把 post-norm 稳定扩展到千层。
+| 维度 | Qwen 的选择 | 动机 |
+|---|---|---|
+| embedding 与 lm_head | 不共享（untied） | 以空间换性能 |
+| RoPE 逆频率 | FP32 而非 BF16 | 逆频率跨多个数量级，低精度量化误差直接进旋转角 |
+| bias | 多数层去 bias，但 QKV 保留 bias | 增强外推 |
+| FFN 宽度 | SwiGLU 使 FFN 从 4×hidden 收缩到 8/3×hidden | 与双矩阵 FFN 等参 |
+| 词表 / 预训练 / 上下文 | 15 万+ / 2.2T tokens / 最大 32K（1.8B–72B 系列） | 中文与多语言覆盖 |
 
-**Q2：LayerNorm 与 RMSNorm 的区别？为什么现代模型用 RMSNorm？**
+### 超参数随规模的缩放惯例
 
-- LayerNorm 减均值除方差 + 可学习 `γ,β`；RMSNorm 只除 root-mean-square + 可学习 gain `g`，无均值、无 bias。
-- **为什么**：RMSNorm 去掉均值中心化，计算略省、参数从 `2d` 降到 `d`；经验上对 LLM 训练足够（Zhang & Sennrich 2019）。
-- **工程**：`RMS(x)=sqrt(Σx²/d + ε)`；平方 reduction 应在 fp32 做，`ε` 太大/太小分别影响低 RMS 激活与 fp16 underflow。
+以 Qwen 1.8B→72B Dense 谱系为参照（官方技术报告口径）：
 
-**Q3：RoPE 的原理？为什么比绝对位置编码好？**
+| 指标 | 1.8B 端 | 72B 端 | 缩放规律 |
+|---|---|---|---|
+| 层数 L | 24 | 80 | 随规模增长但次线性 |
+| attention heads | 16 | 64 | 随 d_model 缩放，d_head 常保持 64–128 |
+| hidden size d | 2048 | 8192 | 主导项：非嵌入参数 ≈ 12Ld² |
+| d_ff | ≈ 8/3·d | ≈ 8/3·d | SwiGLU 配套，round 到 128/256 倍数 |
 
-- **原理**：对 Q/K 的每对维度施加位置相关的二维旋转 \(R_m\)，因旋转矩阵正交，点积只依赖相对位移：\(\tilde q_m^\top\tilde k_n=q_m^\top R_{n-m}k_n\)。
-- **为什么好**：只依赖相对位置、外推性质优于绝对/sinusoidal；频率 \(\omega_i=\theta^{-2i/d_h}\)。
-- **工程细节**：只旋转 Q/K 不旋转 V；维度需偶数；按 `d_h` 旋转不是整个 `d`；cache shape `[2, ctx_len, d_h/2]`。
-- **边界**：超出训练长度外推不免费，需 position interpolation / NTK-aware / YaRN 调整 base 与频谱。
+谱系参照：Qwen 覆盖 1.8B–72B Dense；DeepSeek-V3 走 MoE 路线（671B 总参 / 37B 激活）。
+Dense 与 MoE 的核心分野在「每 token 激活量」而非总参数，选型时先想清楚部署预算。
 
-**Q4：attention 为什么除以 \(\sqrt{d_h}\)？**
+### 训练配方数字（工业界参照）
 
-- 若 \(q,k\) 各维独立、零均值、方差约 1，则点积 \(\operatorname{Var}(q^\top k)\approx d_h\)。
-- 除以 \(\sqrt{d_h}\) 把 logit scale 拉回常数，避免 softmax 过早饱和、梯度消失。
-- **实现顺序**：`scores*scale → mask(-∞) → softmax`，mask 必须在 softmax 前。
+- 优化器：AdamW，β1=0.9、β2=0.95、ε=1e-8（Qwen 官方技术报告口径）；
+- LR schedule：cosine 衰减到峰值 LR 的 10%；
+- 精度：BFloat16 混合精度（norm/reduction 在 FP32）；
+- 数据组织：随机拼接文档、截断到上下文长度（context packing）；
+- 数据量两种口径：Chinchilla 训练最优约 20 tokens/param；Llama-3 8B 用 15T tokens
+  （约 1875 tokens/param）属「推理经济性」过训——训练一次、推理摊薄；Llama-3 405B
+  亦为 15T tokens、128K 上下文、多模态支持。
 
-**Q5：SwiGLU 为什么取代 ReLU/GELU FFN？参数怎么匹配？**
+**对本讲学习者的启示**：课堂上的每个「架构选择」在工业界大多已被压缩为默认配方，
+真正拉开差距的是四件套之外的二阶决策（untied、FP32 逆频率、QKV bias、词表大小、
+过训倍数）与数据质量。面试时按「默认值 → 例外 → 例外理由」的结构作答，
+比直接背结论更有说服力。
 
-- **结构**：\(\text{SwiGLU}(x)=W_2(\text{SiLU}(W_1x)\odot W_3x)\)，三个矩阵、两个 width-\(f\) 上投影，门控乘性调制提升表达（Shazeer 2020）。
-- **匹配**：普通 FFN `2df` 参数，SwiGLU `3df`；要等参需 \(3f_{\rm GLU}=2f_{\rm FFN}\)，即 `f_FFN=4d` 时 `f_GLU≈8d/3`（再 round 到 128/256 倍数）。
-- **陷阱**：「都设 4d 再比较」参数/FLOPs 不匹配，结论不可归因。本仓库等参消融下二者 loss 接近 → 结论是「本 setting 差异小」，非「gating 无效」。
+## 大厂面试真题与答题框架
 
-**Q6：非嵌入参数量怎么手算？为什么是 \(12Ld^2\)？**
+以下为高频面试题（公开面经风格），非任何公司真题；答题框架供口述组织使用。
 
-- 单层：QKV+O 四个 `d×d` 矩阵 `4d²`；SwiGLU（`f=4d`）三个矩阵中 up/gate 两个 `2·4d²=8d²`（down 计入 4d² 但总 FFN 8d²）→ 单层 `12d²`。
-- 总 \(12Ld^2\) + embedding/head `2Vd`（tied 省一份）。
-- 例：`d=4096, L=32` → `12×32×16.7M ≈ 6.4B`，与 LLaMA-7B 量级一致。
+**题目 1：为什么 SwiGLU 要把 d_ff 从 4d 改成 8/3·d？**
+- 考点：FFN 参数匹配；GLU 门控结构；消融公平性。
+- 答题框架：
+  1. 标准 FFN 两个矩阵，参数 2df，f=4d 时每层 8d²；
+  2. SwiGLU 三个矩阵（W1/W3 上投影 + W2 下投影），参数 3df；
+  3. 等参匹配：3df = 8d² ⟹ f ≈ 8/3·d；
+  4. 工程上把 f round 到 128/256 的倍数，兼顾等参与 GEMM shape；
+  5. 不做匹配的「SwiGLU 更好」混入了约 +50% 的 FFN 参数。
+- 加分项：引用 GLU Variants 的系统比较（Shazeer, 2020）；坦承小规模下等参差异
+  可能很小（本仓库实验中 SwiGLU 与等参 SiLU FFN 最终 loss 接近），主动给出结论边界。
+- 踩坑：把 SwiGLU 说成「必然大幅涨点」；忽略 activation memory 也随 f 增大。
 
-**Q7：weight tying 是什么？优缺点？**
+**题目 2：tied vs untied embedding 的取舍？**
+- 考点：参数效率；初始化双角色；大词表规模感。
+- 答题框架：
+  1. tied 省一侧 Vd：15 万+ 词表 × 8192 hidden ≈ 12 亿参数/侧，规模可观；
+  2. 代价：同一矩阵同时接 sparse 查表梯度与 dense 分类器梯度，初始化难两全
+     （本仓库实验：std=1 直接共享退化，std=0.02 恢复）；
+  3. 工业选择分化：Qwen 官方口径 untied，以空间换性能；
+  4. 公平比较必须匹配总参数，否则混入容量差异。
+- 加分项：列出工程坑——state-dict alias、optimizer 重复更新、vocab resize
+  同步、分布式把 alias 分片两次。
+- 踩坑：只谈「省参数」，不谈初始化、优化与比较公平性。
 
-- 共享 embedding 与 LM head（`W_U=E`），省 `Vd` 参数、关联输入/输出 token 几何。
-- **代价**：同一矩阵同时接收稀疏 embedding 梯度与密集 head 梯度；初始化要兼顾「查表表示」与「分类器」两种角色。
-- **工程坑**：state dict 的 alias 在 load/distributed wrap 后可能裂成两份，需单独校验。本仓库直接共享 std=1 退化，改 std=0.02 后恢复——说明 sharing 不是无条件收益。
+**题目 3：QK-Norm / Z-loss 治什么病？**
+- 考点：训练稳定性；attention logit 尺度；与 Pre-RMSNorm 的分工。
+- 答题框架：
+  1. 症状：训练中后期 loss 尖峰、attention 熵坍缩（概率集中到少数位置）；
+  2. QK-Norm：对每 head 的 Q/K 做 RMSNorm，从源头限制 logit 尺度；
+  3. Z-loss：惩罚归一化项 log Z 的漂移，用于大规模训练/MoE 路由稳定；
+  4. 定位：二者买的是 stability 而非容量；与 Pre-RMSNorm 互补——后者管
+     residual stream，前者管 attention 内部；
+  5. 替代方案：更保守的 init、FP32 reduction、降 LR 也可能缓解，需消融定位。
+- 加分项：把 logit 方差 ∝ d_h 与 softmax 饱和联系起来；指出 QK-Norm 放在
+  RoPE 前还是后是独立设计点，应消融。
+- 踩坑：把 QK-Norm 归类为「涨点技巧」；声称「加了就绝不会 NaN」。
 
-**Q8：位置编码有哪几类？各自特点？**
+**题目 4：GQA 为什么从 Llama-2 34B/70B 起用？**
+- 考点：KV cache 规模；decode 带宽；MQA→GQA 谱系。
+- 答题框架：
+  1. decode 阶段 memory-bound，每步读全部 KV cache（正比 2·L·T·n_kv·d_head）；
+  2. MHA：n_kv = n_heads，cache 最大；MQA：n_kv = 1，质量受损；
+  3. GQA：组内共享 K/V，n_kv 介于两者之间，cache 与质量可插值；
+  4. 采纳节点：Llama-2 34B/70B、Llama-3 8B/70B；同时降低 K/V projection 参数；
+  5. 本质：inference-aware architecture choice，训练代价小、推理收益大。
+- 加分项：现场算一个具体 KV cache 数字；提到 GQA 可由 MHA checkpoint
+  平均 K/V 头转换得到。
+- 踩坑：说 GQA 主要加速训练（主要收益在推理 decode）；忽略 heads 变化对
+  RoPE 维度与 kernel layout 的耦合。
 
-- **绝对/learned**：给每个位置一个向量，加在 embedding 上；外推差。
-- **sinusoidal**：固定三角函数编码，外推略好但仍有限。
-- **RoPE**：相对位置旋转，只依赖位移，外推最好（配 PI/YaRN 后可达 500k）。
-- **ALiBi**：向 attention logits 加距离线性 bias，实现最简、零参数外推。
-- **NoPE**：仅靠 causal mask，无法表达精确距离（本仓库 NoPE full-budget 1.439，差于 RoPE 1.371）。
+**题目 5：为什么 Llama-3 8B 用 15T tokens（约 1875 tokens/param）？**
+- 考点：Chinchilla 最优 vs 部署最优；过训（overtraining）。
+- 答题框架：
+  1. Chinchilla：训练 FLOPs 最优约 20 tokens/param，只优化「训练一次」的成本；
+  2. 部署视角：训练一次、推理数亿次，小模型过训摊薄每次推理成本；
+  3. 数字：8B @ 15T ≈ 1875 tokens/param；405B 亦为 15T tokens、128K 上下文；
+  4. 代价：训练算力远超 compute-optimal，换同参数更低 loss 与更强下游能力；
+  5. 表述：compute-optimal ≠ deployment-optimal。
+- 加分项：把 1875/20 ≈ 90× 作为「推理经济性」的量化口径；指出过训依赖
+  数据质量与去重，不是单纯多喂。
+- 踩坑：把 Chinchilla 的 20 当硬约束；认为过训与数据质量无关。
 
-**Q9：为什么需要残差连接？残差流的方差随 depth 累积怎么控制？**
+**题目 6：RoPE 逆频率为什么要 FP32？长上下文外推怎么做？**
+- 考点：数值精度；frequency spectrum；外推方法族。
+- 答题框架：
+  1. 逆频率 ω_i = θ^(-2i/d_head) 从 1 到 1/10000，跨多个数量级；
+  2. BF16 尾数仅 8 位，量化误差直接进旋转角，长程相对位置失真；
+  3. 工业实现（Qwen 官方技术报告口径）：逆频率矩阵 FP32，旋转后 cast 回；
+  4. 外推三件套：position interpolation（压位置回训练区间）、NTK-aware/YaRN
+     （调 base/频谱插值）、长文继续训练；
+  5. 评测同时覆盖短上下文回归 + 长文检索（needle）+ perplexity。
+- 加分项：解释低频分量编码长程、高频编码局部；讨论 base 从 10k 提到 500k
+  级对短文能力的潜在代价。
+- 踩坑：认为 RoPE 天然支持任意长度；只看长文指标不看短文回归。
 
-- **为什么**：残差 \(x_{l+1}=x_l+F_l(x_l)\) 给梯度一条直接路径（Jacobian 含 identity），缓解梯度消失；也让子层学「残差」而非「重算全部」。
-- **问题**：若各层支路独立同尺度，残差方差会随 depth 线性累积，深层网络 scale 失稳。
-- **控制手段**：pre-norm 保持子层输入尺度稳定；对 residual output projection 乘 `1/√L` 或 depth scaling；DeepNorm/μP 提供有理论约束的参数化；初始化后实测每层 residual RMS / gradient norm。
-- **本仓库证据**：移除 RMSNorm 后 40M-token baseline 从 1.637 恶化到 9.256，降 LR、延长预算仍未恢复——说明 scale 失稳无法靠调参简单救回。
+**题目 7：给定约 30B 参数预算，如何初定 L、d、h、f？**
+- 考点：参数公式；aspect ratio；硬件友好性。
+- 答题框架：
+  1. 非嵌入参数 ≈ L(4d² + 3df)，f=8/3·d 时 ≈ 12Ld²；
+  2. 锚点：Qwen 72B（L=80、d=8192、heads=64）；30B 级约 L=60–64、d=6144；
+  3. d_head 取 64–128 定 h（d=6144 时 h=48 或 96）；
+  4. round 到 128/256 倍数，核对 tensor core 对齐；
+  5. 复核 embedding/logits 开销（15 万+ 词表 untied 两侧各 ≈ Vd）。
+- 加分项：pipeline 并行偏好层数可切分；activation memory ≈ LBTd；
+  承认 aspect ratio 无理论最优，需小规模消融。
+- 踩坑：只按公式不看 kernel 效率；把某家谱系配置当定律照搬。
 
-**Q10：权重初始化怎么做？Xavier/He 的原理？**
+## 系统设计题
 
-- **目标**：控制 signal/gradient scale，使前向激活与反向梯度不随层数爆炸或消失。
-- **推导**：若输入零均值方差 \(q\)，线性层 \(y_j=\sum_i W_{ji}x_i\) 的方差 \(\operatorname{Var}(y_j)=d_{\rm in}\operatorname{Var}(W)q\)，令 \(\operatorname{Var}(W)\propto 1/d_{\rm in}\) 可保持量级。
-- **变体**：Xavier（`2/(d_in+d_out)`）兼顾前向反向，适合 tanh；He（`2/d_in`）适配 ReLU 的半数神经元失活；本仓库用 fan-in/fan-out truncated normal `√(2/(d_in+d_out))`。
-- **注意**：初始化依赖 norm 位置、residual depth 与 weight tying；「标准正态初始化」不是完整描述，必须记录 distribution、std 与特殊 scaling。
+**设计题 1：为一个 30B 级、中文为主的模型选型架构与超参**
+- 需求澄清：中文为主是否要兼顾多语言/代码？训练 FLOPs 预算与交付时间？
+  推理场景的上下文长度与并发？tokenizer 与词表是否已定？
+- 规模估算（基于事实卡数字推导）：
+  - 非嵌入 ≈ 12Ld²：取 L=64、d=6144 ⟹ ≈ 29B；
+  - 词表 15 万+（中文为主参照 Qwen），untied 两侧各 15 万×6144 ≈ 9.2 亿，
+    合计 ≈ 1.8B，总参数 ≈ 31B，符合「30B 级」；
+  - 数据量：下界 Chinchilla 约 20 tokens/param（约 0.6T）；过训口径参照
+    Llama-3 8B 的 1875 tokens/param 与 Qwen 系列的 2.2T tokens，首版 2–3T
+    量级并预留继续训练；
+  - 上下文：32K 起步（参照 Qwen 1.8B–72B 系列最大 32K），预留扩展。
+- 架构：四件套默认（Pre-RMSNorm + SwiGLU + RoPE + GQA），叠加 Qwen 式差异化
+  ——untied embedding/lm_head、RoPE 逆频率 FP32、QKV 保留 bias；
+  d_head=128 ⟹ h=48；d_ff = 8/3×6144 = 16384（恰为 256 倍数）。
+- Trade-off 表：
 
-**Q11：深层 Transformer 为什么难训练？DeepNorm / μP 怎么解决？**
+| 决策 | 选项 A | 选项 B | 取舍 |
+|---|---|---|---|
+| embedding 共享 | untied（+约 1.8B 参数） | tied（省参数） | untied 换性能（Qwen 口径） |
+| KV 组织 | GQA（n_kv ≈ h/8） | MHA | decode 带宽 vs 质量 |
+| 上下文 | 32K 起步 | 直接 128K | attention T² 与数据组织成本 |
+| 数据量 | 2–3T tokens | 15T 级（Llama-3 口径） | 训练预算 vs 推理摊薄 |
 
-- **为什么难**：残差方差随 depth 累积、梯度消失/爆炸、激活 scale 漂移，普通 post-norm 对 warm-up 与初始化高度敏感。
-- **DeepNorm**：对 residual 分支乘缩放因子、调 norm gain，把 post-norm Transformer 稳定扩展到千层量级——稳定性来自 scale 可控性，而非 norm 位置本身。
-- **μP（Tensor Programs V）**：规定各参数类随 width 的缩放规则，使 learning rate、初始化等超参可在小模型上调好后 zero-shot 迁移到大模型。
+- 评测方案：validation loss 曲线；中文/多语言 benchmark；短文回归 + 长文
+  needle 检索；推理侧报告 tokens/s、KV cache 显存、TTFT。
+- 追问预案：为什么 d_head=128？（64–128 均合理，128 减少 heads 数对 kernel
+  更友好，需小消融）；Dense 还是 MoE？（30B 级 Dense 足够；DeepSeek-V3 的
+  671B 总参/37B 激活是另一条路线）；如何扩到 128K？（PI/YaRN + 长文继续训练）。
 
-### 14.3 手撕要点（attention block）
+**设计题 2：从零配置一个 1B 模型的完整训练配方**
+- 需求澄清：1B 指总参数还是非嵌入？训练卡数与时长？数据是否含多语言/代码？
+- 规模估算：先用锚点校验公式——Qwen 1.8B（L=24、d=2048、heads=16）：
+  非嵌入 12×24×2048² ≈ 1.2B，untied 两侧 15 万×2048 ≈ 0.61B，合计 ≈ 1.8B ✓。
+- 1B 方案：词表 15 万+ 时 embedding 占比过高（untied 两侧 ≈ 0.46B @ d=1536），
+  建议非嵌入预算 ≈ 0.45B：L=16、d=1536（12×16×1536² ≈ 0.45B）、h=12
+  （d_head=128）、d_ff=4096（= 8/3×1536，恰为 2 的幂）；总参数 ≈ 0.9B。
+  核心洞察：参数越小，词表大小与 tying 决策的权重越大，可考虑 tied 或
+  缩词表把预算还给 d。
+- 训练配方表（数字源自事实卡）：
 
-面试让「手撕 multi-head attention」时，按 shape 契约写，别漏 mask 顺序。下面给出
-`RMSNorm + RoPE + causal MHA` 的完整、正确参考实现：
+| 类别 | 项目 | 取值 |
+|---|---|---|
+| 架构 | norm / FFN / 位置 / KV | Pre-RMSNorm / SwiGLU / RoPE / GQA |
+| 架构 | L, d, h, d_head | 16, 1536, 12, 128 |
+| 架构 | 词表 / 上下文 | 15 万+（或缩词表/tied 释放预算）/ 32K |
+| 优化 | optimizer | AdamW（β1=0.9、β2=0.95、ε=1e-8） |
+| 优化 | LR schedule | warmup + cosine 衰减到峰值 LR 的 10% |
+| 优化 | 精度 | BFloat16 混合精度（norm/reduction FP32） |
+| 数据 | 组织 | 随机拼接文档、截断到上下文长度 |
+| 数据 | token 量 | 2T 级锚点（Qwen 系列 2.2T）；下界 Chinchilla 约 20 t/p |
+
+- 评测方案：tiny model 过拟合单 batch（查 shift/mask/optimizer）；参数量手算
+  与框架统计对齐；loss 曲线多 seed；tokens/s、peak VRAM、wall-clock。
+- 追问预案：β2 为什么 0.95 而非 0.999？（大规模训练对尖峰更鲁棒的工业惯例）；
+  何时做 LR 消融？（小预算 screening → 全预算确认的两阶段）；tied 怎么定？
+  （词表大时倾向 untied 并单独调初始化，需匹配总参数比较）。
+
+**设计题 3：把 32K 上下文模型扩展到 128K**
+- 需求澄清：已有 checkpoint 能否继续训练？长文数据来源与质量？推理显存上限？
+- 规模估算：attention 计算随 T² 增长（32K→128K 为 16×）；KV cache 线性 ×4
+  （GQA 可缓解）；参照 Llama-3 的 128K 上下文与本讲「RoPE base 10k → 500k 级」。
+- 方案：扩大 RoPE base + NTK-aware/YaRN 频谱插值 + 长文继续训练；
+  数据需按新长度重组 packing。
+- Trade-off 表：
+
+| 方案 | 训练成本 | 短文回归风险 |
+|---|---|---|
+| 直接外推（不训练） | 零 | 高（未训练的 phase 组合） |
+| Position interpolation + 少量继续训练 | 低 | 中 |
+| YaRN/NTK-aware + 继续训练 | 中 | 低 |
+| 从头按 128K 训练 | 最高 | 最低 |
+
+- 评测方案：needle-in-haystack 分层检索；长文 QA；按序列长度分桶的
+  perplexity；短文 benchmark 回归。
+- 追问预案：为什么训练长度决定外推难度？（训练只观察 m < T_train 的
+  rotation phases）；KV cache 放不下怎么办？（更激进的 GQA 分组、KV 量化、
+  PagedAttention 类显存管理）；长文数据不足怎么办？（长文合成/拼接 +
+  课程式长度递增）。
+
+## 代码实现题
+
+**实现题 1：RoPE 前向（含 FP32 逆频率）**
+- 题目：实现 `apply_rope(x, pos, theta_base=10000.0)`，只用于 Q/K，逆频率与
+  旋转角在 FP32 中计算，输出 cast 回输入 dtype。
+- 考察点：逆频率公式 θ^(-2i/d_head)；FP32 精度动机（跨多个数量级，BF16 尾数
+  仅 8 位）；相邻 pair 旋转；只作用于 Q/K。
 
 ```python
 import torch
-import torch.nn.functional as F
 
-def rmsnorm(x, weight, eps=1e-6):
-    # x: [..., d]，沿最后一维归一化，不减均值、无 bias
-    rms = torch.sqrt(x.pow(2).float().mean(-1, keepdim=True) + eps)  # fp32 reduction
-    return (x / rms) * weight                                        # weight: [d]
-
-def apply_rope(q, k, cos, sin):
-    # q,k: [B,h,T,d_h]；cos,sin: [T, d_h]（按 d_h 成对旋转）
-    def rotate(x):
-        x1, x2 = x[..., :x.shape[-1] // 2], x[..., x.shape[-1] // 2:]
-        return torch.cat([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
-    return rotate(q), rotate(k)
-
-def causal_mha(x, Wq, Wk, Wv, Wo, h, cos, sin):
-    B, T, d = x.shape
-    dh = d // h
-    # 1. QKV projection + reshape 为多头
-    q = x @ Wq.T; k = x @ Wk.T; v = x @ Wv.T          # [B,T,d]
-    q = q.view(B, T, h, dh).transpose(1, 2)           # [B,h,T,dh]
-    k = k.view(B, T, h, dh).transpose(1, 2)
-    v = v.view(B, T, h, dh).transpose(1, 2)
-    # 2. RoPE：只旋转 Q/K
-    q, k = apply_rope(q, k, cos, sin)
-    # 3. scores / sqrt(dh) + causal mask(-inf) + softmax(dim=-1)
-    scores = q @ k.transpose(-2, -1) / (dh ** 0.5)    # [B,h,T,T]
-    mask = torch.triu(torch.ones(T, T, device=x.device, dtype=torch.bool), diagonal=1)
-    scores = scores.masked_fill(mask, float("-inf"))
-    attn = F.softmax(scores, dim=-1)
-    # 4. weighted sum + concat + output projection
-    out = attn @ v                                    # [B,h,T,dh]
-    out = out.transpose(1, 2).contiguous().view(B, T, d)
-    return out @ Wo.T
+def apply_rope(x, pos, theta_base=10000.0):
+    # x: [B, n_heads, T, d_head]（d_head 为偶数）；pos: [T]
+    B, h, T, d = x.shape
+    assert d % 2 == 0
+    # 逆频率必须 FP32：数值从 1 到 1/theta_base 跨多个数量级，BF16 会量化失真
+    inv_freq = theta_base ** (
+        -torch.arange(0, d, 2, dtype=torch.float32) / d
+    )                                                  # [d/2]，FP32
+    angles = pos.to(torch.float32)[:, None] * inv_freq[None, :]  # [T, d/2]，FP32
+    cos = angles.cos()[None, None]                     # [1, 1, T, d/2]
+    sin = angles.sin()[None, None]
+    x32 = x.to(torch.float32)
+    x1, x2 = x32[..., 0::2], x32[..., 1::2]            # 相邻维度组成 pair
+    out = torch.empty_like(x32)
+    out[..., 0::2] = x1 * cos - x2 * sin
+    out[..., 1::2] = x1 * sin + x2 * cos
+    return out.to(x.dtype)                             # cast 回原 dtype
 ```
 
-**三个必踩坑**
+- 验收标准：
+  1. 与逐元素参考实现 `torch.allclose`（FP32 容差 1e-5）；
+  2. `inv_freq` 的 dtype 为 FP32；
+  3. 相对位置性质单元测试：旋转后内积只依赖相对位移 n-m；
+  4. 不旋转 V；`pos` 超出训练长度时 cache 行为可预期；
+  5. 反向传播无 NaN，梯度与参考一致。
 
-1. **mask 方向**：query `i` 只能看 key `j≤i`；用 `torch.triu(diagonal=1)` 掩掉未来，且在 `softmax` 前设 `-inf`，不能软 softmax 后再 mask。
-2. **softmax 轴**：沿 key 轴（`dim=-1`），不是 head/query 轴。
-3. **缩放**：除以 \(\sqrt{d_h}\) 而非 \(\sqrt{d}\)；RoPE 按 `d_h` 旋转、只旋转 Q/K；`transpose(1,2)` 后 `.contiguous()` 再 view 回 `[B,T,d]`。
+**实现题 2：带 QK-Norm 的 attention 前向骨架**
+- 题目：在 causal MHA 前向中加入每 head 的 Q/K RMSNorm（FP32 reduction）；
+  QKV 保留 bias（Qwen 口径），输出投影无 bias。
+- 考察点：QK-Norm 位置（projection 后、RoPE 前）；RMSNorm FP32 accumulate；
+  causal mask 顺序（scale → mask → softmax）；softmax 沿 key 轴。
 
-### 14.4 高频追问与陷阱
+```python
+import torch
 
-| 追问 | 正确方向 |
-| --- | --- |
-| 多头注意力的意义？ | 多个子空间并行关注不同模式；但 head 数不是独立容量，固定 d 时 d_h 变小 |
-| head dimension 怎么选？ | `d_h≈64–128` 是经验/硬件折中，非表达定律；受 tensor core alignment 影响 |
-| RoPE 为什么不旋转 V？ | 位置信息只需进入 attention 权重（QK 点积），V 是内容聚合，旋转 V 无额外收益 |
-| MQA/GQA 解决什么？ | 多 query head 共享 K/V，降低 decode KV cache 与带宽（L4 详谈） |
-| 为什么用 bias-free linear？ | 省参数、简化 shape；RMSNorm 已承担平移角色 |
-| 深层 Transformer 为什么难训练？ | 残差流方差随 depth 累积、梯度消失/爆炸；pre-norm/DeepNorm/μP 缓解 |
-| 外推和插值是一回事吗？ | 否：外推是直接加长，插值是把长位置压回训练区间，继续训练是在新长度更新参数 |
+class RMSNormLastDim(torch.nn.Module):
+    def __init__(self, d, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = torch.nn.Parameter(torch.ones(d))  # gain 初始化为 1
 
-### 14.5 模拟追问链（还原面试官的层层深入）
+    def forward(self, x):
+        x32 = x.float()                                   # FP32 reduction
+        out = x32 * torch.rsqrt(x32.pow(2).mean(-1, keepdim=True) + self.eps)
+        return (out * self.weight).to(x.dtype)
 
-架构题通常从「画 attention」一路追到「为什么是这些默认值」，每一层都在往**公式→数值→公平比较**递进：
+class QKNormCausalAttention(torch.nn.Module):
+    def __init__(self, d_model, n_heads, d_head):
+        super().__init__()
+        self.h, self.dh = n_heads, d_head
+        self.wq = torch.nn.Linear(d_model, n_heads * d_head, bias=True)  # QKV 保留 bias
+        self.wk = torch.nn.Linear(d_model, n_heads * d_head, bias=True)
+        self.wv = torch.nn.Linear(d_model, n_heads * d_head, bias=True)
+        self.wo = torch.nn.Linear(n_heads * d_head, d_model, bias=False)
+        self.q_norm = RMSNormLastDim(d_head)              # 每 head Q/K 独立 norm
+        self.k_norm = RMSNormLastDim(d_head)
 
-> **面试官**：手写一下 multi-head attention 的流程。
-> **你**：QKV 三个投影 → reshape 成 `[B,h,T,d_h]` → `scores = QKᵀ/√d_h` → causal mask `-∞` → softmax(dim=-1) → 乘 V → concat → 输出投影。
->
-> **面试官**：为什么除以 \(\sqrt{d_h}\)？
-> **你**：q、k 各维独立方差约 1，点积方差 ≈ \(d_h\)；除以 \(\sqrt{d_h}\) 把 logit scale 拉回常数，避免 softmax 饱和。
->
-> **面试官**：mask 在哪一步做？为什么？
-> **你**：softmax 之前设 `-∞`；若 softmax 后再 mask，未来 token 已参与归一化，会泄漏。
->
-> **面试官**：pre-norm 和 post-norm 区别？为什么现在都用 pre-norm？
-> **你**：norm 放在 residual 之前 vs 之后；pre-norm 的 Jacobian 含 identity 直通路径，深层训练更稳，post-norm 对 warm-up/初始化敏感。
->
-> **面试官**：RoPE 怎么把相对位置注入进去？
-> **你**：对 Q/K 施加位置相关旋转 \(R_m\)，因旋转正交，点积 \(\tilde q_m^\top \tilde k_n = q_m^\top R_{n-m}k_n\) 只依赖相对位移。
->
-> **面试官**：SwiGLU 和普通 FFN 比，参数怎么对齐？
-> **你**：普通 FFN `2df`，SwiGLU `3df`；要等参需 \(f_{\rm GLU}\approx 8d/3\)，都设 4d 再比较是不公平的。
->
-> **面试官**：那这个模型参数量多少？
-> **你**：单层 `12d²`，总 \(12Ld^2\)，7B 量级。
+    def forward(self, x, rope=None):
+        B, T, _ = x.shape
+        def split(z):  # [B,T,h*dh] -> [B,h,T,dh]
+            return z.view(B, T, self.h, self.dh).transpose(1, 2)
+        q, k, v = split(self.wq(x)), split(self.wk(x)), split(self.wv(x))
+        q, k = self.q_norm(q), self.k_norm(k)             # 治 logit 增长/熵坍缩
+        if rope is not None:
+            q, k = rope(q), rope(k)                       # RoPE 在 QK-Norm 之后
+        scores = (q @ k.transpose(-1, -2)) / self.dh ** 0.5
+        causal = torch.triu(
+            torch.ones(T, T, dtype=torch.bool, device=x.device), diagonal=1
+        )
+        scores = scores.masked_fill(causal, float("-inf"))  # scale → mask → softmax
+        attn = torch.softmax(scores, dim=-1)                # 沿 key 轴
+        out = attn @ v
+        return self.wo(out.transpose(1, 2).reshape(B, T, self.h * self.dh))
+```
 
-**分层自测**：能画出 attention 流程并说清 mask 顺序为**初级**；能解释 `√d_h`、pre-norm Jacobian、RoPE 旋转为**中级**；能主动讲 SwiGLU 参数匹配、残差方差控制、DeepNorm/μP 为**高级**。
+- 验收标准：
+  1. causal leakage 测试：修改未来 token 不改变历史位置 logits；
+  2. norm 后每 head 的 RMS ≈ 1；
+  3. 与无 QK-Norm 版本的参数量差恰为 2·d_head（q/k 两个 gain）；
+  4. 大 logits 下 softmax 数值稳定（减最大值）；
+  5. state_dict 中 bias/无 bias 键与预期一致。
 
-## 15. 结论与本讲小结
+**实现题 3：参数量手算与 SwiGLU 等参宽度**
+- 题目：实现 `param_count(d, L, V, f_mode, tied)`：`f_mode="swiglu"` 时
+  f = round(8/3·d 到 256 倍数)，`"standard"` 时 f = 4d；支持 tied/untied，
+  并与真实模块的参数统计对齐。
+- 考察点：P = 2Vd + L(4d² + 3df + 2d) + d（untied）；tied 时输出侧并入 E；
+  round 对等参假设的影响。
+
+```python
+def swiglu_width(d, multiple_of=256):
+    raw = 8 / 3 * d                        # 等参匹配：3df = 2d·4d ⟹ f = 8d/3
+    return int(round(raw / multiple_of) * multiple_of)
+
+def param_count(d, L, V, f_mode="swiglu", tied=False, multiple_of=256):
+    f = swiglu_width(d, multiple_of) if f_mode == "swiglu" else 4 * d
+    per_layer = 4 * d * d + 3 * d * f + 2 * d    # QKVO + SwiGLU + 2×RMSNorm gain
+    emb_sides = 1 if tied else 2                 # tied 时输出侧并入 embedding
+    return emb_sides * V * d + L * per_layer + d  # + final RMSNorm gain
+
+# 锚点校验（Qwen 1.8B：L=24, d=2048, V=150000, untied）：
+#   非嵌入 24×(4·2048² + 3·2048·5376 + 2·2048) ≈ 1.2B
+#   embedding+head 2×150000×2048 ≈ 0.61B，合计 ≈ 1.8B ✓
+```
+
+- 验收标准：
+  1. 对 Qwen 1.8B 锚点（L=24、d=2048、V=15 万、untied）输出 ≈ 1.8B
+     （允许 round 带来的小偏差，需显式报告）；
+  2. tied 比 untied 恰好少 Vd；
+  3. f 的 round 偏差被显式报告，不偷换等参假设；
+  4. 与 `sum(p.numel() for p in model.parameters())` 一致。
+
+## 14. 结论与本讲小结
 
 现代 LM block 的核心是 causal attention 与 token-wise FFN，经 residual stream 反复组合。
 Pre-norm/RMSNorm 保护优化稳定性，RoPE 把相对位置注入 QK 点积，SwiGLU 用门控提高 FFN 表达。
@@ -882,5 +1093,9 @@ arXiv:2306.15595, 2023. [link](https://arxiv.org/abs/2306.15595)
 
 - Stanford CS336, [Spring 2026 Lecture 3](https://github.com/stanford-cs336/lectures/blob/main/lecture_03.pdf)
 - [Tokenization & Basics 主题导航](../experiments/topics/tokenization-and-basics.md)
-- [A1 实验报告](../assignments/assignment1-basics/report/main.pdf)
+- [A1 实验报告](../assignments/spring2026/assignment1-basics/report/main.pdf)
 - [Lecture 04 — Attention Alternatives & MoE](lecture-04-attention-moe.md)
+- [RoFormer: Enhanced Transformer with Rotary Position Embedding（arXiv:2104.09864）](https://arxiv.org/abs/2104.09864)（访问日期 2026-10-04）
+- [GQA: Training Generalized Multi-Query Transformer Models（arXiv:2305.13245）](https://arxiv.org/abs/2305.13245)（访问日期 2026-10-04）
+- [The Llama 3 Herd of Models（arXiv:2407.21783）](https://arxiv.org/abs/2407.21783)（访问日期 2026-10-04）
+- [DeepSeek-V3 Technical Report（arXiv:2412.19437）](https://arxiv.org/abs/2412.19437)（访问日期 2026-10-04）

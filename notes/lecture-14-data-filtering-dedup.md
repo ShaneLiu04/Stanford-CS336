@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_14.py"
-  - "../assignments/assignment4-data/"
+  - "../assignments/spring2026/assignment4-data/"
 ---
 
 # Lecture 14 — 过滤、去重与重加权：把规则变成可测系统
@@ -16,7 +16,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、数据工程师与 LLM 研究者
 
 ## 摘要
@@ -292,6 +292,10 @@ bucket、候选 pair 数和 peak RSS，避免热门模板形成超大 bucket。
 - 只优化 validation loss，可能奖励 benchmark 泄漏或风格窄化。
 - 去重不能解决语义改写、翻译重复和拼接污染；也不证明模型不会记忆 [[8]](#ref-8)。
 - DoReMi/DSIR 的目标域若含 benchmark，等于把泄漏写进采样分布 [[11]](#ref-11)[[12]](#ref-12)。
+- 把“去重越多越好”当默认：FineWeb 实测去重收益先升后降，过度去重导致性能
+  恶化；阈值与去重范围（per-snapshot vs 全局）变更必须走小模型受控 ablation。
+- 去污染只做精确匹配：改写/翻译型污染会逃过哈希；应叠加 n-gram/语义级检测
+  （如 LLM Decontaminator）并辅以第三方评测交叉验证。
 
 ## 13. Checklist
 
@@ -320,19 +324,19 @@ bucket、候选 pair 数和 peak RSS，避免热门模板形成超大 bucket。
 
 ## 14. 讨论：效度威胁与结论边界
 
-### 14.1 Construct validity
+### Construct validity
 
 - “质量”由正负样本定义，classifier accuracy 不是数据质量的度量；
 - Jaccard 阈值是表面相似度，与“信息冗余”不一一对应；
 - ESS 衡量权重集中度，不衡量分布匹配的正确性。
 
-### 14.2 Internal validity
+### Internal validity
 
 - 阈值、去重、混合同时变更时，无法归因单一因素；
 - 下游 proxy 模型过小，其偏好未必代表目标规模模型 [[5]](#ref-5)；
 - 人工标注样本量小且标注者偏差存在，precision 数字有置信区间。
 
-### 14.3 External validity
+### External validity
 
 - 在一个语料/语言上校准的阈值与 \(b,r\) 不外推到其他分布；
 - 规则与分类器的误杀模式依赖时代（web 风格演化）；
@@ -341,120 +345,393 @@ bucket、候选 pair 数和 peak RSS，避免热门模板形成超大 bucket。
 论文式表述应报告完整管线版本、每级通过率、阈值敏感性分析与失败样本聚合统计，
 而不是只给“我们的 recipe 更好”的最终 loss。
 
-## 15. 面试备考（Interview Prep）
+## 面试要点速记
 
-> 过滤/去重/重加权是数据工程面试的高频题：面试官常从「MinHash 为什么能估 Jaccard」切入，
-> 追到「LSH 候选率」「DSIR vs DoReMi」「去重前先定义什么」「过滤为何不是越严越好」。
-> 核心是把「数据清洗」理解成**可测量、可重放、可证伪的决策系统**，而非清洗脚本。
-> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 15.1 一页速览卡（面试前 1 分钟）
+1. **Q：MinHash 为什么能估计 Jaccard？** 要点：k-shingle 集合经随机置换取
+   最小哈希，两签名相等的概率 = Jaccard；b 带 × r 行的 LSH 用
+   \(1-(1-s^r)^b\) 控 recall/precision 曲线。
+2. **Q：去重前必须先定义什么？** 要点：“重复”的语义（URL/hash/MinHash 阈值）
+   与删除单位（文档/段落/序列）；语义不同结论完全不同。
+3. **Q：为什么过滤+去重同时改善 loss 与下游？** 要点：低质与重复内容浪费
+   token 预算、推高记忆与泛化风险；Gopher rules/模型分类器 + 精确/模糊去重
+   是 RefinedWeb/FineWeb 的标准组合。
+4. **Q：DSIR 与 DoReMi 的定位差异？** 要点：DSIR 学 raw→target 分布的重要性
+   权重做重采样（不删除）；DoReMi 用 group-DRO 学域混合权重，minimax 保住
+   最差域。
+5. **Q：为什么基于 PPL 的质量过滤通常保留中间段？** 要点：PPL 过低 =
+   模型已学会（信息量小、边际收益低）、PPL 过高 = 多为异常点（乱码/噪声），
+   两端都有害；用分位数切中间段，并以下游 ablation 验证切分位置。
+6. **Q：FineWeb-edu 规模更小为何反而更强？** 要点：llama-3-70b-instruct
+   给约 50 万样本按 0–5 打教育质量分、滤 <3；质量过滤 > 数量；用固定训练
+   配方的受控小模型 ablation 做裁决。
+7. **Q：评测集污染（contamination）怎么防？** 要点：评测集混入训练数据会让
+   benchmark 虚高（“刷榜”）；对策 = 污染检测工具（如 LLM Decontaminator）
+   + 消融实验 + 第三方评测；exact 匹配抓不住改写/翻译型污染。
+8. **Q：语义去重的具体做法？与 MinHash 的差异？** 要点：embedding 聚类成
+   N 簇 → 簇内余弦相似度高于阈值视为语义重复 → 仅保留离簇中心最近的一条；
+   能捕捉改写/翻译级冗余，但成本更高且有“语义近但事实不同”的误删风险。
 
-**核心主张**：原始语料到训练分布的每一步（过滤/去重/重加权）都是决策系统，每个 stage 应输出
-score、decision、reason 以便重放；「越严越好」和 classifier accuracy 都是误导。
+**必背数字**
 
-**必背数字与公式**
+- LSH 概率式 \(1-(1-s^r)^b\)；典型 Jaccard 阈值 0.8 级；去重常带来
+  数倍数据压缩与下游增益并存。
+- 工业界参照：FineWeb 15T tokens（96 快照）、Llama-3 15T、GPT-2 约 100B、
+  Qwen 2.2T（去重过滤后）——主流公开语料的量级锚点。
+- 工业界参照：FineWeb-edu 用 llama-3-70b-instruct 给约 50 万样本按 0–5 打
+  教育质量分、滤 <3，规模显著更小仍优于 FineWeb（质量 > 数量）。
+- 工业界参照：DoReMi 式先导（2.6B 小模型，中文/英文/代码/电信四域）——
+  电信域 PPL 2.8→1.76、中文 3.33→2.68、英文 6.02→5.73、代码 3.66→3.31，
+  通用能力不劣化。
+- 工业界参照：Nemotron 数学管线——98 个 CC 快照重抓 + FineMath 分类器 +
+  MinHash-LSH 去重 + LLM Decontaminator 去污染。
+- 工业界参照：FineWeb 实测去重收益先升后降，过度去重导致性能恶化——
+  去重阈值与范围没有“越大越好”。
 
-- MinHash 碰撞 \(\Pr[m(A)=m(B)]=J(A,B)\)，估计方差 \(\operatorname{Var}(\hat J)=J(1-J)/K\)。
-- LSH 候选率 \(P_{\text{cand}}(s)=1-(1-s^r)^b\)，近似拐点 \(s^\star\approx(1/b)^{1/r}\)。
-- DSIR 权重 \(w(x)=p_{\text{target}}/p_{\text{raw}}\)，有效样本量 \(\mathrm{ESS}=(\sum w)^2/\sum w^2\)。
-- 典型 Jaccard 阈值约 0.8；去重常带来数倍数据压缩。
+## 行业现状与最新进展（2024–2026）
 
-**三句话答高频**
+### 去重收益的边际递减与临界点
 
-1. MinHash 用随机排列取最小哈希，碰撞概率等于 Jaccard；LSH 分 band 控制候选规模。
-2. 去重前先定义「重复」语义（URL/hash/MinHash 阈值）与删除单位（文档/段落/行）。
-3. 过滤越严不一定越好，要平衡人工精度 × token 产量 × 域覆盖 × 下游 loss。
+FineWeb 的系统实测给出了一个反直觉结论：去重对性能的提升存在临界点，越过
+之后边际收益递减，**过度去重最终导致性能恶化**。因此 FineWeb 的 MinHash
+去重按每次导入（per-snapshot dump）独立进行，而非跨全部 96 个快照的激进
+全局去重；过滤器侧还对比了 C4 派生的选择性过滤器与自定义过滤器，用受控
+小模型 ablation 裁决。工业界通行的去重层级如下：
 
-### 15.2 高频面试题与答题框架
+| 层级 | 手段 | 解决的问题 | 量级成本 |
+| --- | --- | --- | --- |
+| 1 | URL 黑名单过滤 | 已知低质/违规来源 | 极低 |
+| 2 | 语言过滤（fastText 级） | 非目标语言 | 低 |
+| 3 | 哈希精确去重 | 完全重复 | 低，\(O(N)\) |
+| 4 | MinHash-LSH 模糊去重 | 近重复/模板/镜像 | 中，\(O(NMK)\) |
+| 5 | 语义去重（进阶） | 改写/翻译级冗余 | 高（embedding + 聚类） |
 
-**Q1：MinHash 为什么能估计 Jaccard？LSH 的候选率？**
+工程细节上，去重粒度本身是超参数：如以产品族而非单个产品为粒度，覆盖范围
+更大、去重更彻底——粒度选择直接决定“删除语义”。
 
-- 把文档变 word n-gram shingles 集合；对随机排列/哈希取集合最小值 \(m_k(A)=\min_{a\in A}h_k(a)\)，则 \(\Pr[m_k(A)=m_k(B)]=J(A,B)\)。
-- \(K\) 个 hash 的碰撞率无偏估计 Jaccard，方差 \(J(1-J)/K\)，增大 \(K\) 降方差但增成本。
-- LSH 把 \(K=br\) 个 signature 分 \(b\) 个 band、每 band \(r\) 行，至少一个 band 全同即为候选：\(P_{\text{cand}}(s)=1-(1-s^r)^b\)；增大 \(b\) 提召回、增大 \(r\) 更严格。
+### 质量过滤的“分类器时代”
 
-**Q2：去重前必须先定义什么？**
+FineWeb-edu 用 llama-3-70b-instruct 给约 50 万样本按 0–5 打“教育质量”分，
+过滤掉低于 3 分的文档；其规模显著小于 FineWeb，却优于 FineWeb 与其他公开
+数据集——“质量 > 数量”的直接证据。同一路线还有 FineMath 分类器（数学语料
+筛选）与 Nemotron 的 LLM Decontaminator（评测去污染，见下）。这一范式与
+Gopher 规则互补：规则管结构与形态异常，分类器管“内容对学习者是否有价值”，
+二者都需人工抽检与分组误差报告。
 
-- 「重复」的语义（URL / 内容 hash / MinHash 阈值）与删除单位（document / paragraph / line）。
-- 语义不同结论完全不同：exact hash 只删完全一致；MinHash 删近重复；SemDeDup 删语义冗余。
-- 还要定义「保留一份 vs 删除所有重复行」——本仓库 exact-line 删所有全局频次 >1 的行，会连带删合法免责声明。
+### 语义去重与配比优化
 
-**Q3：为什么过滤 + 去重同时改善 loss 与下游？**
+语义去重实践（某大模型团队）：把文档 embedding 聚类成 N 个簇，簇内计算
+余弦相似度，高于阈值视为语义重复，仅保留与簇中心最近的一条，删除其余。
+相比 MinHash 只捕捉表面重叠，这一层能删掉改写/同义级冗余。
 
-- 低质与重复内容浪费 token 预算、推高记忆与泛化风险；去重后唯一 token 驱动收益（data-constrained scaling）。
-- Lee 等证明去重显著降 perplexity 并减少 memorization；Gopher rules + 精确/模糊去重是 RefinedWeb/FineWeb 的标准组合。
+配比优化实践（DoReMi 复现，某大模型团队）：基于 2.6B 小模型先导实验，按
+多 domain PPL 迭代调整中文/英文/代码/电信四域权重，结果如下（量级参照）：
 
-**Q4：DSIR 与 DoReMi 的定位差异？**
+| 域 | 先导 PPL（前→后） | 说明 |
+| --- | --- | --- |
+| 中文 | 3.33 → 2.68 | 通用域同步改善 |
+| 英文 | 6.02 → 5.73 | 通用域同步改善 |
+| 代码 | 3.66 → 3.31 | 通用域同步改善 |
+| 电信 | 2.8 → 1.76 | 目标域大幅改善，通用能力不劣化 |
 
-- **DSIR**：估计 raw→target 密度比 \(w=p_{\text{target}}/p_{\text{raw}}\) 做 importance resampling（**不删除**，保留概率多样性）。
-- **DoReMi**：在小 proxy 模型上用 group DRO 学域混合权重（给最差域加大权重），再用该权重训练大模型。
-- 两者都改变采样分布，与「删除式」过滤/去重正交；都依赖 reference data 且需审计其来源。
+其数据构成示例：ICT 领域数据中文 9B / 英文 10B tokens；通用数据中文 10B /
+英文 15B / 代码 15B。核心思想与 DoReMi 一致：小模型学权重、大模型吃配比，
+先导成本远低于直接在大模型上试错。
 
-**Q5：fastText 与 Gopher rules 的取舍？**
+### 去污染与评测公正
 
-- **Gopher rules**：文档统计启发式（词数、平均词长、省略号行、字母比例），便宜、可解释，但边界跳变 + 文化/领域偏差。
-- **fastText**：词/字符 n-gram 线性分类，推理快适合 web-scale 初筛；但「质量」由正负样本定义（Wikipedia 为正、随机网页为负学的可能是来源风格）。
-- 实务：先便宜规则做结构初筛，再用学习式分类器，最后小模型 ablation 裁决（FineWeb 方法论）。
+Nemotron 数学管线给出了领域语料的完整参照链路：收集数学 URL → 从 98 个
+CC 快照重抓 HTML → lynx 保留页面布局 → Phi-4 归一化 LaTeX → FineMath
+分类器过滤 → MinHash-LSH 模糊去重 → LLM Decontaminator 去污染。评测集
+混入训练数据会造成 benchmark 虚高（“刷榜”），使模型对比结论失效；对策 =
+污染检测工具 + 消融实验 + 第三方评测，且去污染应放在管线末端以覆盖全部
+上游环节引入的污染。
 
-**Q6：exact dedup、MinHash、SemDeDup 的区别？**
+**对本讲学习者的启示**：2024 年后的行业共识是“质量与唯一性优先于原始
+规模”。FineWeb/FineWeb-edu 证明受控小模型 ablation 是裁决一切数据决策的
+最高法院；去重与过滤都存在“过犹不及”的临界点；语义去重、PPL 驱动配比与
+去污染已从可选项变成标配。学习本讲时应把每个阈值都视为待验假设，而不是
+工程默认值，并习惯性地问“这个决策被什么实验支撑”。
 
-- **exact**：hash 完全一致才删，只去完全重复；**MinHash**：近似 Jaccard 去近重复；**SemDeDup**：embedding 空间按 cosine 去语义冗余，约减半数据等质量。
-- 代价递进：exact 最便宜、SemDeDup 需 encoder+聚类；语义去重有「语义相近但事实不同」被误删的风险。
+## 大厂面试真题与答题框架
 
-**Q7：DSIR 的 ESS 诊断什么？ratio 爆炸怎么处理？**
+以下为高频面试题（公开面经风格），覆盖本讲核心考点。
 
-- \(\mathrm{ESS}=(\sum w)^2/\sum w^2\) 衡量有效样本量；ESS 很低表示少数文档支配数据。
-- \(p_{\text{raw}}\) 很小时 ratio 爆炸 → 需 smoothing、log-weight clipping；目标集被 benchmark 污染会把污染放大到训练集。
+**题目 1：讲一下 MinHash-LSH 的原理，b/r 参数怎么选？**
+- 考点：MinHash 无偏性、LSH 候选率公式、参数与阈值的定量关系。
+- 答题框架：1) 定义 Jaccard \(J=|A\cap B|/|A\cup B|\)；2) 最小哈希碰撞概率
+  = Jaccard；3) \(K\) 个哈希估计，方差 \(J(1-J)/K\)；4) 分 \(b\) 带 ×
+  \(r\) 行，候选率 \(1-(1-s^r)^b\)；5) 拐点 \(s^\star\approx(1/b)^{1/r}\)，
+  按目标相似度校准 b/r，LSH 之后必须用真 Jaccard 复核再 union-find 合并。
+- 加分项：FineWeb 实测去重收益先升后降，故按 per-snapshot 独立去重；
+  工程上监控最大 bucket、候选 pair 数与 peak RSS。
+- 踩坑：把 LSH 候选直接判重不做复核；空文档 signature 全同聚成一簇；
+  survivor 永远取“最早抓取”造成来源偏差。
 
-**Q8：DoReMi 的 group DRO 怎么做？**
+**题目 2：精确、模糊、语义去重分别解决什么？如何分层？**
+- 考点：三级去重的语义差异与工业层级。
+- 答题框架：1) 哈希精确去重删完全重复，\(O(N)\) 最便宜；2) MinHash-LSH
+  删近重复/模板；3) 语义去重（聚类 + 簇内余弦阈值，保留离簇中心最近样本）
+  删改写级冗余；4) 顺序从便宜到贵，先删量大的；5) 前置 URL 黑名单与语言
+  过滤减少后级输入量。
+- 加分项：粒度选择影响彻底程度（按产品族而非产品为粒度，去重更彻底）；
+  每级记录 score/decision/reason/version 以便重放。
+- 踩坑：一上来就语义去重浪费算力；跨层阈值不统一导致审计困难。
 
-- 先训小 proxy 模型，在其上以 group DRO 优化域权重——给当前模型表现最差的域加大权重（minimax 保住最差域）。
-- 学到的域配比用于正式大模型训练，等预算下收敛更快。
-- 前提：proxy 足够小（否则学权重开销超收益）、域定义合适、tokenizer/数据版本与后续训练一致。
+**题目 3：为什么基于 PPL 的过滤通常保留中间段？**
+- 考点：PPL 作为质量信号的双向失效模式。
+- 答题框架：1) PPL 过低 = 模型已学会，信息量小、边际收益低；2) PPL 过高 =
+  多为乱码/异常点；3) 两端都有害，保留中间段；4) 用分位数（如 20%–90%）
+  切分并做下游 ablation 验证。
+- 加分项：PPL 依赖参照模型选择，跨域需重新校准；与分类器过滤互补而非替代。
+- 踩坑：把 PPL 单调当“越低质量越高”；用同一模型既打分又验证造成循环论证。
 
-**Q9：过滤为什么不是越严越好？**
+**题目 4：描述 DoReMi 的思路。预算有限时怎么落地？**
+- 考点：group-DRO 域权重学习与 proxy 范式。
+- 答题框架：1) 训练小 proxy 模型；2) group DRO 给当前最差域加权，学到域
+  权重；3) 用该权重训练正式大模型，等预算下收敛更快；4) 落地参照：2.6B
+  小模型先导 + 中/英/代码/电信四域 PPL 监控，电信 2.8→1.76、通用不劣化。
+- 加分项：权重学习与正式训练之间不能更换 tokenizer/数据版本；应报告
+  learned weights 与初始配比的差异。
+- 踩坑：proxy 太大导致“学权重”成本反噬；域定义过细导致权重震荡。
 
-- 提高阈值提升人工精度，却减少领域/语言覆盖；目标是 \(\max_\tau U(\tau)=\text{quality}-\lambda C_{\text{tokens}}-\gamma\,\text{distribution shift}\)。
-- 每 stage 应输出 score/decision/reason，才能重放不同阈值；只优化 validation loss 可能奖励 benchmark 泄漏或风格窄化。
+**题目 5：去重与数据多样性的张力怎么权衡？**
+- 考点：过度去重的危害与临界点意识。
+- 答题框架：1) 重复 token 边际价值随 epoch 衰减，去重有正收益；2) 但
+  FineWeb 实测收益先升后降，过度去重性能恶化；3) 阈值与去重范围变更必须
+  走小模型受控 ablation；4) 按文档类型/语言分组审计误杀与覆盖变化。
+- 加分项：引用 data-constrained scaling（唯一 token 主导收益）与 FineWeb
+  实测两条证据线。
+- 踩坑：把“去重越多越好”当默认；只报最终 loss 不报多样性/覆盖指标。
 
-**Q10：LSH 的 \(b\) 和 \(r\) 怎么调？**
+**题目 6：评测集污染（contamination）为什么危险？怎么防？**
+- 考点：去污染意识与工程防线。
+- 答题框架：1) 评测集混入训练数据 → benchmark 虚高（“刷榜”），对比结论
+  失效；2) 防线一：管线末端加去污染（Nemotron 数学管线在 MinHash-LSH 后
+  接 LLM Decontaminator）；3) 防线二：消融实验隔离污染影响；4) 防线三：
+  第三方评测交叉验证。
+- 加分项：指出 exact 匹配抓不住改写/翻译型污染，需 n-gram/语义级检测。
+- 踩坑：只在训练前做一次去污染，之后新增数据不复查。
 
-- \(b\) 大：召回高、候选多；\(r\) 大：更严格、候选少；拐点约 \(s^\star\approx(1/b)^{1/r}\)。
-- 最终阈值仍要通过数据校准；LSH 只缩小 pair 数，之后还要算真 Jaccard 复核（候选 ≠ 重复）。
+**题目 7：FineWeb-edu 规模更小却更强，为什么？对数据策略有何启示？**
+- 考点：质量 > 数量；LLM-as-judge 打分的过滤器设计。
+- 答题框架：1) llama-3-70b-instruct 给约 50 万样本按 0–5 打教育质量分，
+  滤 <3；2) 规模显著更小仍优于 FineWeb 与其他公开数据集；3) 启示：token
+  预算应投向高质量子集，“质量”的定义即打分 prompt 的定义，需人工抽检；
+  4) 用固定训练配方的受控 ablation 验证。
+- 加分项：讨论 LLM 打分的偏差与标注成本（50 万样本量级）；与 RefinedWeb
+  拒绝分类器路线的对照。
+- 踩坑：把分类器分数当校准概率；忽视打分模型自身对“教育价值”的偏差。
 
-### 15.3 手撕要点（MinHash / LSH / DSIR）
+## 系统设计题
 
-面试让「推导 MinHash 无偏性」或「算 LSH 候选率」时，按公式写：
+**设计题 1：为 15T tokens 级 web 语料设计“过滤 + 去重 + 配比”分布式管线（含 PII 与去污染）**
 
-```text
-MinHash: m_k(A) = min_{a∈A} h_k(a),  Pr[m_k(A)=m_k(B)] = J(A,B)
-  Ĵ = (1/K) Σ 1[m_k(A)=m_k(B)],  Var(Ĵ) = J(1-J)/K
+- 需求澄清：目标 token 预算（FineWeb 量级 15T / 96 快照；参照 Llama-3
+  15T、Qwen 2.2T 去重过滤后）；语言范围；PII 合规等级；评测集清单与
+  去污染要求；可用算力、工期与吞吐 SLA。
+- 规模估算：15T tokens 对应数十亿文档量级；MinHash 构造 \(O(NMK)\)
+  （\(K\approx128\)），签名存储约 128 B/文档 × N；LSH 按 band shuffle，
+  需估算最大 bucket 与候选 pair 数；按 per-snapshot 去重可复用 FineWeb
+  的成本结构。
+- 架构：Spark/Ray 分 stage：URL 黑名单 → fastText 语言过滤 → Gopher
+  结构规则 → PII 掩码 → 质量分类器打分（保留 score）→ 哈希精确去重 →
+  MinHash-LSH 模糊去重（per-snapshot）→（进阶）聚类 + 余弦语义去重 →
+  DoReMi 式 2.6B proxy 学域配比 → 去污染（评测集 n-gram/语义检测）→
+  tokenizer + 固定预算 ablation。每 stage 落 score/decision/reason/version
+  审计字段，支持阈值重放。
+- trade-off 表：
 
-LSH (K=br, b bands × r rows):
-  P_cand(s) = 1 - (1-s^r)^b,  拐点 s* ≈ (1/b)^{1/r}
+| 决策 | 选项 A | 选项 B | 权衡 |
+| --- | --- | --- | --- |
+| 去重范围 | per-snapshot（FineWeb） | 全局跨快照 | A 保留多样性、规避过度去重；B 更彻底但实测可能性能恶化 |
+| 质量过滤 | 规则（Gopher） | LLM 打分分类器 | A 便宜可解释；B 贴近目标但贵且有偏差 |
+| 配比来源 | 人工经验 | proxy 模型学习（DoReMi 式） | A 上手快；B 等预算更优但有先导成本 |
+| 去污染 | exact 匹配 | 语义级检测 | A 快；B 能抓改写型污染 |
 
-DSIR: w(x) = p_target(x)/p_raw(x)
-  ESS = (Σw)² / Σw²   （低 ESS = 少数文档支配数据）
+- 评测方案：小模型受控 ablation（固定训练配方比 validation loss 与下游）；
+  人工 precision 分语言/文档类型抽样；去重后多样性/域覆盖报表；去污染
+  前后 benchmark 对比与评测集命中率检查（应趋近 0）。
+- 追问预案：热门模板形成超大 bucket → 限制桶容量 + 二次复核 + 拆 band；
+  小语种被规则误杀 → 分组通过率监控 + 单独阈值；增量更新 → 新快照对增量
+  + 采样旧集做去重；PII 误掩码 → 掩码版原文双写留审计。
+
+**设计题 2：为领域增训（以电信/ICT 为例）设计“通用能力不劣化”的数据策略**
+
+- 需求澄清：领域目标（电信域 PPL 显著下降）；硬约束（通用 benchmark 不
+  劣化）；先导实验预算；中/英/代码三域通用数据基线配比。
+- 规模估算：参照某大模型实践——ICT 领域数据中文 9B / 英文 10B tokens；
+  通用数据中文 10B / 英文 15B / 代码 15B；先导模型 2.6B，多轮短训迭代
+  权重。
+- 架构：领域语料管线（URL 收集 → CC 快照重抓 → lynx 保留布局 → 文本
+  归一化 → 领域分类器（FineMath 式）→ MinHash-LSH 去重 → 去污染）→
+  2.6B proxy 上按四域 PPL 迭代 domain weight（DoReMi 式 group-DRO）→
+  目标配比下训练正式模型 → 领域/通用双轨评测。
+- trade-off 表：
+
+| 决策 | 选项 A | 选项 B | 权衡 |
+| --- | --- | --- | --- |
+| 配比来源 | 固定人工配比 | PPL 驱动迭代 | A 简单；B 实测电信 2.8→1.76 且通用不劣化 |
+| 领域数据粒度 | 按产品 | 按产品族 | 族级范围更大、去重更彻底 |
+| proxy 规模 | 1B 级 | 2.6B 级 | 更小更快，但偏好可能不外推到大模型 |
+| 评测方式 | 自建 benchmark | 自建 + 第三方 | 前者可能污染虚高，后者更可信但有泄露顾虑 |
+
+- 评测方案：四域 PPL 追踪（量级参照：中文 3.33→2.68、英文 6.02→5.73、
+  代码 3.66→3.31、电信 2.8→1.76）；通用 benchmark 回归（不劣化判据 +
+  置信区间）；领域下游任务集；第三方评测防刷榜。
+- 追问预案：proxy 与大模型偏好不一致 → 大模型上小样本复验配比；tokenizer
+  变更 → 已学权重作废重跑；域定义过粗/过细 → 做粒度 sweep 并观察权重
+  震荡。
+
+**设计题 3：设计数学领域语料管线（Nemotron/FineMath 式），含去重与去污染**
+
+- 需求澄清：目标规模与质量等级；LaTeX/公式保真要求；评测集去污染等级。
+- 规模估算：URL 种子池 → 98 个 CC 快照重抓 HTML（Nemotron 实践量级）；
+  存储按快照膨胀系数估算；FineMath 分类器打分与 MinHash-LSH 计算量随
+  过滤后留存率下降。
+- 架构：收集数学 URL → 98 个 CC 快照重抓 HTML → lynx 保留页面布局 →
+  Phi-4 归一化 LaTeX → FineMath 分类器过滤 → MinHash-LSH 模糊去重 →
+  LLM Decontaminator 去污染 → 固定预算小模型 ablation 定稿。
+- trade-off 表：
+
+| 决策 | 选项 A | 选项 B | 权衡 |
+| --- | --- | --- | --- |
+| 正文抽取 | lynx 保布局 | 纯文本抽取 | A 保留公式/结构；B 便宜但损失数学内容 |
+| 去污染时机 | 去重前 | 管线末端（去重后） | 末端做（Nemotron 顺序）可覆盖全部上游污染 |
+| 分类器 | 规则关键词 | LLM 打分（FineMath 式） | A 便宜；B 区分度更高但推理成本大 |
+
+- 评测方案：数学 benchmark 前后对比 + 通用能力回归；污染检测报告（评测集
+  命中率应为 ~0）；小模型 ablation 比较管线变体（如 lynx vs 纯文本抽取）。
+- 追问预案：分类器把竞赛题当高质样本（潜在污染源）→ 评测集黑名单前置；
+  LaTeX 归一化不一致 → 抽样人工核对渲染结果。
+
+## 代码实现题
+
+**代码题 1：MinHash 签名 + LSH 分桶去重（骨架）**
+
+- 题目：实现 minhash 签名、LSH 分桶、候选复核与 union-find 合并；输入
+  文档 dict，输出保留的 survivor 集合。
+- 考察点：规范化与 shingling；\(K/b/r\) 与阈值的定量关系；LSH 候选必须用
+  真 Jaccard 复核；确定性合并顺序。
+
+```python
+import re
+import hashlib
+from collections import defaultdict
+
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+def shingles(text: str, n: int = 5) -> set:
+    words = normalize(text).split()
+    return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+def minhash_sig(sh: set, k: int = 128, seed: int = 0) -> tuple:
+    sig = []
+    for i in range(k):
+        h = hashlib.blake2b(digest_size=8, person=str(seed + i).encode())
+        sig.append(min(int.from_bytes(h(s.encode()).digest(), "little") for s in sh))
+    return tuple(sig)
+
+def lsh_keys(sig: tuple, b: int = 16):
+    r = len(sig) // b
+    for band in range(b):
+        yield (band, sig[band * r:(band + 1) * r])
+
+def jaccard(a: set, b: set) -> float:
+    return len(a & b) / len(a | b)
+
+def minhash_dedup(docs: dict, threshold: float = 0.8,
+                  k: int = 128, b: int = 16) -> set:
+    sh_by_id, buckets = {}, defaultdict(list)
+    for doc_id, text in docs.items():
+        sh = shingles(text)
+        if not sh:                       # 空文档不进签名，避免聚成一簇
+            continue
+        sh_by_id[doc_id] = sh
+        for key in lsh_keys(minhash_sig(sh, k), b):
+            buckets[key].append(doc_id)
+
+    parent = {d: d for d in sh_by_id}
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    checked = set()
+    for members in buckets.values():
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                a, c = members[i], members[j]
+                if (a, c) in checked:
+                    continue
+                checked.add((a, c))
+                # LSH 只给候选；必须用真 Jaccard 复核再合并
+                if jaccard(sh_by_id[a], sh_by_id[c]) >= threshold:
+                    parent[find(a)] = find(c)
+
+    keep = {}
+    for doc_id in sh_by_id:              # 每簇保留一个确定性 survivor
+        root = find(doc_id)
+        if root not in keep or doc_id < keep[root]:
+            keep[root] = doc_id
+    return set(keep.values())
 ```
 
-**三个必踩坑**
+- 验收标准：对注入完全重复/近重复的合成集，召回 ≥ 95%、误删 ≤ 1%；
+  空文档不被误并；同输入多次运行结果一致；\(b=16, r=8\) 时拐点
+  \((1/16)^{1/8}\approx0.76\)，与阈值 0.8 匹配；报告候选 pair 数与最大
+  bucket 大小。
 
-1. **LSH 候选 ≠ 重复**：还要算真 Jaccard 复核，用 union-find 合并簇。
-2. **Python `hash()` 不稳定**：跨进程/版本不同，必须用固定算法 + seed。
-3. **split 前去重**：train/validation 切分后再去重会跨 split 泄漏，应先建近重复簇再切分。
+**代码题 2：基于小模型 PPL 的质量过滤 + DoReMi 式域配比搜索脚本**
 
-### 15.4 高频追问与陷阱
+- 题目：给定 proxy 模型在候选文档上的 loss 与各域验证 loss，实现 1) PPL
+  中间段过滤；2) group-DRO 风格的域权重迭代更新。
+- 考察点：PPL = exp(mean NLL)；分位数过滤的双向失效理解；最差域加权、
+  clip、归一化；先导-放大两阶段流程与可复现性。
 
-| 追问 | 正确方向 |
-| --- | --- |
-| 去重能解决所有污染吗？ | 否，语义改写、翻译重复、拼接污染仍在，且不证明模型不记忆 |
-| classifier accuracy 是数据质量吗？ | 否，只是正负样本定义的「风格」，精度有 CI |
-| survivor 选「最早抓到」对吗？ | 可能系统偏向特定域，策略需可解释并审计来源占比 |
-| 目标域含 benchmark 会怎样？ | DSIR/DoReMi 会把泄漏写进采样分布 |
-| MinHash 空集合会怎样？ | 全部同 signature 聚成一簇，应先过滤空文档 |
+```python
+import numpy as np
 
-## 16. 小结
+def ppl_filter(losses: np.ndarray, q_low: float = 0.2,
+               q_high: float = 0.9) -> np.ndarray:
+    """PPL 过低 = 模型已学会（信息量小）；过高 = 异常点 → 保留中间段。"""
+    ppl = np.exp(losses)
+    lo, hi = np.quantile(ppl, [q_low, q_high])
+    return (ppl >= lo) & (ppl <= hi)
+
+def doremi_update(weights: dict, domain_loss: dict,
+                  lr: float = 0.2, cap: float = 0.5,
+                  floor: float = 0.02) -> dict:
+    """简化 group-DRO：最差域（loss 最大）加权、最优域减权，clip 后归一化。"""
+    worst = max(domain_loss, key=domain_loss.get)
+    best = min(domain_loss, key=domain_loss.get)
+    w = dict(weights)
+    w[worst] *= 1 + lr
+    if best != worst:
+        w[best] *= 1 - lr
+    w = {d: min(max(v, floor), cap) for d, v in w.items()}
+    s = sum(w.values())
+    return {d: v / s for d, v in w.items()}
+
+# 先导流程（参照 2.6B proxy 四域实践：中文/英文/代码/电信）
+# weights = {"zh": 0.25, "en": 0.25, "code": 0.25, "telecom": 0.25}
+# for step in range(n_steps):
+#     proxy.train_one_round(weights)            # 2.6B 小模型短训
+#     domain_loss = proxy.eval_domain_nll()     # 各域验证平均 NLL
+#     weights = doremi_update(weights, domain_loss)
+#     print({d: float(np.exp(l)) for d, l in domain_loss.items()})
+#     # 监控量级参照：电信 PPL 2.8→1.76、中文 3.33→2.68，通用域不劣化
+```
+
+- 验收标准：`ppl_filter` 在合成双峰 loss 分布上恰好删除两端分位样本；
+  `doremi_update` 输出权重和为 1 且全部落在 \([floor, cap]\)；对“电信域
+  loss 最高”的输入，若干轮后 telecom 权重单调上升并触顶 cap；固定种子
+  全程可复现。
+
+## 15. 小结
 
 fastText 和 Gopher 适合廉价初筛，MinHash 估计集合相似度，LSH 控制候选规模，SemDeDup
 把去重推进到语义层，DSIR/DoReMi 则通过密度比与域权重改变采样分布。它们不是同一种
@@ -516,4 +793,8 @@ Optimizing Data Mixtures Speeds Up Language Model Pretraining.” *NeurIPS*,
 
 - Stanford CS336, [Lecture 14 — Filtering, Deduplication and Mixing](https://github.com/stanford-cs336/lectures/blob/main/lecture_14.py)
 - [Data Curation 主题导航](../experiments/topics/data-curation.md)
-- [A4 Data 官方题面](../assignments/assignment4-data/cs336_assignment4_data.pdf)
+- [A4 Data 官方题面](../assignments/spring2026/assignment4-data/cs336_assignment4_data.pdf)
+- [Scaling Data-Constrained Language Models（Muennighoff et al., 唯一 token 主导收益的原始证据）](https://arxiv.org/abs/2305.16264)（访问日期 2026-10-04）
+- [The Llama 3 Herd of Models（15T tokens 级数据管线的工业参照）](https://arxiv.org/abs/2407.21783)（访问日期 2026-10-04）
+- [DeepSeek-V3 Technical Report（预训练数据管线与配比的工程参照）](https://arxiv.org/abs/2412.19437)（访问日期 2026-10-04）
+- [Stanford CS336 课程主页](https://cs336.stanford.edu)（访问日期 2026-10-04）

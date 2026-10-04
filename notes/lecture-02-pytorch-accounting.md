@@ -7,7 +7,7 @@ lecturer: "Percy Liang"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py"
-  - "../assignments/assignment1-basics/"
+  - "../assignments/spring2026/assignment1-basics/"
 ---
 
 # Lecture 02 — PyTorch 与 Resource Accounting：从 tensor shape 到资源账本
@@ -16,7 +16,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、ML Systems 工程师与性能研究者
 
 ## 摘要
@@ -555,7 +555,7 @@ latency-sensitive 服务还应报告 p50/p95。长训练同时报告 tokens/s �
 
 | 概念 | 路径 / 符号 | 阅读问题 |
 |---|---|---|
-| `einsum` Linear | `assignments/assignment1-basics/cs336_basics/model.py`：`Linear.forward` | weight 为何是 `[d_out,d_in]`？ |
+| `einsum` Linear | `assignments/spring2026/assignment1-basics/cs336_basics/model.py`：`Linear.forward` | weight 为何是 `[d_out,d_in]`？ |
 | Head reshape | 同文件：`CausalMultiHeadSelfAttention.forward` | `[B,T,d]` 如何变 `[B,h,T,d_h]`？ |
 | FLOPs 组件 | 同文件：Q/K/V/O、`scaled_dot_product_attention`、`SwiGLU` | 对照本讲逐项计数 |
 | Mixed precision | `.../cs336_basics/training.py`：`torch.autocast` | 哪些状态仍是 fp32？ |
@@ -580,6 +580,10 @@ latency-sensitive 服务还应报告 p50/p95。长训练同时报告 tokens/s �
 10. **把 gradient accumulation 当免费大 batch。** 它节省显存，但可能降低 kernel efficiency。
 11. **把 activation checkpointing 当总内存除以二。** 它只作用于可重算 activations。
 12. **把高 GPU utilization 当高 MFU。** memory-bound kernel 也能让设备一直忙。
+13. **把 ZeRO/FSDP 当无损省显存。** 分片引入参数 all-gather，小卡数/低带宽下可能
+    把瓶颈从显存搬到通信。
+14. **按 byte 数直推 fp8 的显存与质量。** fp8 依赖 E4M3/E5M2 格式与
+    per-tensor/per-channel scaling 实现，账本要按实际保存的 scale tensor 重算。
 
 ## 11. 实践 Checklist
 
@@ -601,19 +605,28 @@ latency-sensitive 服务还应报告 p50/p95。长训练同时报告 tokens/s �
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
 | 第一次 step 极慢 | 分离 compile/warm-up | CUDA context、JIT、autotune |
-| 计时异常快 / kernel 计时不可信 | 是否同步 | 只测到 asynchronous launch、未 `synchronize` |
-| 显存逐 step 增长 / 长时间运行缓涨 | live graph / Python list / allocator 碎片 | 未 `detach()`、retain graph、变长 shape 反复分配 |
+| 计时异常快 | 是否同步 | 只测到 asynchronous launch |
+| 显存逐 step 增长 | live graph / Python list | 未 `detach()`、retain graph |
 | reserved 很高、allocated 较低 | allocator snapshot | fragmentation/caching |
-| 训练/推理 OOM | 参数+梯度+优化器+激活账本 | 未计 optimizer state、未用 checkpointing、被计算图持有 |
-| 理论能放下却 OOM | temporary/workspace/reserved | 漏算 activation 或 fragmentation |
 | matmul 很慢 | shape、layout、dtype | 小 GEMM、非 contiguous、未用 tensor core |
-| matmul 结果错乱 | dtype 与 broadcast 审计 | fp16 溢出、维度隐式广播 |
-| GPU 100% 但 MFU 低 | kernel mix、bandwidth | memory/launch bound、小 batch GEMM |
-| MFU 远低于预期 | arithmetic intensity 与 Roofline | 小 batch GEMM、launch-bound 循环 |
-| 实测比理论慢数倍 | 通信/数据加载 overlap | CPU 预处理瓶颈、未异步预取 |
+| GPU 100% 但 MFU 低 | kernel mix、bandwidth | memory/launch bound |
 | compile 无加速 | graph breaks / shape cache | 动态控制流、频繁新 shape |
 | accumulation loss 不一致 | loss scaling、clip/step 时机 | 未除 \(K\)、每 microbatch step |
-| mixed precision NaN / loss 出现 NaN | reduction dtype / scaling | fp16 overflow/underflow、未用 GradScaler |
+| mixed precision NaN | reduction dtype / scaling | fp16 overflow/underflow |
+| 理论能放下却 OOM | temporary/workspace/reserved | 漏算 activation 或 fragmentation |
+
+### 故障排查速查
+
+| 现象 | 优先检查 | 常见根因 |
+|---|---|---|
+| 训练 OOM | 参数+梯度+优化器+激活账本 | 未计 optimizer state；未用 checkpointing |
+| 推理也 OOM | 参数量×dtype 与引用释放 | 张量被计算图/全局变量持有 |
+| MFU 远低于预期 | arithmetic intensity 与 Roofline | 小 batch GEMM、launch-bound 循环 |
+| 实测比理论慢数倍 | 通信/数据加载 overlap | CPU 预处理瓶颈、未异步预取 |
+| matmul 结果错乱 | dtype 与 broadcast 审计 | fp16 溢出、维度隐式广播 |
+| loss 出现 NaN | loss scaling 与梯度范数 | 混合精度未用 GradScaler、上溢 |
+| 长时间运行显存缓涨 | allocator 碎片化 | 变长 shape 反复分配；固定 shape 或设分配器策略 |
+| kernel 计时不可信 | CUDA 异步语义 | 未 `synchronize` 就取时间戳 |
 
 ## 12. 作业关联
 
@@ -627,219 +640,420 @@ latency-sensitive 服务还应报告 p50/p95。长训练同时报告 tokens/s �
 
 ## 13. 讨论：效度威胁与结论边界
 
-### 13.1 Construct validity
+### 14.1 Construct validity
 
 - FLOPs 是算法工作量近似，不包含所有 memory、launch、communication 和 control overhead；
 - peak allocated memory 不等于 process VRAM，也不等于可用 batch；
 - MFU 依赖 FLOP 公式和峰值规格，跨论文比较前必须统一 numerator/denominator；
 - GPU utilization 只表示设备忙，不表示有效模型计算。
 
-### 13.2 Internal validity
+### 14.2 Internal validity
 
 - 未同步 CUDA、未 warm-up 或把 compile time 混入，会系统性扭曲计时；
 - 不同 batch/sequence 同 step 数看过的 tokens 不同，不能归因于优化；
 - dtype、TF32、autocast、determinism 或 kernel version 未固定，会成为 confounder；
 - profiler 自身有 overhead，尤其是 stack trace、shape record 和 memory history。
 
-### 13.3 External validity
+### 14.3 External validity
 
 - 单 GPU、单 shape、单软件版本的 speedup 不自动迁移到其他硬件/规模；
 - microbenchmark kernel speedup 不等于 end-to-end time-to-quality；
 - synthetic tensors 可能缺少真实 padding、sparsity、data pipeline 和 communication；
 - 峰值规格是理论上限，power/thermal/clock 与共享环境会改变可达性能。
 
-### 13.4 研究报告最低信息
+### 14.4 研究报告最低信息
 
 硬件型号/数量、driver/CUDA/framework/commit、模型与 shapes、dtype、warm-up/repetitions、
 synchronization、统计量、OOM/error policy、correctness tolerance、完整运行命令。
 缺少这些信息的“X× 加速”不可可靠复现。
 
-## 14. 面试备考（Interview Prep）
+## 面试要点速记
 
-> 本讲是 ML Systems / LLM 面试最硬核的「算账」考点：面试官会让你当场手算参数量、FLOPs、
-> 训练显存、KV cache、MFU。核心不是背数字，而是掌握 `shape → FLOPs → bytes → bottleneck`
-> 这条推导链。下面按「一页速览 → 高频题 → 手撕核算 → 追问」四层组织，每题仍用
-> **定义 → 为什么/原理 → 公式 → 工程落地 → 边界**的框架。
+**高频问题与答题要点**
 
-### 14.1 一页速览卡（面试前 1 分钟）
+1. **Q：训练 1B 模型最少要多少显存（不含激活）？** 要点：bf16 参数 2N + 梯度
+   2N + Adam fp32 状态（m、v、master weights）12N ≈ **16N bytes** → 1B ≈ 16GB。
+2. **Q：\(C\approx6ND\) 的 6 从哪来？** 要点：前向 ~2ND，反向 ~4ND（对权重梯度
+   需重放两次矩阵乘）。
+3. **Q：什么时候是 memory-bound？** 要点：arithmetic intensity（FLOPs/字节）
+   低于机器峰值算力/带宽之比：elementwise、小 batch decode、optimizer step。
+4. **Q：activation checkpointing 的代价？** 要点：只存层边界激活、反向时重算
+   → 显存大降、时间 +约 33%（多一次前向）。
+5. **Q：MFU 怎么算、多少算健康？** 要点：实测 FLOPs /（峰值 FLOPs × 时间）；
+   大模型密集训练 40–60% 正常，低于 ~30% 先查通信、数据加载与小 kernel。
+6. **Q：ZeRO 三个 Stage 各省多少显存？** 要点（DeepSpeed 业界口径）：
+   Stage-1 优化器分片 ≈ 12Φ/P + 4Φ；Stage-2 再分梯度 ≈ 14Φ/P + 2Φ；
+   Stage-3 全分片 ≈ 16Φ/P（Φ=参数量、P=卡数）。
+7. **Q：为什么 activation checkpointing 有时反而"省时间"？** 要点：省下的激活
+   显存换更大 batch → GEMM 复用更强、kernel 效率提升，可能抵消约 +33% 的重算开销。
+8. **Q：bf16 与 fp16 的本质区别？** 要点：同为 2 bytes；fp16 5-bit exponent 易
+   underflow 需 loss scaling；bf16 8-bit exponent 动态范围接近 fp32、可免 scaling。
+9. **Q：GPU 利用率 100% 但训练慢，先查什么？** 要点：utilization ≠ MFU；
+   查 kernel mix（memory-bound 小算子）、通信是否重叠、数据加载空泡。
 
-**核心主张**：resource accounting 是用 `shape → FLOPs → bytes → bottleneck → experiment`
-回答「模型能否放下、瓶颈是算力还是带宽、一次实验要多久」。
+**必背数字**
 
-**必背数字与公式**
+- 16N bytes 规则（Adam+bf16 训练态）；6ND；checkpointing 时间 ~1.33×；
+  roofline 拐点 = 峰值算力 / 峰值带宽。
 
-- 训练 FLOPs \(C\approx6ND\)：forward \(2ND\) + backward \(4ND\)（\(N\) 为参与 matmul 的参数量）。
-- 参数量 \(P\approx12Ld^2\)（`d_ff=4d`，单层 QKV+out `4d²` + FFN `8d²`）。
-- **16N 规则**：Adam+bf16 训练态 ≈ parameter 2 + gradient 2 + fp32 moments(m,v) 8 + master 4 = **16 bytes/参数**。
-- 一次 matmul 的 backward ≈ 2× forward（对 X 和 W 各做一次同阶 GEMM）。
-- activation checkpointing 时间 ≈ **1.33×**（多一次 forward），显存从 \(O(L)\) 降到 \(O(\sqrt L)\)。
-- roofline 拐点 \(I^\*=C_{\max}/BW\)；\(I<I^\*\) 是 memory-bound，否则 compute-bound。
+**工业界参照（2024–2026 口径）**
 
-**三句话答高频**
+- 硬件峰值（SXM 口径）：A100 BF16 312 TFLOPS / 80GB HBM2e / 2TB/s；
+  H100 BF16 dense 989 TFLOPS / 80GB HBM3 / 3.35TB/s / NVLink4 900GB/s；
+  H200 141GB HBM3e / 4.8TB/s；B200 BF16 dense 2.25 PFLOPS、FP8 dense 4.5 PFLOPS /
+  192GB HBM3e / 8TB/s / NVLink5 1.8TB/s。
+- ZeRO 分片公式：Stage-1 ≈ 12Φ/P + 4Φ；Stage-2 ≈ 14Φ/P + 2Φ；Stage-3 ≈ 16Φ/P。
+- MFU 实测参照：业界教程案例 LLaMA1-65B @ 昇腾 910B2 约 0.46；
+  第一梯队集群一般 40%–55%；训练 FLOPs 简化口径 ≈ 6·N_active·D。
+- H100 FP8（配合 DeepSpeed）显存约 -42%；1-bit Adam 梯度通信压缩 5 倍。
+- activation checkpointing：全量重计算约 +33% 计算；选择性重计算显存降 30%–70%。
+- 通信兜底：NCCL ring all-reduce；GPU 通信时延约 1µs（NVLink/IB）。
 
-1. FLOPs 决定「理论算多少」，memory 决定「能不能放」，arithmetic intensity 决定「能不能跑满」。
-2. Adam 显存大头是 fp32 的 m/v（8 bytes/参数），不是模型权重。
-3. backward 不是 forward 的 1 倍，对 matmul 约为 2 倍，所以总训练 ≈ 3× forward。
+## 行业现状与最新进展（2024–2026）
 
-### 14.2 高频面试题与答题框架
+### 混合精度训练的显存账本（AdamW + bf16）
 
-**Q1：\(C\approx6ND\) 的 6 是怎么来的？什么时候失效？**
+业界通用口径把训练状态拆成"fp32 训练态 + bf16 计算态"两部分：
 
-- **推导**：forward 一次 matmul 约 \(2ND\)；backward 需要算对输入的梯度和对权重的梯度，各是同阶的 GEMM，共约 \(4ND\)；合计 \(6ND\)。
-- **为什么**：反向的两次 GEMM 正是「激活转置 × 输出梯度」与「输入转置 × 输出梯度」。
-- **失效边界**：忽略 attention 的 \(T^2\) 项、embedding lookup、softmax/norm、optimizer、recomputation、通信；只在长训练、dense matmul 主导时量级准确。
+| 项目 | dtype | 每参数 bytes | 说明 |
+|---|---|---:|---|
+| master weights | fp32 | 4 | 权重主副本，更新语义的正确性来源 |
+| AdamW 一阶矩 m | fp32 | 4 | 与参数同 shape |
+| AdamW 二阶矩 v | fp32 | 4 | 与参数同 shape |
+| fp32 训练态小计 | | 12 | 即 ZeRO 论文口径的 12Φ |
+| 参数 | bf16 | 2 | 前向/反向实际计算精度 |
+| 梯度 | bf16 | 2 | backward 产物 |
+| 合计（不含激活） | | ~16 | 即 16N bytes 规则 |
 
-**Q2：训练一个 1B 参数模型最少要多少显存（不含激活）？**
+7B 模型：16 × 7G ≈ 112GB——单张 80GB 的 H100 放不下训练态本身，这正是
+分片并行（ZeRO / FSDP）的出发点。
 
-- **bf16+Adam 的 16N 规则**：parameter 2 + gradient 2 + Adam 两个 fp32 moment 8 + fp32 master weight 4 = 16 bytes/参数。
-- 1B × 16 = **16 GB**；这还没算 activation、临时 workspace、CUDA context 与 allocator 碎片。
-- **为什么 Adam 是 3 倍权重**：m、v 各 4 bytes 与参数同 shape，master weight 再 4 bytes，共 12 bytes 纯优化器状态。
-- **注意**：纯 bf16 无 master weight 可降到 12N；fp32 全量是 16N 但来源不同（param 4 + grad 4 + m 4 + v 4）。
+### ZeRO / FSDP：分片对显存公式的改写
 
-**Q3：模型参数量怎么手算？**
+本讲概念与工业界实践/数字的对照：
 
-- 单层：QKV+out 四个 \(d\times d\) 矩阵 `4d²` + SwiGLU 三个矩阵（`d_ff=4d` 时）`3·4d²=12d²`，其中两个门 `2·4d²=8d²` 记入 FFN → 单层 `12d²`。
-- 总 `12Ld²` + embedding/head `2Vd`（tied 时 1 份）。
-- 例：`d=4096, L=32, V=32000` → `12×32×4096² ≈ 6.4B` 非嵌入参数，与 LLaMA-7B 量级一致。
+| 本讲概念 | 工业界实践/数字 |
+|---|---|
+| 16N bytes 规则 | ZeRO 口径的 16Φ（bf16 参数/梯度 + fp32 master/m/v） |
+| optimizer states | Stage-1 分片：≈ 12Φ/P + 4Φ |
+| gradients | Stage-2 再分片：≈ 14Φ/P + 2Φ |
+| parameters | Stage-3 全分片：≈ 16Φ/P |
+| activation checkpointing | 全量重算约 +33% 计算；selective 重算显存降 30%–70% |
+| MFU | 第一梯队集群 40%–55%；LLaMA1-65B 案例约 0.46 |
 
-**Q4：训练显存由哪些部分组成？激活显存怎么估？**
+各方案的显存与通信代价：
 
-- 总 \(M_{\rm peak} = M_{\rm params}+M_{\rm grads}+M_{\rm opt}+M_{\rm activations}+M_{\rm temp}+M_{\rm allocator}\)。
-- activation 上界形如 \(A/B \approx L(7Td+4Tf+2hT^2)+Td+2TV\)，其中 `hT²` attention 概率与 `TV` logits 在大序列/大词表下最贵。
-- **工程**：用 `memory_allocated`（live）区分 `memory_reserved`（caching allocator 预留），OOM 常是碎片而非总 free 不足。
+| 方案 | 每卡训练态显存（Φ=参数量，P=卡数） | 通信模式变化 |
+|---|---|---|
+| 不分片（DDP） | ~16Φ | 梯度 all-reduce |
+| ZeRO-1 | 12Φ/P + 4Φ | 优化器状态 all-gather |
+| ZeRO-2 | 14Φ/P + 2Φ | 梯度 reduce-scatter |
+| ZeRO-3 / FSDP | 16Φ/P | 参数 all-gather（前后向各一次） |
 
-**Q5：什么是 memory-bound？arithmetic intensity 与 roofline 怎么用？**
+FSDP 是 PyTorch 原生的 ZeRO-3 等价物：自动 bucket 划分、支持异构分片。
+FSDP2（PyTorch 2.4 起）升级为 per-parameter sharding、支持参数重分片，易用性
+大幅提升，兼得 ZeRO-3 级显存优化。ZeRO 论文见
+[arXiv:1910.02054](https://arxiv.org/abs/1910.02054)，FSDP 论文见
+[arXiv:2304.11277](https://arxiv.org/abs/2304.11277)。
 
-- arithmetic intensity \(I=\text{FLOPs}/\text{bytes}\)；可达性能 \(\le\min(C_{\max}, BW·I)\)。
-- 拐点 \(I^\*=C_{\max}/BW\)：低于它受带宽限制（memory-bound），高于它受算力限制（compute-bound）。
-- **例子**：GEMM 的 \(I=O(n)\)（越大的矩阵复用越强，compute-bound）；逐元素 ReLU、softmax 的 \(I=O(1)\)（memory-bound）；decode 的 matvec 复用低、偏 memory-bound。
+### FP8 与新一代硬件的显存变化
 
-**Q6：MFU 是什么？怎么算？多少算健康？**
+- H100 上 FP8（配合 DeepSpeed）可减少约 42% 显存占用；1-bit Adam 把梯度通信
+  压缩 5 倍——显存与通信可以一起省。
+- B200：BF16 dense 2.25 PFLOPS、FP8 dense 4.5 PFLOPS、192GB HBM3e、8TB/s、
+  NVLink5 1.8TB/s；算力、带宽、互联同步上台阶，通信/计算重叠窗口更宽。
+- 实测案例（LLaMA2-70B，TP=8，单节点）：H200 454.6 TFLOPS/GPU vs
+  B200 815.2 TFLOPS/GPU（+79%）；MLPerf 口径 B200 对 H200：GPT-3 175B
+  预训练约 2.0×、Llama-70B LoRA 约 2.2×。
+- 但 fp8 的 E4M3/E5M2 格式与 per-tensor/per-channel scaling 强依赖实现：
+  显存账本要按实际保存的 scale tensor 重算，不能只按 byte 数减半推总账。
 
-- \(\text{MFU}=\frac{\text{模型理论 FLOPs/step}×\text{steps/s}}{\text{峰值 FLOP/s}×\text{设备数}}\)。
-- 大模型密集训练 **40–60%** 算正常；低于 ~30% 先查通信、数据加载、小 kernel 与 launch gap。
-- **陷阱**：GPU utilization 100% ≠ MFU 高；memory-bound kernel 也能让设备一直「忙」但没算有效 FLOPs。
+### 对本讲学习者的启示
 
-**Q7：fp32 / fp16 / bf16 区别？为什么 bf16 通常不用 loss scaling？**
+本讲的 `shape → bytes → bottleneck` 链路正是工业界训练前可行性评估（feasibility
+check）的核心：16B/参数规则决定卡数下限；ZeRO 公式决定分片档位；6·N_active·D
+除以峰值与 MFU（40%–55% 是第一梯队水平）决定训练时长；activation
+checkpointing（全量重算 +33%，或 selective 重算显存降 30%–70%）决定 batch
+上限。把这套账本练成手算能力，面试与工程排障都直接受益。
 
-- fp32：8-bit exponent + 23-bit fraction（稳、4 bytes）；fp16：5+10（范围小、梯度易 underflow，需 loss scaling）；bf16：8+7（2 bytes，动态范围≈fp32，精度粗）。
-- bf16 保留 8-bit exponent，梯度范围与 fp32 相近，因此大模型常可免 loss scaling（Kalamkar et al. 2019；PaLM）。
-- fp8 需 E4M3/E5M2 + per-tensor/channel scaling，数值边界更依赖实现。
+## 大厂面试真题与答题框架
 
-**Q8：gradient accumulation 为什么省显存？代价是什么？**
+高频面试题（公开面经风格），以下为建议答题框架。
 
-- 把 global batch \(B_g\) 分成 \(K\) 个 microbatch \(B_\mu\)，loss 除以 \(K\) 累计后再 `clip + optimizer.step()`。
-- 它只降低 activation peak（每个 microbatch 的激活用完即释放），**不减少总 FLOPs**，且小 GEMM 可能降低 kernel 效率。
-- **语义等价前提**：累计完才 step/clip，且各 microbatch 数据分布一致；否则不等于 global batch。
+**题目 1：手算 7B 模型全参训练的显存构成**
+- 考点：16B/参数规则、混合精度状态拆分、从账本推出并行方案。
+- 答题框架：
+  1. 先分状态：fp32 master 4B + m 4B + v 4B = 12B/参数；bf16 参数 2B + bf16 梯度 2B；
+  2. 合计 ~16B/参数 → 7B ≈ 112GB（不含激活）；
+  3. 单张 80GB 放不下 → 引出分片：ZeRO-3 下 16Φ/P，P=8 时每卡训练态 14GB；
+  4. 再补激活：随 B、T、L 增长，说明 activation checkpointing 的必要性；
+  5. 声明口径：业界通用 AdamW+bf16，不含临时 workspace 与 allocator 预留。
+- 加分项：区分 allocated 与 reserved；指出 fp32 master 是否保留依实现而异。
+- 踩坑：把 16N bytes 说成"模型文件大小"；漏掉激活和通信 buffer。
 
-**Q9：activation checkpointing 的原理与代价？为什么约 1.33×？**
+**题目 2：为什么 activation checkpointing 反而可能"省时间"？**
+- 考点：时空交换、arithmetic intensity 与 batch 的联动。
+- 答题框架：
+  1. 直接代价：全量重计算约 +33% 计算（多一次前向）；
+  2. 换来的显存可投给更大 batch → GEMM 更大、复用更强、kernel 效率更高；
+  3. 大 batch 的吞吐增益可能抵消重算开销，净效应为正；
+  4. 更进一步用 selective recomputation：只重算 attention 等 T² 项，
+     显存降 30%–70%、计算增量更小；
+  5. 结论绑定具体 shape/hardware——这是权衡，不是免费优化。
+- 加分项：给出 per-op 的"每节省 1 byte 的重算代价"排序思路。
+- 踩坑：说"checkpointing 把显存减半"；忽略它不减少参数/梯度/优化器状态。
 
-- 普通反向保存每层激活（\(O(L)\)）；checkpointing 只存边界，backward 时重算中间 forward，把激活降到 \(O(\sqrt L)\)。
-- 代价：多跑一次 forward，理论时间 ≈ \((2+1)/(2) \approx 1.33×\) 的前向/反向总量；只作用于 activation，不动参数/梯度/优化器。
-- **进阶**：selective recomputation 按「省 1 byte 的重算代价」排序，只丢弃保存贵、重算便宜的中间量（如 `T²` attention 辅助矩阵）。
+**题目 3：MFU 为什么上不去？**
+- 考点：MFU 定义、瓶颈归因、roofline 证据链。
+- 答题框架：
+  1. 先写定义：MFU = 模型理论 FLOPs/step × steps/s ÷（峰值 FLOP/s × 卡数）；
+  2. 给参照系：第一梯队集群一般 40%–55%（业界教程案例 LLaMA1-65B 约 0.46）；
+  3. 逐项归因：通信未重叠、小 batch GEMM、elementwise/optimizer kernel 是
+     memory-bound、数据加载空泡、recompute 的额外 FLOPs 口径不一致；
+  4. 用 profiler 证据区分 compute/memory/launch/communication bound；
+  5. 对应优化：增大 batch、kernel fusion、通信 overlap、selective recomputation。
+- 加分项：指出 MFU 依赖 FLOPs 公式口径（dense vs executed、是否含重算）。
+- 踩坑：把 GPU utilization 100% 当 MFU 高；把 wall-clock 差异全归因于 MFU。
 
-**Q10：为什么 attention 是 memory-bound，而 GEMM 是 compute-bound？**
+**题目 4：ZeRO 三个 Stage 各省什么、代价是什么？**
+- 考点：ZeRO 分片公式、通信换显存。
+- 答题框架：
+  1. 不分片 ~16Φ；Stage-1 优化器分片 ≈ 12Φ/P + 4Φ；
+  2. Stage-2 再分梯度 ≈ 14Φ/P + 2Φ；Stage-3 全分片 ≈ 16Φ/P；
+  3. 通信从梯度 all-reduce 变为参数 all-gather（每层前后向各一次）；
+  4. 选型逻辑：单卡放得下参数与梯度、只是优化器态大 → Stage-1/2；
+     参数本身放不下 → Stage-3；
+  5. FSDP 是 PyTorch 原生等价物，FSDP2（PyTorch 2.4 起）per-parameter
+     sharding、支持参数重分片，易用性大幅提升。
+- 加分项：把 12Φ/P 中的 12 对应到 m/v/master 各 4B 的拆分。
+- 踩坑：只背公式说不出通信代价；忽略 Stage-3 下 bucket/all-gather 的额外 buffer。
 
-- GEMM 的 FLOPs 是 \(O(n^3)\)、搬运 \(O(n^2)\)，arithmetic intensity \(O(n)\)，越大越 compute-bound。
-- 标准 attention 的 score 矩阵是 \(T^2\) 中间量，算术强度随序列长度**下降**，因此长序列下受带宽限制；这正是 FlashAttention 通过减少 HBM 往返加速的动机。
+**题目 5：bf16 / fp16 / fp8 怎么选？**
+- 考点：dtype 取舍、数值边界、显存账本联动。
+- 答题框架：
+  1. fp16：5-bit exponent，范围小，梯度 underflow 需 loss scaling；
+  2. bf16：8-bit exponent 接近 fp32 动态范围，大规模训练可免 loss scaling；
+  3. fp8（E4M3/E5M2）：需 per-tensor/per-channel scaling，H100 上配合
+     DeepSpeed 显存约 -42%；
+  4. 显存差异：2B vs 2B vs 1B，但优化器 master 通常仍是 fp32；
+  5. 报告 fp8 结果必须写明格式、scaling 策略与失败处理。
+- 加分项：举 RMSNorm 前先 upcast fp32 的例子说明 reduction 对精度敏感。
+- 踩坑：认为 bf16 与 fp16 范围相同；按 byte 数直接减半推 fp8 总账。
 
-**Q11：为什么对 matmul，backward 是 forward 的 2 倍？**
+**题目 6：训练前怎么估一次实验要多久？**
+- 考点：6·N_active·D、MFU、tokens/s 交叉校验。
+- 答题框架：
+  1. 训练 FLOPs ≈ 6·N_active·D（声明 N 口径：是否含 embedding/head、是否 tied）；
+  2. 按硬件峰值与目标 MFU（第一梯队 40%–55%）估有效 FLOP/s；
+  3. 时间 ≈ FLOPs ÷（卡数 × 峰值 × MFU）；
+  4. 交叉校验：用 tokens/s × step 数做 sanity check；
+  5. 声明误差来源：长 context 下 6ND 比例失真、通信、数据管线。
+- 加分项：提 Chinchilla 配比下 D 与 N 的联动（引 Lecture 9/11）。
+- 踩坑：把 6ND 当精确值；忽略 attention 的 T² 项在长 context 下的占比。
 
-- 对 \(Y=XW\)，forward 一个 GEMM；backward 要算两个梯度：\(\partial L/\partial X=(\partial L/\partial Y)W^\top\) 与 \(\partial L/\partial W=X^\top(\partial L/\partial Y)\)，两个 GEMM 各与 forward 同阶 \(2mnk\)。
-- 故 backward ≈ 2× forward，训练总计 ≈ 3× forward → 每参数 `6` 次 matmul FLOPs，正是 \(6ND\) 的来源。
-- **注意**：这仅对 dense matmul 成立；softmax/norm/embedding 等非 matmul 算子的 backward 比例不同，需单独看。
+**题目 7：训练 OOM，排查顺序是什么？**
+- 考点：memory accounting 体系化、allocator 行为。
+- 答题框架：
+  1. 先核对账本：参数+梯度+优化器+激活是否算全（16B/参数 + 激活公式）；
+  2. 分离 reserved 与 allocated：是 fragmentation 还是容量真不够；
+  3. 查泄漏：未 detach 的 loss/output 跨 step 存活，观察 allocated baseline 是否持续增长；
+  4. 降峰值手段排序：gradient accumulation → activation checkpointing /
+     selective recomputation → ZeRO 分片 → offload；
+  5. 最后才 empty_cache()，并说明它不释放 live tensors。
+- 加分项：用 memory snapshot 定位 allocation stack 与 lifetime。
+- 踩坑：一上来就减 batch；把 fragmentation 误判为容量不足。
 
-**Q12：怎么系统诊断训练 OOM？**
+## 系统设计题
 
-- 先分层定位：parameters / gradients / optimizer states / activations / temporary workspace / allocator。
-- 用 `memory_allocated`（live tensors）区分 `memory_reserved`（caching allocator 预留），OOM 常是碎片而非总 free 不足。
-- 流程：阶段间 `synchronize()` → 记录 allocated/reserved/peak → 用 memory snapshot 查 allocation stack 与 lifetime → 检查是否把未 `detach()` 的 tensor 放进 Python list 导致整张图跨 step 存活。
-- **兜底**：`empty_cache()` 不释放 live tensors，只是归还 allocator 空闲块，不是常规优化手段。
+**设计题 1：在 8×H100（80GB）上做 70B 全参训练——先给显存预算表，再判可行性**
 
-**Q13：`torch.compile` / kernel fusion 为什么能加速？什么时候无效？**
+- 需求澄清：全参 vs LoRA；序列长度与 batch；是否允许 CPU offload；MFU 目标。
+- 规模估算：
+  - 训练态：70B × 16B ≈ 1120GB（bf16 参数/梯度 + fp32 master/m/v）；
+  - 单节点总显存：8 × 80GB = 640GB < 1120GB；
+  - ZeRO-3 全分片：16Φ/P = 1120/8 = 140GB/卡 > 80GB——单节点不可行；
+  - 反推卡数：留约 40% 余量给激活/通信/临时量，每卡训练态 ≤ ~48GB →
+    P ≥ 1120/48 ≈ 24 卡（3 节点）起步；
+- 架构：3 节点及以上 ZeRO-3 / FSDP2 全分片 + activation checkpointing
+  （全量重算 +33% 计算，或 selective 重算显存降 30%–70%）+
+  gradient accumulation 控激活峰值；节点内 NVLink4 900GB/s，节点间走
+  NCCL ring all-reduce（IB 时延 ~1µs 量级）。
+- Trade-off 表：
 
-- 它减少的是 **kernel launch 次数与 HBM round trips**，不是数学 FLOPs；把逐元素小算子（norm、softmax、dropout、mask）融合进一个 kernel，消除中间 tensor 写回。
-- **无效场景**：graph break、动态 shape、数据依赖 control flow、side effect 都会退回 eager；每次新 shape 触发 cache miss。
-- **正确比较**：分开 compile time、warm-up/autotuning、steady-state 与 graph cache miss，不能把首次运行计入 speedup。
+| 手段 | 显存收益 | 时间/通信代价 | 适用前提 |
+|---|---|---|---|
+| 加节点（增大 P） | 训练态 16Φ/P 线性降 | 通信总量随 P 增长 | 集群与成本允许 |
+| ZeRO-3 / FSDP2 | 训练态全分片 | 参数 all-gather 每层两次 | 带宽充足 |
+| CPU offload | 训练态移出 HBM | PCIe 换步时间 | 最后手段 |
+| activation checkpointing | 激活近线性下降 | 计算 +约 33% | 激活是主要矛盾时 |
+| gradient accumulation | 激活峰值 ÷ K | kernel 效率可能下降 | 需大 global batch 时 |
 
-### 14.3 手撕核算要点（显存 + FLOPs）
+- 评测方案：报告 tokens/s、peak allocated、MFU（对照 40%–55% 健康区间）、
+  前几步 loss 与 fp32 参考实现的数值一致性。
+- 追问预案：为什么不以 TP 为主（TP=8 也压不下 140GB/卡的训练态）；
+  FP8 是否值得（H100 FP8 + DeepSpeed 显存约 -42%，但需评估数值稳定性）。
 
-面试常让「算一个给定 config 的模型显存 / FLOPs」，按固定步骤走，避免漏项：
+**设计题 2：训练前"卡数-显存-时间"可行性估算器**
 
-```text
-显存核算（训练，bf16+Adam）
-  1. 参数量 N = 12 L d² + 2 V d
-  2. params   = 2N bytes（bf16）
-  3. grads    = 2N bytes（bf16）
-  4. optimizer = 8N bytes（m,v 各 4N，fp32）
-  5. master   = 4N bytes（fp32，可选）
-  6. 小计     ≈ 16N bytes
-  7. activations（按公式估算，或用 torch.autograd 实测）
-  8. 加 workspace / context / 碎片余量
+- 需求澄清：输入（参数量 N、tokens D、序列长度、目标 global batch）；输出
+  （最少卡数、每卡显存预算、预计天数）；允许的并行策略集合。
+- 规模估算（公式库，均来自本讲口径）：
+  - 训练 FLOPs ≈ 6·N_active·D；
+  - 训练态显存：不分片 ~16Φ；ZeRO-1/2/3 分别 12Φ/P+4Φ、14Φ/P+2Φ、16Φ/P；
+  - 时间 ≈ 6ND ÷（P × 峰值 FLOP/s × MFU），MFU 取 40%–55% 区间做敏感性分析；
+  - 激活：全量重算 +33% 计算，或 selective 重算显存降 30%–70%。
+- 架构：CLI 读 config → 账本计算（训练态 + 激活 + 通信 buffer）→ 策略枚举
+  （P、ZeRO 档位、checkpointing 档位）→ 过滤显存可行解 → 按（卡数, 天数）
+  输出 Pareto 前沿；对峰值另加安全余量。
+- Trade-off 表：
 
-FLOPs 核算（每 token，d_ff=4d）
-  1. QKV+O: 4 × 2T d²  = 8 T d²
-  2. scores + AV:       = 4 T² d
-  3. SwiGLU: 3 × 2T d·4d = 24 T d²
-  4. LM head:             = 2 T d V
-  → 每 token ≈ (8+24)T d² + 4 T² d + 2 T d V
+| 维度 | 保守假设 | 激进假设 | 风险 |
+|---|---|---|---|
+| 每参数字节 | 16B（含 fp32 master） | 12B（无 master） | 数值语义变化 |
+| MFU | 40% | 55% | 时间低估 |
+| 激活策略 | 不重算 | 全量重算 | OOM / 时间 +33% |
+| 通信 | 串行计入 | 完全重叠 | 时间低估 |
+
+- 评测方案：用已公开实测案例回测（LLaMA1-65B @ 昇腾 910B2 的 MFU ≈ 0.46；
+  LLaMA2-70B @ H200 454.6 TFLOPS/GPU 的量级），误差在可接受区间内为可用。
+- 追问预案：长 context 下 6ND 失真怎么办——换逐项 FLOPs 公式
+  F = 3E + 4B·s²·l·h + 6B·s·l·h·V（业界教程即按此口径估出 MFU ≈ 0.46）。
+
+**设计题 3：推理服务的"卡数-显存"估算（连接本讲的 decode memory-bound）**
+
+- 需求澄清：并发数、序列长度、是否量化、目标时延（TTFT / p95）。
+- 规模估算：decode 是矩阵向量乘，权重每 token 读取一次 → arithmetic
+  intensity O(1) → memory-bound；吞吐上界 ≈ 显存带宽 ÷ 每 token 读取 bytes
+  （bf16 约 2B/参数）；带宽参照 H100 3.35TB/s、H200 4.8TB/s、B200 8TB/s。
+- 架构：batch 调度提升权重复用；KV cache（随并发 × 序列长度增长）与权重
+  显存二分预算；continuous batching 提高利用率。
+- Trade-off 表：
+
+| 手段 | 显存/吞吐收益 | 代价 |
+|---|---|---|
+| 增大 batch | 权重读取摊薄、吞吐升 | KV cache 线性涨 |
+| 量化（fp8 等） | 权重与 KV 同降 | 精度损失需评测 |
+| PagedAttention | KV 碎片减少 | 实现复杂度 |
+
+- 评测方案：tokens/s/GPU、TTFT、p50/p95 时延；口径对照 vLLM 文档（docs.vllm.ai）。
+- 追问预案：为什么训练 GEMM 偏 compute-bound 而推理 decode 偏 memory-bound
+  ——复用率差异（矩阵×矩阵 vs 矩阵×向量）。
+
+## 代码实现题
+
+**实现题 1：param_bytes 显存会计函数**
+
+- 题目：给定模型，按"参数/梯度/优化器状态"三类、按 dtype 统计训练显存，
+  输出可与 16B/参数 手算口径对账。
+- 考察点：dtype × element_size 核算、AdamW 状态生命周期、口径声明。
+- Python 骨架：
+
+```python
+import torch
+
+def param_bytes_accounting(model: torch.nn.Module,
+                           fp32_master: bool = True) -> dict:
+    """按 dtype 统计参数/梯度/优化器状态字节数（AdamW+bf16 业界口径）。"""
+    params, grads = {}, {}
+    n_trainable = 0
+    for p in model.parameters():
+        key = str(p.dtype).replace("torch.", "")
+        params[key] = params.get(key, 0) + p.numel() * p.element_size()
+        n_trainable += p.numel() if p.requires_grad else 0
+        if p.grad is not None:
+            gkey = str(p.grad.dtype).replace("torch.", "")
+            grads[gkey] = grads.get(gkey, 0) \
+                + p.grad.numel() * p.grad.element_size()
+    opt_m_v = 8 * n_trainable        # fp32 的 m、v 各 4B/参数
+    master = 4 * n_trainable if fp32_master else 0
+    total = sum(params.values()) + sum(grads.values()) + opt_m_v + master
+    return {
+        "params": params,              # bf16: 2B/参数
+        "grads": grads,                # bf16: 2B/参数（backward 后非空）
+        "optimizer_m_v_fp32": opt_m_v, # 8B/参数
+        "fp32_master_weights": master, # 4B/参数，视实现
+        "total_bytes": total,
+        "bytes_per_param": total / max(n_trainable, 1),
+    }
 ```
 
-**完整工作示例：7B 模型能否单卡全参数微调？**
+- 验收标准：对 bf16 的 7B 模型，backward 后输出
+  参数 14GB + 梯度 14GB + m/v 56GB + master 28GB = 112GB，
+  `bytes_per_param ≈ 16`；`fp32_master=False` 时 ≈ 12；说明口径不含激活。
 
-给定 `d=4096, L=32, V=32000`（约 LLaMA-7B 配置，tied embedding）：
+**实现题 2：模拟 ZeRO 分片的显存计算器**
 
-1. **参数量** \(N\approx12Ld^2=12\times32\times4096^2\approx6.44\times10^9\)（约 6.4B）。
-2. **训练态显存**（bf16+Adam，16N）\(\approx6.44\text{B}\times16\approx103\text{ GB}\) —— 单张 80GB GPU 放不下，需 ZeRO/offload/多卡。
-3. **训练 FLOPs**（2T tokens）\(C\approx6ND=6\times6.44\times10^9\times2\times10^{12}\approx7.7\times10^{22}\)。
-4. **单卡时间**（A100 bf16 峰值 312 TFLOP/s，忽略一切 overhead）\(\approx7.7\times10^{22}/3.12\times10^{14}\approx2.5\times10^8\text{ s}\) ≈ 8 年 —— 必须多卡。
+- 题目：输入参数量 Φ、卡数 P、卡上 HBM 容量与激活预算，输出各 ZeRO Stage
+  的每卡训练态显存与可行性判定。
+- 考察点：ZeRO 公式落地、边界条件（P=1、显存余量）、单位换算。
+- Python 骨架：
 
-结论：**先算显存（16N）决定能否单卡放下，再算 FLOPs（6ND）决定要多少卡跑多久**；这就是 resource accounting 的完整闭环。
+```python
+def zero_stage_memory(phi: int, world_size: int,
+                      hbm_bytes_per_gpu: int,
+                      activation_bytes: int = 0,
+                      safety_margin: float = 0.2) -> dict:
+    """按 DeepSpeed ZeRO 业界口径估算各 Stage 每卡训练态显存。"""
+    P = max(1, world_size)
+    ddp    = 16 * phi
+    stage1 = 12 * phi // P + 4 * phi
+    stage2 = 14 * phi // P + 2 * phi
+    stage3 = 16 * phi // P
+    budget = int(hbm_bytes_per_gpu * (1 - safety_margin)) - activation_bytes
+    stages = {"ddp": ddp, "stage1": stage1,
+              "stage2": stage2, "stage3": stage3}
+    return {
+        **{f"{k}_per_gpu": v for k, v in stages.items()},
+        "feasible": {k: v <= budget for k, v in stages.items()},
+        "per_gpu_budget_after_activation": budget,
+    }
 
-**三个必踩坑**
+# 例：phi=7e9、P=8、80GB H100、激活预算 20GB、余量 20%
+# stage3 ≈ 16*7e9/8 = 14GB（feasible），ddp = 112GB（infeasible）
+```
 
-1. **别把参数量当显存**：Adam 状态与 activation 往往更大，16N 才是训练态小计。
-2. **backward ≠ forward**：对 matmul 约 2×，训练总计约 3× forward，才有 `6ND`。
-3. **`numel()` 不是峰值**：多个 tensor 生命周期重叠、allocator 碎片、临时 workspace 都会抬高真实 peak。
+- 验收标准：Φ=7e9、P=8、80GB 卡时 `stage3_per_gpu ≈ 14GB` 且 feasible、
+  `ddp ≈ 112GB` 不可行；P=1 时各 Stage 均退化为 16Φ，与公式一致；
+  `safety_margin` 只作用于容量、不改变公式项。
 
-### 14.4 高频追问与陷阱
+**实现题 3：用 CUDA events 的可信 step 计时器**
 
-| 追问 | 正确方向 |
-| --- | --- |
-| view 和 contiguous 有什么区别？ | view 只改 stride 不搬数据；transpose 后要求 contiguous 会触发真实拷贝，profiler 里看 `aten::copy_` |
-| einsum 一定快吗？ | 否，只表达语义；能否 lower 成高效 GEMM 才决定性能 |
-| 为什么 Adam 显存是权重的 3 倍？ | m、v 各 4 bytes + master weight 4 bytes = 12 bytes 优化器状态 |
-| 大 batch GEMM 为什么效率高？ | 更大矩阵复用强、arithmetic intensity 高，但激活显存也随 batch 涨 |
-| MFU 和 GPU utilization 一样吗？ | 否，utilization 只表示设备忙，memory/launch-bound 也能 100% |
-| loss scaling 解决什么？ | fp16 梯度 underflow；bf16 因 8-bit exponent 通常不需要 |
-| 梯度累积等于免费大 batch 吗？ | 否，省显存但总 FLOPs 不变、小 GEMM 可能更慢 |
-| checkpointing 是总内存减半吗？ | 否，只作用于可重算的 activation，不动参数/梯度/优化器 |
+- 题目：实现 warm-up + repetitions 的训练 step 计时，输出 sec/step、
+  tokens/s 与估算 MFU。
+- 考察点：CUDA 异步语义、同步边界、MFU 口径。
+- Python 骨架：
 
-### 14.5 模拟追问链（还原面试官的层层深入）
+```python
+import torch
 
-算账类面试通常从「要多少显存」一路追到「瓶颈在哪、怎么优化」，每一层都在往**公式→边界→工程**递进：
+def timed_train_step(step_fn, model_flops_per_step: int,
+                     peak_flops: int, num_gpus: int,
+                     tokens_per_step: int,
+                     warmup: int = 3, reps: int = 10) -> dict:
+    for _ in range(warmup):
+        step_fn()
+    torch.cuda.synchronize()
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    start.record()
+    for _ in range(reps):
+        step_fn()
+    end.record()
+    torch.cuda.synchronize()
+    sec_per_step = start.elapsed_time(end) / 1e3 / reps
+    mfu = model_flops_per_step / sec_per_step / (peak_flops * num_gpus)
+    return {
+        "sec_per_step": sec_per_step,
+        "tokens_per_sec": tokens_per_step / sec_per_step,
+        "mfu": mfu,
+    }
+```
 
-> **面试官**：训练一个 1B 模型最少要多少显存？
-> **你**：bf16+Adam 的 **16N 规则**，1B × 16 ≈ 16 GB，这还不含 activation 和碎片。
->
-> **面试官**：为什么是 16 倍，不是权重的 2 倍？
-> **你**：bf16 参数 2 + 梯度 2，Adam 的 m/v 各 4 bytes（fp32）+ master weight 4 bytes，优化器状态 12 bytes 才是大头。
->
-> **面试官**：训练 FLOPs 怎么估？\(C\approx6ND\) 的 6 哪来的？
-> **你**：forward 一次 matmul 约 \(2ND\)，backward 对 X 和对 W 各一次同阶 GEMM 共 \(4ND\)，合计 \(6ND\)。
->
-> **面试官**：显存不够怎么办？
-> **你**：gradient accumulation 和 activation checkpointing 省 activation，ZeRO 分片优化器状态；但都不减少总 FLOPs。
->
-> **面试官**：怎么判断当前是 compute-bound 还是 memory-bound？
-> **你**：算 arithmetic intensity \(I=\text{FLOPs}/\text{bytes}\)，对比 roofline 拐点 \(C_{\max}/BW\)；elementwise、decode 偏 memory-bound，大 GEMM 偏 compute-bound。
->
-> **面试官**：GPU 利用率 100% 就说明算满了吗？
-> **你**：不是，那只是设备忙；memory/launch-bound 的 kernel 也能让设备一直忙。要看 MFU——理论 FLOPs 与峰值算力的比值，大模型密集训练 40–60% 算正常。
+- 验收标准：去掉 synchronize 时测出的时间显著偏短（识别 launch-only 假象）；
+  已知峰值与 FLOPs 公式下 MFU 输出落在 0–1 且与手算一致；健康的大模型密集
+  训练应在 0.40–0.55 量级（第一梯队口径）。
 
-**分层自测**：能答出「16N + 6ND」为**初级**；能讲清「backward 两个 GEMM、memory-bound vs compute-bound」为**中级**；能主动算「7B 模型显存/FLOPs 的完整闭环 + 诊断 OOM」为**高级**。
-
-## 15. 结论与本讲小结
+## 14. 结论与本讲小结
 
 PyTorch 编程的核心不是记 API，而是保持 tensor 轴、dtype、device 与生命周期可审计。
 FLOPs 决定理论工作量，memory accounting 决定能否运行，arithmetic intensity 决定硬件能否接近峰值。
@@ -912,6 +1126,10 @@ Regularization.” *ICLR*, 2019. [link](https://arxiv.org/abs/1711.05101)
 - Stanford CS336, [Spring 2026 Lecture 2](https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py)
 - PyTorch, [Autograd mechanics](https://pytorch.org/docs/stable/notes/autograd.html)
 - einops, [Einstein notation and rearrange](https://einops.rocks/)
-- [A1 实验报告](../assignments/assignment1-basics/report/main.tex)
-- [A2 实验报告](../assignments/assignment2-systems/report/main.pdf)
+- [A1 实验报告](../assignments/spring2026/assignment1-basics/report/main.tex)
+- [A2 实验报告](../assignments/spring2026/assignment2-systems/report/writeup.pdf)
 - [Systems 主题导航](../experiments/topics/systems.md)
+- [Megatron-LM（NVIDIA GitHub）](https://github.com/NVIDIA/Megatron-LM)（访问日期 2026-10-04）
+- [DeepSpeed（Microsoft GitHub）](https://github.com/microsoft/DeepSpeed)（访问日期 2026-10-04）
+- [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054)（访问日期 2026-10-04）
+- [PyTorch FSDP: Experiences on Scaling Fully Sharded Data Parallel](https://arxiv.org/abs/2304.11277)（访问日期 2026-10-04）

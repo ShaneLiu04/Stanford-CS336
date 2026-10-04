@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_06.py"
   - "../experiments/topics/systems.md"
-  - "../assignments/assignment2-systems/"
+  - "../assignments/spring2026/assignment2-systems/"
 ---
 
 # Lecture 06 — Kernels、Triton 与 FlashAttention：IO 感知的融合算子设计
@@ -17,7 +17,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、GPU kernel 工程师与系统研究者
 
 ## 摘要
@@ -423,7 +423,7 @@ Tolerance 应按 dtype 与 reduction length 分层。只用一个宽松 `allclos
 
 ## 6. 代码与实验映射
 
-- PyTorch tiled + Triton 实现：`assignments/assignment2-systems/cs336_systems/flash_attention.py`
+- PyTorch tiled + Triton 实现：`assignments/spring2026/assignment2-systems/cs336_systems/flash_attention.py`
 - forward kernel：`_flash_attention_forward_kernel`
 - backward：`_flash_attention_delta_kernel`、`_flash_attention_dq_kernel`、`_flash_attention_dkdv_kernel`
 - correctness：`scripts/benchmark_correctness.py`
@@ -496,6 +496,8 @@ absolute latency/memory，避免小 baseline 上夸大的倍数。
 - 非连续 stride 被当作 contiguous；
 - 只测 forward，就声称 FlashAttention 训练端到端更快；
 - 用 `torch.allclose` 单一 tolerance 掩盖某个 gradient 分支错误。
+- causal 场景先算 score 再乘零 mask，没有按 tile 边界整块跳过未来 K/V，正确但速度拿不到块剪枝收益。
+- benchmark 把首次 compile/autotune 混入 steady-state 计时，或只报 speedup 倍数不报 absolute latency 与 memory。
 
 ## 9. Checklist
 
@@ -515,31 +517,41 @@ absolute latency/memory，避免小 baseline 上夸大的倍数。
 |---|---|---|
 | output 全 NaN | max/LSE/mask | fully-masked tile、低精度 accumulator |
 | forward 对、backward 错 | delta/scale/transpose | correction 或 \(1/\sqrt d\) 错 |
-| 只在 tail shape 错 / kernel 与参考不符 | load/store mask | `other` 单位元或越界 store、边界 tile 未 mask |
+| 只在 tail shape 错 | load/store mask | `other` 单位元或越界 store |
 | causal 小 shape 通过、大 shape 失败 | tile offsets | local/global index 混用 |
-| Triton 比 PyTorch 慢 / 提速不达标 | launch/register/shape/autotune | tile 太小、spill、underfill、grid 过小 |
+| Triton 比 PyTorch 慢 | launch/register/shape | tile 太小、spill、underfill |
 | register spill | compiler metadata | tile/stages/live range 过大 |
 | occupancy 低 | warps/shared/register | config 资源超限 |
-| dK/dV 不确定漂移 / 随机 NaN | write ownership | atomics/race/reduction order、未同步 shared memory |
+| dK/dV 不确定漂移 | write ownership | atomics/race/reduction order |
+| compile 时间爆炸 | specialization count | 动态 shape/过多 autotune configs |
+| benchmark 忽快忽慢 | sync/clocks/autotune | 测到异步 launch 或冷启动 |
+
+### 故障排查速查
+
+| 现象 | 优先检查 | 常见根因 |
+|---|---|---|
+| kernel 与参考输出不符 | 分块边界与 masking | 越界读写、边界 tile 未 mask |
+| 提速不达标 | launch 次数与 occupancy | 未充分 fuse、grid 过小、autotune 未生效 |
+| 随机 NaN/结果漂移 | 写冲突与原子操作 | 竞态、未同步的 shared memory 更新 |
 | fused backward 不收敛 | softmax 重算与 LSE 复用 | dK/dV 分块累计错误、LSE 传播错位 |
-| compile 时间爆炸 / 编译慢失败 | specialization count / block 尺寸 | 动态 shape、过多 autotune configs、非编译期常量 |
-| benchmark 忽快忽慢 / 波动大 | sync/clocks/autotune | 测到异步 launch、冷启动、未锁 clock、未取中位数 |
+| benchmark 波动大 | 预热与频率控制 | cache 未预热、未锁 clock、未取中位数 |
+| Triton 编译慢/失败 | block 尺寸约束 | 非编译期常量、超出 shared memory 限制 |
 
 ## 10. 讨论：效度威胁与结论边界
 
-### 10.1 Construct validity
+### Construct validity
 - memory-efficient 不等于 fast；FLOPs 相同也不等于 runtime 相同；
 - peak allocated 不等于 HBM traffic；
 - synthetic random correctness 不代表训练稳定；
 - speedup ratio 不能替代 absolute latency。
 
-### 10.2 Internal validity
+### Internal validity
 - compile/autotune/caching 混入会扭曲计时；
 - reference 可能走不同 dtype/TF32/math mode；
 - wrapper hidden copy 会把成本错归 kernel；
 - 只保留最佳 autotune run 会引入 selection bias。
 
-### 10.3 External validity
+### External validity
 - 单 GPU/Triton 版本的 config 不泛化；
 - \(d=64/128\) 结果不代表 irregular head dimensions；
 - self-attention kernel 不直接适用 paged KV/cross-attention；
@@ -548,130 +560,340 @@ absolute latency/memory，避免小 baseline 上夸大的倍数。
 推荐表述应限定 GPU、Triton/PyTorch version、dtype、shape、causal flag、warm-up、
 repetitions 与 tolerance，并公开 OOM/compile failures。
 
-## 11. 面试备考（Interview Prep）
+## 面试要点速记
 
-> kernel/Triton/FlashAttention 是 ML Systems 面试的进阶考点：面试官常从「FlashAttention 为什么快」
-> 一路追到「online softmax 怎么合并」「backward 为什么不存概率矩阵」「为什么拆 dQ 和 dK/dV」。
-> 核心是把「张量表达式 → tile → 硬件资源」这条链讲清楚，并区分「IO 优化」与「数学近似」。
-> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 11.1 一页速览卡（面试前 1 分钟）
+1. **Q：online softmax 维护哪两个统计量？** 要点：running max \(m\) 与归一化
+   累计和 \(l\)；新 tile 到来时以 \(\exp(m_{\text{old}}-m_{\text{new}})\) 重标定
+   旧累计，使 softmax 可流式计算。
+2. **Q：FA backward 不存概率矩阵的关键？** 要点：用 \(O\)、\(dO\)、LSE 逐块
+   重算 \(P\) 与 \(dS\)，tiled 累加 dK/dV；显存 O(N) 且 backward 无需物化 N²。
+3. **Q：Triton 的编程模型？** 要点：program 实例操作 block 级 tensor；mask
+   处理边界；autotune 扫 block/warps/stages；比 CUDA 牺牲部分底层控制换开发效率。
+4. **Q：如何验证 kernel 正确与性能结论可信？** 要点：与参考实现多 shape 对拍
+   （容差区分 fp 误差与 bug）；benchmark 必须 warmup、锁频、多次取中位数。
+5. **Q：为什么 FlashAttention 省显存但不省 FLOPs？** 要点：主 FLOPs（QKᵀ、PV）
+   仍是 Θ(T²d) 不可省；省的是 S/P 的 O(T²) HBM 读写与显存（块级 SRAM 流水 →
+   O(T)）；backward 以 LSE 逐块重算做 compute-for-memory。
+6. **Q：causal mask 怎样才真正省计算？** 要点：mask 需在 row max/指数和之前
+   生效；只有按 tile 边界整块跳过未来 K/V 才减少 FLOPs；先算 score 再置零
+   只保证正确性、不省计算。
+7. **Q：通算融合是什么？** 要点：AllReduce/AllGather 等通信算子与计算算子
+   并行执行以掩盖通信延迟；公开实践（昇腾 MC2 + 盘古）降低约 100ms 迭代
+   延迟；布局对齐（如 512B 边界）减少 transdata 类算子。
+8. **Q：什么时候手写 Triton、什么时候用库/编译器？** 要点：规则图融合交给
+   Inductor 类编译器；需要改 tile 算法、online statistics、backward
+   dataflow 的热点手写；FlexAttention 类编程模型正在移动这条边界。
 
-**核心主张**：kernel 性能来自「把数据放在正确存储层 + 足够大的融合 program 摊销 HBM 与 launch」；
-FlashAttention 的数学核心是**可精确合并的 online softmax**，不是近似。
+**必背数字**
 
-**必背数字与公式**
+- FA：前向显存 O(N)、HBM 读写 O(N)（对比朴素的 O(N²)）；重算换显存是
+  一致的时空权衡主线。
 
-- online softmax 统计量 \(m=\max x,\ \ell=\sum e^{x-m}\)；新块合并 \(m'=\max(m,m_b),\ \ell'=e^{m-m'}\ell+e^{m_b-m'}\ell_b\)。
-- FlashAttention：FLOPs 仍 \(O(T^2d)\)，但显存与 HBM 读写从 \(O(T^2)\) 降到 \(O(T)\)。
-- backward 只存 \(Q,K,V,O,L\)（线性），不存 \(P\)（\(T^2\)）；用 LSE \(L_i=m_i+\log\ell_i\) 重算概率。
-- 仓库实测：BF16 `N=4096,d=64` 旧 fallback 597.05 ms → fused 0.320 ms；`N=32768` fused 10.06 ms vs SDPA 88.56 ms。
+**工业界参照**（口径：行业公开资料，2024–2026）
 
-**三句话答高频**
+- FlashAttention-2 通过分块 softmax、减少 non-matmul FLOPs 与并行/循环顺序优化，硬件利用率提升至约 75%（行业口径）；TRT-LLM 侧 FP16 attention 吞吐可达理论峰值约 75%。
+- FlashAttention 版本谱系：v1（2022，IO 感知精确 attention，显存 O(T)）→ v2（2023，利用率 ~75%）→ v3（Hopper：WGMMA + async + FP8）。
+- Hopper 上 FP8 融合 GEMM 可省约 42% 显存（配合 DeepSpeed 口径）；GEMM+激活融合内核可降低显存碎片。
+- H100 BF16 Roofline 拐点约 295 FLOPs/byte：大矩阵 BF16 GEMM 是 compute-bound，小 batch decode 是 bandwidth-bound。
+- 通算融合实践：昇腾 MC2 在盘古模型中降低约 100ms 迭代延迟；矩阵尺寸对齐 512B 边界可提升 MatMul 性能并减少 transdata 类算子。
 
-1. online softmax 维护 running max 与归一化指数和，用 rescale 把分块统计量精确合并。
-2. FA 不减少 FLOPs，只把 HBM 读写从 \(O(N^2)\) 降到 \(O(N)\)，属于 exact 优化。
-3. backward 存 LSE 而非 \(P\)，用 delta \(D=\langle O,G\rangle\) 重算概率，双视角分解避免 atomic。
+## 行业现状与最新进展（2024–2026）
 
-### 11.2 高频面试题与答题框架
+### FlashAttention 版本演进与利用率数字
 
-**Q1：online softmax 维护什么？分块怎么精确合并？**
+- v1（2022）：首次把 attention 组织为 IO-aware tiled algorithm，不近似 softmax，显存 O(T)；
+- v2（2023）：分块 softmax + 减少 non-matmul FLOPs + 并行/循环顺序优化，硬件利用率约 75%（行业口径）；
+- v3：面向 Hopper，利用 WGMMA、async pipelining 与 warp specialization，并支持 FP8。
 
-- 维护 running max \(m\) 与归一化指数和 \(\ell=\sum e^{x-m}\)（输出累加器还维护 \(o\)）。
-- 新块 \((m_b,\ell_b)\) 合并：\(m'=\max(m,m_b)\)，\(\ell'=e^{m-m'}\ell+e^{m_b-m'}\ell_b\)，\(o'=e^{m-m'}o+\sum_{j\in b}e^{x_j-m'}v_j\)。
-- **关键坑**：旧 accumulator \(o\) 必须与旧 \(\ell\) 同比例 rescale，漏掉这一项在小随机输入上不易暴露。
+| 本讲概念 | 工业界实践/数字（2024–2026 口径） |
+|---|---|
+| online softmax 分块合并 | FA v1/v2/v3 全系精确 attention；v2 利用率 ~75% |
+| IO 感知（O(T) HBM 流量） | serving 侧 PagedAttention 分页 KV 管理，进一步改变地址连续性 |
+| 混合精度 accumulator | v3 在 Hopper 上支持 FP8；TRT-LLM FP16 吞吐约理论峰值 75% |
+| 手写 Triton vs 库 | CS336 A2 的 `_FLASH_ATTN_FORWARD` 即 Triton 实现；工业界多路径并存 |
 
-**Q2：FlashAttention 为什么快？减少 FLOPs 吗？**
+### 算子融合的工业实践
 
-- **不减少 FLOPs**，仍是 \(O(T^2d)\)。它是 exact IO 优化：tiling + online softmax 让 Q/K/V tile 片上复用，不把 \(T^2\) 的 score/probability 矩阵写回 HBM。
-- 显存与 HBM 读写从 \(O(T^2)\) 降到 \(O(T)\)，因此长序列下不再受带宽瓶颈限制。
-- **对比**：linear attention 改公式/状态（近似）；FA 数学结果与 full softmax 完全一致。
+- FasterGeLU、FlashAttention 等融合算子通过减少中间数据搬运获得收益；
+- GEMM+激活融合内核（epilogue fusion）降低显存碎片与额外读写；
+- Hopper 上 FP8 融合 GEMM 可省约 42% 显存（配合 DeepSpeed 口径）；
+- 与本讲 §2.2 一致：fusion 的收益来自减少 intermediates 与 launch，而非减少数学 FLOPs。
 
-**Q3：FlashAttention 的 backward 为什么不存概率矩阵 \(P\)？**
+### 通算融合：计算与通信 overlap
 
-- 若存 \(P\)，backward 要读 \(T^2\) 张量，又引入二次显存。
-- FA 只存 \(Q,K,V,O,L\)（线性量级）；backward 时用 LSE \(L_i\) 重算 \(P_{ij}=e^{S_{ij}-L_i}\)。
-- 这是 **compute-for-memory**：用重算换显存，避免读取 \(N^2\) 中间量。
+- AllReduce/AllGather 等通信算子与计算并行执行，以掩盖通信延迟；
+- 有公开实践（昇腾 MC2）在盘古模型中降低约 100ms 迭代延迟；
+- 数据布局对齐（如矩阵尺寸对齐 512B 边界）提升 MatMul 性能、减少 transdata 类算子；
+- 这是 §2 三类 kernel（elementwise/reduction/GEMM）之外的多卡维度：通信本身也可视为一类需要调度的"算子"。
 
-**Q4：为什么 backward 拆成 delta、dQ、dK/dV 三个阶段？**
+**对本讲学习者的启示**：本讲的三大主线——online statistics、write ownership、IO 感知——正是工业界 kernel 演进的核心词汇。面试中能把"利用率约 75%（v2 口径）""HBM 流量 O(T²) → O(T)""FP8 融合 GEMM 省约 42% 显存（Hopper 口径）"这类数字与推导挂钩，比背结论更有说服力；同时注意数字均带口径（硬件、dtype、库版本），回答时应主动声明适用边界。
 
-- softmax correction 需要 \(D_i=\sum_k P_{ik}dP_{ik}=\langle O_i,G_i\rangle\)，先用 delta kernel 算。
-- **dQ kernel**（query-major）：每个 program 独占一个 dQ tile，扫全部 K/V，无需跨 program atomic。
-- **dK/dV kernel**（key-major）：每个 program 独占 dK/dV tile，扫全部 Q。
-- 若单 query-centric 同时写 dK/dV，不同 query block 会写同一 key gradient → 需要 atomic；双视角分解以重算换无冲突写入，通常比大量 atomic 更可控。
+## 大厂面试真题与答题框架
 
-**Q5：Triton 的编程模型？相比 CUDA 的取舍？**
+（高频面试题，公开面经风格，非特定公司真题）
 
-- 一个 program instance 操作一个 data block（tile），用 `tl.arange`/pointer/mask 表达，编译器决定如何分布到 warps/lanes。
-- `tl.constexpr` 编译期 specialization 消除分支，代价是更多 kernel variants 与 compile/cache cost。
-- **取舍**：牺牲部分底层控制（如显式 shared memory、warp 调度）换接近 Python 的开发效率；适合需要改 tile 算法/online statistics/backward dataflow 的热点。
+**题目 1：为什么 FlashAttention 省显存但不省 FLOPs？**
+- 考点：IO complexity 与 compute complexity 的区分；red-blue pebble 视角。
+- 答题框架：
+  1. 朴素实现 materialize S=QKᵀ 与 P=softmax(S)，显存与 HBM 读写均为 O(T²)；
+  2. FA 把 Q/K/V 分块驻留片上，SRAM 内完成 scores+softmax+PV，HBM 流量降为 O(T) 级块流水；
+  3. 主计算 QKᵀ 与 PV 的 FLOPs 仍是 Θ(T²d)，一个都没少；
+  4. backward 用保存的 LSE 逐块重算 P，属 compute-for-memory 权衡；
+  5. 结论：FA 是精确算法，优化的是内存层级调度而非数学复杂度。
+- 加分项：能提 red-blue pebble game 给出的 IO 下界；指出 causal 场景只有整块跳过未来 K/V tile 才真正省 FLOPs。
+- 踩坑：说成"近似/降阶算法"；把"显存 O(T)"误说成"FLOPs O(T)"。
 
-**Q6：什么是 compute-for-memory（重算换显存）？**
+**题目 2：online softmax 的数值稳定性如何保证？**
+- 考点：running max rescale；mask 单位元；低精度边界。
+- 答题框架：
+  1. 每块先减 running max，exp 输入 ≤ 0，防 overflow；
+  2. 合并时 m′=max(m,m_b)，旧统计量 ℓ 与旧输出 o 同乘 e^{m−m′}；
+  3. 初始化 m=−∞、ℓ=0、o=0；fully-masked tile 必须不改变 state；
+  4. 全 mask tile 防护：旧缩放取 1 而非 e^{−∞−(−∞)}，避免 NaN 污染 accumulator；
+  5. accumulator/LSE 用 FP32，最终再 cast 回输入 dtype。
+- 加分项：指出合并满足结合性，可做 tree reduction/parallel scan，但浮点顺序影响 rounding；LSE=m+log ℓ 是 backward 的充分统计量。
+- 踩坑：只 rescale ℓ 不 rescale o（小随机输入上难发现）；LSE 用 BF16 保存导致长序列梯度误差积累。
 
-- 不保存某些中间量，backward 时重算，以额外 FLOPs 换更少显存。
-- FA backward 重算 \(P\)；activation checkpointing 重算 forward；本质是同一时空权衡主线。
-- 判断标准：比较「保存 bytes」与「重算 FLOPs」，只丢弃保存贵、重算便宜的中间量（selective recomputation）。
+**题目 3：Triton 里 tile size / num_warps / num_stages 怎么调？**
+- 考点：autotune 搜索空间；寄存器/shared memory 压力与 occupancy 的三角关系。
+- 答题框架：
+  1. tile 越大复用越高，但 scores tile 与 accumulator 的寄存器/shared memory 压力也越大；
+  2. num_warps 决定 block 内并行度与 reduction 效率，过少吃不满、过多浪费；
+  3. num_stages 控制 load/compute 流水深度，过多会 spill 或降低 occupancy；
+  4. autotune 按 shape/dtype/causal 分组搜索，每个 candidate 先验证正确性；
+  5. 用 profiler 看 registers/thread、occupancy、warp stalls、HBM 吞吐来解释结果。
+- 加分项：forward、dQ、dK/dV 的最优 config 往往不同；用 held-out shapes 检查是否过拟合；记录 winning config 与 Triton/GPU 版本。
+- 踩坑：教条"tile 越大越好"；动态 shape 导致 specialization 爆炸与 compile cache miss。
 
-**Q7：怎么验证一个 fused kernel 的正确性？**
+**题目 4：FlashAttention backward 为什么拆成 delta、dQ、dK/dV 三个 kernel？**
+- 考点：write ownership 与 race-free 设计；atomics 的代价。
+- 答题框架：
+  1. 先算 D_i=⟨O_i,G_i⟩（shape [B,N_q]），替代逐元素 Σ P·dP；
+  2. dQ kernel 固定 query tile 扫全部 key tile，program 独占 dQ 输出；
+  3. dK/dV kernel 固定 key tile 扫全部 query tile，program 独占 dK/dV；
+  4. 若单遍同时写 dK/dV，多个 query program 写同一 key 梯度，需 atomics 或二次归并；
+  5. 双视角分解用重算换无冲突写入，通常比高竞争原子操作更可控。
+- 加分项：能推导 D_i=Σ_k P_ik dP_ik=⟨O_i,G_i⟩ 恒等式；指出 1/√d 只乘 dQ/dK 路径、不乘 dV。
+- 踩坑：忘记 softmax correction D_i；对 dV 也乘 1/√d；认为 atomics 一定更差（低竞争下未必，应实测）。
 
-- 分层：先与高精度 PyTorch reference 比 output/LSE；再比 \(dQ,dK,dV\) 的 max/mean/quantile error；小 shape 用 finite difference。
-- 覆盖 causal/non-causal、rectangular、tail tile、non-contiguous stride；最后放进多步 optimizer 查 drift。
-- **陷阱**：单一 `allclose` 宽容差会掩盖 dK/dV 的累加错误；tolerance 应按 dtype 与 reduction length 分层。
+**题目 5：什么时候手写 Triton，什么时候用库/编译器融合？**
+- 考点：fusion 的边界；开发成本与性能上限的权衡。
+- 答题框架：
+  1. 标准 GEMM/attention → 直接用库（cuBLAS、SDPA）；
+  2. 规则图融合（GEMM+bias+激活）→ 编译器路径（Inductor/FlexAttention 类）；
+  3. 需要改变 tile 算法、online statistics、backward dataflow 的热点 → 手写 Triton；
+  4. 评估过度 fusion 的代价：register spill、occupancy 下降、阻挡库选最优 kernel；
+  5. 一切以 benchmark 收口：HBM bytes、kernel count、end-to-end time。
+- 加分项：举 FasterGeLU、FlashAttention 等工业融合算子实例；提 FlexAttention 类编程模型正在移动"手写 vs 编译"的边界。
+- 踩坑：为 5% 的 microbenchmark 提升引入长期维护成本；不验证正确性就切换路径。
 
-**Q8：FlashAttention-2 / -3 改进了什么？**
+**题目 6：causal mask 在 kernel 层怎么实现才真正省计算？**
+- 考点：mask 时序（max/sum 之前生效）；block-level pruning。
+- 答题框架：
+  1. 合法条件 j≤i 必须在 row max 与指数和之前生效，不能事后乘零；
+  2. 整块"未来"的 K/V tile 在循环层面直接跳过（block pruning），才真正减少 FLOPs；
+  3. 边界 tile 只做部分掩蔽；
+  4. 全 mask 情形（m=−∞）需保证缩放为 1、无效概率为 0，防 NaN；
+  5. 验证：profiler 确认实际执行的 program 数下降，而非只看结果正确。
+- 加分项：扩展到 ragged/variable-length（padding 不进 softmax denominator）与 GQA/MQA；提 PagedAttention 改变了 serving 侧地址连续性假设。
+- 踩坑：先算 score 再 mask（不省 FLOPs）；−∞−(−∞) 产生 NaN。
 
-- **FA-2**：更好的 work partitioning 与减少 non-matmul FLOPs，提升硬件利用率。
-- **FA-3**：利用 Hopper 的 asynchrony、warp specialization 与 FP8 低精度。
-- 共同点：都保持 exact softmax，优化的是「如何把 tile 计算映射到硬件」，而非近似注意力。
+## 系统设计题
 
-**Q9：什么时候手写 Triton，什么时候用 `torch.compile`？**
+**设计题 1：为 128K 上下文设计 attention 内核选型与分块策略**
 
-- compiler fusion 适合规则图、固定 shape；手写 Triton 适合需要改变 tile 算法、online statistics、backward dataflow 的热点。
-- FlexAttention 一类编程模型（score-mod/mask 抽象 + codegen）正在移动这条边界。
-- 决策依据：先 profile 确认真是热点，再比 `unfused → minimal fusion → aggressive fusion`，而非拍脑袋手写。
+- 需求澄清：训练还是推理（prefill vs decode）？causal？GQA/MQA？dtype 与显存预算？单卡还是多卡并行？
+- 规模估算（用行业口径数字）：
+  - T=131072、d=64：朴素实现每 head 每 batch 的 S/P 中间量约 1.7×10¹⁰ 个元素，BF16 下约 34 GB——直接不可行；
+  - 精确 attention FLOPs O(T²d) 不可省，causal 约减半（量级 10¹²–10¹³ FLOPs/head）；
+  - FlashAttention 只保存 LSE（[B,T]），HBM 读写从 O(T²) 降到 O(T) 块级流水。
+- 架构：
+  1. prefill：FA2/FA3 类 tiled kernel，query tile 驻留 [B_M,d]，流式扫 K/V tile；Hopper 上可选 FP8 路径（融合 GEMM 口径省约 42% 显存）；
+  2. decode：小 batch 下是 bandwidth-bound（Roofline 拐点 H100 BF16 ≈ 295 FLOPs/byte），重心转向 KV cache 读取——用 GQA 压缩 KV + 分页管理；
+  3. 分块：B_M×B_N 受片上 SRAM 与寄存器预算约束，autotune 分组搜索；d 非二次幂时 pad 到 2 的幂。
+- trade-off 表：
 
-**Q10：为什么 backward 里 \(1/\sqrt d\) 只乘 dQ/dK 不乘 dV？**
+| 方案 | 显存 | 速度 | 实现复杂度 | 适用 |
+|---|---|---|---|---|
+| 朴素 materialize | O(T²)，OOM | 慢 | 低 | 仅小 T 教学 |
+| FA2 类 tiled（FP16/BF16） | O(T) | 利用率口径 ~75% | 中 | prefill/训练主力 |
+| FA3/FP8（Hopper） | 更低（融合 GEMM 口径省 ~42%） | 更高 | 高 | 新硬件极限优化 |
+| 分页 KV + GQA decode | KV 压缩 | bandwidth-bound 优化 | 中 | serving decode |
 
-- 因为 \(S=QK^\top/\sqrt d\)，缩放只进入 score 路径；dV 由 \(P^\top G\) 得到，与缩放无关。
-- 多乘/少乘/误乘到 dV 是最常见且难在小 shape 上发现的错误之一。
+- 评测方案：扫 T（16K→128K）、dtype、causal；记录 output/LSE 误差、p50/p95 latency、peak memory、OOM 边界；profiler 确认 HBM 流量真的下降而非偶然缓存效应。
+- 追问预案：backward 怎么办（delta + 两遍重算）？多卡（sequence/tensor parallel 与通算融合 overlap）？ragged batch（lengths/offsets 进 kernel interface，padding 不进 denominator）？
 
-### 11.3 手撕要点（online softmax 合并）
+**设计题 2：为一个自定义算子决定"融合 vs 库调用"**
 
-面试让「推导 online softmax 的分块合并」时，按统计量一步步写：
+- 需求澄清：算子结构（elementwise 链 / reduction / GEMM+epilogue）？shape 静态还是动态？目标是 latency 还是吞吐？团队能力与维护周期？
+- 规模估算：
+  - 用 Roofline 拐点（H100 BF16 ≈ 295 FLOPs/byte）判断 bound 类型：elementwise/reduction 链是 bandwidth-bound，收益上限 = 消掉的中间 HBM 读写次数；
+  - 例（本讲 §1）：朴素 row softmax 读 5MN+M、写 3MN+2M，融合后理想读写各 MN——收益是常数倍带宽节省，不是 FLOPs 减少。
+- 架构（决策树）：
+  1. 库已有且 shape 标准 → 库调用（cuBLAS/SDPA）；
+  2. 规则图、无 custom dataflow → 编译器融合（Inductor 类），近零维护成本；
+  3. 需要改变 tile 算法 / online statistics / 特殊 mask → 手写 Triton，走本讲 correctness+benchmark 协议；
+  4. 上线前对三条路径跑统一 benchmark（warmup、锁频、p50/p95、HBM bytes、kernel count）。
+- trade-off 表：
 
-```text
-对一行 scores，已处理前缀维护:
-  m = max(x_已见),   l = sum(exp(x - m)),   o = sum(exp(x - m) * v)
+| 路径 | 开发成本 | 性能上限 | 可移植性 | 主要风险 |
+|---|---|---|---|---|
+| 库调用 | 最低 | 受限于库覆盖 | 高 | 算子不被支持 |
+| 编译器融合 | 低 | 中 | 中 | 动态 shape 下 compile 开销 |
+| 手写 Triton | 高 | 最高（可改 tile 算法） | 中（版本敏感） | 正确性/维护负担 |
 
-新 block b 的局部统计量:
-  m_b = max(x_b),   l_b = sum(exp(x_b - m_b)),   o_b = sum(exp(x_b - m_b) * v_b)
+- 评测方案：多 shape 扫描 + 正确性对拍（output 与梯度，容差按 dtype 分层）；报告 absolute latency 与 memory，而非只报 speedup 倍数。
+- 追问预案：FP8/Hopper 新特性值不值得跟进（参照 FA3 演进）？何时放弃 fusion（register spill、occupancy 崩塌）？如何防止 autotune 过拟合到 benchmark shapes？
 
-合并:
-  m' = max(m, m_b)
-  l' = exp(m - m') * l + exp(m_b - m') * l_b
-  o' = exp(m - m') * o + exp(m_b - m') * o_b
+**设计题 3：训练大模型时如何掩盖 AllReduce 通信延迟（通算融合）**
 
-最终输出:  O = o' / l'
+- 需求澄清：并行策略（TP/PP/SP）与拓扑（NVLink/IB）？通信量与计算量的比例？迭代时间预算？
+- 规模估算：TP 下每层典型 2 次 AllReduce；参照公开实践（昇腾 MC2 + 盘古模型），计算-通信 overlap 可降低约 100ms 迭代延迟——先量化本环境通信占比，再定优化优先级。
+- 架构：
+  1. 通信算子与计算算子并行调度：AllReduce/AllGather 与后续 GEMM overlap，用流水掩盖延迟；
+  2. 数据布局对齐：矩阵尺寸对齐 512B 边界，减少 transdata 类算子并提升 MatMul 效率；
+  3. 结构层面：micro-batch 流水、sequence parallel 从源头减少单次通信量；
+  4. 内核层面：融合的通信+计算 kernel（本讲的 ownership、mask、片上统计原则直接迁移）。
+- trade-off 表：
+
+| 手段 | 收益 | 代价 | 适用 |
+|---|---|---|---|
+| 计算-通信 overlap | 迭代延迟下降（公开口径 ~100ms 级） | 调度复杂、依赖算子间无数据依赖 | 通用 |
+| 布局对齐 512B | 减少 transdata、提升 MatMul | 需约束 shape/padding | 常规训练 |
+| 增大通信批量 | 提升带宽利用率 | 增加显存/延迟 | 带宽未饱和时 |
+| 改并行策略（SP/PP） | 从源头减通信 | 改动大、可能影响收敛 | 通信占比高时 |
+
+- 评测方案：迭代时间 p50/p95 + 通信带宽利用率 + 计算 SM 占比；逐手段消融；防止 overlap 引入的数值顺序变化影响收敛（对照 loss curve）。
+- 追问预案：overlap 的通用性边界（依赖结构）？FP8 路径下通信量变化的取舍？多机与单机的不同瓶颈？
+
+## 代码实现题
+
+**代码题 1：online softmax 单块参考实现（Python）**
+
+- 题目：给定 x∈R^{R×C}，用块流式方式实现精确 softmax，正确处理跨块 rescale 与尾块边界。
+- 考察点：running max/ℓ 合并公式；旧 accumulator 同比例 rescale；尾块处理。
+- 骨架：
+
+```python
+import torch
+
+def online_softmax(x: torch.Tensor, block: int = 128) -> torch.Tensor:
+    # x: [rows, cols]，流式按列分块；演示版物化 o，真实 kernel 只存 tile
+    rows, cols = x.shape
+    m = torch.full((rows,), float("-inf"))
+    l = torch.zeros(rows)
+    o = torch.zeros(rows, cols)
+    for start in range(0, cols, block):
+        xb = x[:, start:start + block]                 # 新 tile（含尾块）
+        mb = xb.max(dim=-1).values
+        m_new = torch.maximum(m, mb)
+        alpha = torch.exp(m - m_new)                   # 首块: exp(-inf-finite)=0
+        l = l * alpha + torch.exp(xb - m_new[:, None]).sum(-1)
+        o *= alpha[:, None]                            # 旧输出必须同比例 rescale
+        o[:, start:start + block] = torch.exp(xb - m_new[:, None])
+        m = m_new
+    return o / l[:, None]
 ```
 
-**三个必踩坑**
+- 验收标准：与 `torch.softmax(x, -1)` 在 fp32 下 allclose（atol 量级 1e-5）；cols 非 block 整数倍；首块即含全局 max 的用例；全流程无 NaN/Inf。
 
-1. **旧 accumulator 必须 rescale**：`o` 要与旧 `l` 同乘 \(e^{m-m'}\)，漏掉会导致输出错。
-2. **fully-masked tile**：`-inf - (-inf)` 产生 NaN，需让旧缩放为 1、无效概率为 0。
-3. **LSE 用 FP32**：低精度保存 LSE 在长序列/尖锐 logits 下放大 gradient error。
+**代码题 2：Triton FlashAttention 前向骨架（含 block mask 与累加缩放）**
 
-### 11.4 高频追问与陷阱
+- 题目：实现单 head 的 FA 前向 kernel：query tile 驻留、流式扫 K/V、online 统计量、causal 与尾块 mask、写出 O 与 LSE。
+- 考察点：mask 在 max/exp 之前生效；α 缩放同时作用于 ℓ 与 acc；全 mask tile 的 NaN 防护；FP32 accumulator。
+- 骨架（省略 batch/head 维、autotune 与 wrapper）：
 
-| 追问 | 正确方向 |
-| --- | --- |
-| FA 是近似注意力吗？ | 否，exact；linear attention 才是近似 |
-| 存 LSE 为什么就够 backward？ | \(P=e^{S-L}\)，重算概率无需存 \(P\) |
-| 两遍 backward 一定最优吗？ | 否，取决于 N/d/tile/硬件；partitals 或 atomic 也可能更优，需实测 |
-| causal 能省 FLOPs 吗？ | 只有 tile 边界直接跳过未来块才算省；先算 score 再 mask 不省 |
-| 融合越多越好吗？ | 否，过度 fusion 导致 register spill、降低 occupancy |
-| FA 能直接用于 serving paged KV 吗？ | 否，训练 FA kernel ≠ paged-attention kernel |
+```python
+import triton
+import triton.language as tl
 
-## 12. 小结
+@triton.jit
+def _fa_fwd(Q, K, V, O, LSE, sm_scale,
+            stride_qt, stride_kt, N_q, N_k,
+            BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_D: tl.constexpr,
+            IS_CAUSAL: tl.constexpr):
+    pid = tl.program_id(0)
+    off_m = pid * BLOCK_M + tl.arange(0, BLOCK_M)
+    off_n = tl.arange(0, BLOCK_N)
+    off_d = tl.arange(0, BLOCK_D)
+    qm = off_m < N_q
+    q = tl.load(Q + off_m[:, None] * stride_qt + off_d[None, :],
+                mask=qm[:, None], other=0.0)
+    m_i = tl.full([BLOCK_M], float("-inf"), tl.float32)
+    l_i = tl.zeros([BLOCK_M], tl.float32)
+    acc = tl.zeros([BLOCK_M, BLOCK_D], tl.float32)
+    n_end = N_k
+    if IS_CAUSAL:
+        n_end = (pid + 1) * BLOCK_M        # block 级 causal 剪枝：整块跳过未来 tile
+    for start_n in range(0, n_end, BLOCK_N):
+        n = start_n + off_n
+        km = n < N_k
+        k = tl.load(K + n[:, None] * stride_kt + off_d[None, :],
+                    mask=km[:, None], other=0.0)
+        s = tl.dot(q, tl.trans(k)) * sm_scale             # [M,N] scores
+        if IS_CAUSAL:                                     # mask 必须先于 max/exp 生效
+            s = tl.where(off_m[:, None] >= n[None, :], s, float("-inf"))
+        s = tl.where(km[None, :], s, float("-inf"))       # 尾块 key mask
+        m_new = tl.maximum(m_i, tl.max(s, 1))
+        # 全 mask tile 防护：m_new=-inf 时用 0 作安全基准，exp(-inf-0)=0
+        m_safe = tl.where(m_new == float("-inf"), 0.0, m_new)
+        alpha = tl.exp(m_i - m_safe)                      # m_i=-inf 时自然为 0
+        p = tl.exp(s - m_safe[:, None])                   # 无效位=0，不产生 NaN
+        v = tl.load(V + n[:, None] * stride_kt + off_d[None, :],
+                    mask=km[:, None], other=0.0)
+        l_i = l_i * alpha + tl.sum(p, 1)
+        acc = acc * alpha[:, None] + tl.dot(p.to(v.dtype), v)
+        m_i = m_new
+    l_safe = tl.where(l_i == 0.0, 1.0, l_i)               # 整行无合法 key 的定义行为
+    o = acc / l_safe[:, None]
+    lse = m_i + tl.log(l_i)
+    tl.store(O + off_m[:, None] * stride_qt + off_d[None, :],
+             o.to(O.dtype.element_ty), mask=qm[:, None])
+    tl.store(LSE + off_m, lse, mask=qm)
+```
+
+- 验收标准：与 PyTorch SDPA（fp32 参考）对比，BF16 下 atol 量级 2e-3；LSE 一致；覆盖 causal/non-causal、N 非 BLOCK 整数倍、d padding；无 NaN；profiler 确认 causal 剪枝后执行的 program 数按块数下降。
+
+**代码题 3：kernel benchmark 协议骨架（CUDA events + p50/p95）**
+
+- 题目：为上述 FA kernel 写 benchmark harness：warmup、逐次事件计时、分位数统计、cold-start 分离、显存峰值记录。
+- 考察点：本讲 §7.1 计时协议；区分 compile/autotune 与 steady-state；统计化报告。
+- 骨架：
+
+```python
+import torch
+
+def bench_ms(fn, warmup: int = 10, rep: int = 50):
+    for _ in range(warmup):              # 触发 compile/autotune/allocator
+        fn()
+    torch.cuda.synchronize()
+    starts = [torch.cuda.Event(enable_timing=True) for _ in range(rep)]
+    ends = [torch.cuda.Event(enable_timing=True) for _ in range(rep)]
+    for i in range(rep):                 # 逐次事件对；cold-start 另行单独计时
+        starts[i].record()
+        fn()
+        ends[i].record()
+    torch.cuda.synchronize()
+    ts = sorted(s.elapsed_time(e) for s, e in zip(starts, ends))
+    return ts[len(ts) // 2], ts[int(len(ts) * 0.95)]   # (p50, p95) ms
+
+def run_suite(kernel_fn, shapes):
+    results = []
+    for (n_q, n_k, d, causal) in shapes:
+        torch.cuda.reset_peak_memory_stats()
+        p50, p95 = bench_ms(lambda: kernel_fn(n_q, n_k, d, causal))
+        results.append(dict(shape=(n_q, n_k, d), causal=causal,
+                            p50_ms=p50, p95_ms=p95,
+                            peak_mib=torch.cuda.max_memory_allocated() / 2**20,
+                            status="ok"))              # OOM/compile error 也记录不丢弃
+    return results
+```
+
+- 验收标准：warmup 前后的 compile 时间被正确分离；每个 shape 记录 status（ok/OOM/compile error）不丢弃；同时报告 latency 与 memory，而非只报 speedup。
+
+## 11. 小结
 
 Triton 性能来自把正确的数据放在正确的存储层，并用足够大的融合 program 摊销 HBM 与 launch。FlashAttention 的数学核心是可合并的 online softmax；训练性能的关键则是用 LSE 和 delta 重算概率，把 dQ 与 dK/dV 的写所有权设计成无冲突的 fused kernels。从 memory-efficient attention 到 FlashAttention 系列再到 FlexAttention 类编程模型，IO 感知的 attention 算子仍在随硬件代际（asynchrony、FP8）与编译器能力继续演化；“手写还是编译”也应像性能判断一样，以可复现实验为依据。
 
@@ -724,5 +946,8 @@ Management for Large Language Model Serving with PagedAttention.” *SOSP*,
 - [CS336 Lecture 6 可执行讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_06.py)
 - [Triton tutorials](https://triton-lang.org/main/getting-started/tutorials/)
 - [PyTorch scaled dot product attention](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html)
-- [A2 Systems 官方题面](../assignments/assignment2-systems/cs336_assignment2_systems.pdf)
-- 本仓库：[A2 fused backward 报告](../assignments/assignment2-systems/report/main.pdf)
+- [A2 Systems 官方题面](../assignments/spring2026/assignment2-systems/cs336_assignment2_systems.pdf)
+- 本仓库：[A2 fused backward 报告](../assignments/spring2026/assignment2-systems/report/writeup.pdf)
+- [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)（访问日期 2026-10-04）
+- [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691)（访问日期 2026-10-04）
+- [Stanford CS336 课程主页](https://cs336.stanford.edu)（访问日期 2026-10-04）

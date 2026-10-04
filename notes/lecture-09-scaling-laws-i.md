@@ -8,7 +8,7 @@ status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf"
   - "../experiments/topics/scaling-laws.md"
-  - "../assignments/assignment3-scaling/"
+  - "../assignments/spring2026/assignment3-scaling/"
 ---
 
 # Lecture 09 — Scaling Laws I：固定算力下如何分配模型与数据
@@ -376,6 +376,8 @@ optimizer/schedule、batch/sequence、seed、status、runtime、final/best loss�
 - **不同 tokenizer 直接比较 token loss：** token 粒度不同；必要时比较 nats/byte。
 - **只画拟合线，不画原始 profile：** 看不出 coverage、异常点和 winner's curse。
 - **认为高 \(R^2\) 保证远距离外推：** in-domain fit 无法衡量函数形式在域外是否成立。
+- **拿总参数给 MoE 算 \(6ND\)：** 训练 FLOPs 由每 token 激活参数决定（DeepSeek-V3：671B 总参 / 37B 激活、14.8T tokens），容量与成本口径必须分开。
+- **把 Chinchilla 1:20 当部署指南：** 它只优化单次训练 FLOPs；Llama-3 8B 用 15T tokens（约 1875 tokens/param）换推理经济性，目标函数不同结论就不同。
 
 ## 9. Checklist
 
@@ -391,36 +393,43 @@ optimizer/schedule、batch/sequence、seed、status、runtime、final/best loss�
 
 | 现象 | 优先检查 | 常见根因 |
 |---|---|---|
-| 每档 winner 都在最小/最大模型 | grid 边界 | 缺更小/更大 \(N\) |
-| 最优 \(N\) 落在网格边界 | 实验点布局 | 边界 optimum 不可信，须扩网格 |
+| 每档 winner 都在最小模型 | grid 边界 | 缺更小 \(N\) |
+| 每档 winner 都在最大模型 | grid 边界 | 缺更大 \(N\) |
 | profile 不呈 U 形 | LR/steps/data | undertrained/不公平 recipe |
 | \(a+b\ne1\) 很多 | actual \(C,D\) | rounding/口径/fit 错 |
-| residual 有系统曲率 / 拟合残差系统性偏大 | regime/function / log-space 加权 | floor/幂律失配、异方差未处理 |
+| residual 有系统曲率 | regime/function | floor/幂律失配 |
 | exponent 对单点敏感 | tier 数/动态范围 | leverage 太高 |
-| IsoFLOP 最低点不稳定 | 离散 minimum 与 seed 方差 | 单 seed 噪声、未做 bootstrap |
-| 外推预测严重偏差 | 函数形式风险 | 幂律远离支撑集外推 |
 | wall-clock 与 FLOPs 排名不同 | utilization | shape/compile/communication |
 | loss 异常低 | contamination/eval | train-val 泄漏 |
 | 大模型 timeout | runtime estimate | max_runtime 太短 |
 | bootstrap interval 过窄 | 重采样层级 | 未重做 winner selection |
+
+### 故障排查速查
+
+| 现象 | 优先检查 | 常见根因 |
+|---|---|---|
+| 拟合残差系统性偏大 | log-space 与噪声加权 | 异方差未处理、未按 loss 方差加权 |
+| 最优 \(N\) 落在网格边界 | 实验点布局 | 边界 optimum 不可信，须扩网格 |
+| IsoFLOP 最低点不稳定 | 离散 minimum 与 seed 方差 | 单 seed 噪声、未做 bootstrap |
+| 外推预测严重偏差 | 函数形式风险 | 幂律远离支撑集外推 |
 | 各点之间不可比 | recipe/tokenizer 一致性 | optimizer、lr schedule、词表不一致 |
-| \(C\approx6ND\) 对不上 | embedding 与短序列修正 | \(l_v\ne d\) 模型、序列太短时近似失效 |
+| \(C\approx6ND\) 对不上 | embedding 与短序列修正 | \(l_v{\neq}d\) 模型、序列太短时近似失效 |
 
 ## 10. 讨论：效度威胁与结论边界
 
-### 10.1 Construct validity
+### Construct validity
 - \(6ND\) 是 dense training 近似，不是 wall-clock 或 energy；
 - training/validation/downstream loss 不是同一指标；
 - non-embedding/total/active parameters 不可混用；
 - consumed tokens 不等于 unique/high-quality tokens。
 
-### 10.2 Internal validity
+### Internal validity
 - 不同规模超参/tuning budget 不等造成偏差；
 - winner selection、checkpoint selection 和 timeout 造成选择偏差；
 - rounding 后仍用 target compute；
 - eval noise/seed 未传播到 exponent。
 
-### 10.3 External validity
+### External validity
 - 一个 architecture/data/tokenizer 的指数不普适；
 - 小规模 regime 不保证延伸数百倍 compute；
 - synthetic/API proxy 不代表真实集群或数据；
@@ -429,122 +438,271 @@ optimizer/schedule、batch/sequence、seed、status、runtime、final/best loss�
 推荐结论应包含 observed range、target/observed ratio、confidence/sensitivity、boundary points
 和 recipe；避免把单一 exponent 写成普遍定律。
 
-## 11. 面试备考（Interview Prep）
+## 面试要点速记
 
-> Scaling laws 是 LLM 面试的「算法+统计」交叉题：面试官常从「\(C\approx6ND\) 哪来的」切入，
-> 追到「Kaplan vs Chinchilla 为什么结论相反」「IsoFLOP 怎么做」「N_opt 指数为什么和为 1」
-> 「最优解落在边界怎么办」。核心是把它当**资源配置工具**而非漂亮直线，别把经验指数当自然常数。
-> 下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 11.1 一页速览卡（面试前 1 分钟）
+1. **Q：Kaplan 与 Chinchilla 的关键差异是什么？** 要点：Kaplan 用固定长度的
+   lr schedule，短训练的小模型被系统性欠训练，得出“参数优先”结论；Chinchilla
+   让 schedule 与训练 token 匹配，并用 isoFLOP 得到 \(N\propto D\) 近似线性
+   （**1:20** tokens/params）。
+2. **Q：isoFLOP 方法怎么做？** 要点：固定 \(C=6ND\) 枚举 (N,D) 组合，扫 N 找
+   loss 最低点；多条等预算曲线的最低点连线即 compute-optimal 轨迹。
+3. **Q：为什么拟合要在 log-space 且加权？** 要点：loss 噪声随规模下降
+   （异方差），log-space 才能跨数量级同量纲比较残差。
+4. **Q：最优解落在网格边界怎么办？** 要点：这是实验设计缺陷的证据，必须扩
+   网格重跑后才能下结论。
+5. **Q：重复数据还有多少价值？** 要点：data-constrained scaling（Muennighoff
+   等）显示重复训练最多约 4 epochs 价值接近新鲜数据，之后边际收益急剧下降；
+   高质量 token 成为新瓶颈，过滤/去重/配比（FineWeb/DCLM 路线）重要性上升。
+6. **Q：为什么 Llama-3 8B 训到约 1875 tokens/param，远超 Chinchilla 的约 20？**
+   要点：Chinchilla 只优化单次训练 FLOPs；部署侧推理成本随服务量累积，
+   "过训练"用一次性训练开销换长期推理经济性。
+7. **Q：MoE 模型的 \(6ND\) 怎么算？** 要点：训练 FLOPs 由每 token 激活参数决定
+   （DeepSeek-V3：671B 总参 / 37B 激活、14.8T tokens），容量与成本口径必须分开。
+8. **Q：测试时计算算不算 scaling law？** 要点：算——o1 用 RL 优化解题过程
+   （回答前完成拆解/规划/校验），R1 以纯 RL 涌现长思考；scaling 轴从预训练
+   扩展到覆盖训练/推理/数据/架构/对齐/多模态的全链条资源优化。
 
-**核心主张**：scaling laws 用低成本小实验预测高成本训练的 compute-optimal \(N,D\) 分配，
-价值来自资源配置，不是拟合漂亮的直线。
+**必背数字**
 
-**必背数字与公式**
+- \(C\approx6ND\)；Chinchilla 最优 N:D ≈ 1:20；联合幂律
+  \(L(N,D)=E+A/N^\alpha+B/D^\beta\)（α≈0.34、β≈0.28，Chinchilla 拟合值）。
 
-- \(C\approx6ND\)（forward `2ND` + backward `4ND`）。
-- 联合 loss law \(L(N,D)=E+A/N^\alpha+B/D^\beta\)，Chinchilla 拟合 \(\alpha\approx0.34,\ \beta\approx0.28\)。
-- 固定 \(C\) 求导得 \(N_{\mathrm{opt}}\propto C^{\beta/(\alpha+\beta)},\ D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)，两指数和为 1。
-- Chinchilla 最优 \(N:D\approx1:20\)（参数:tokens）。
-- 参数量 \(N\approx12Ld^2\)。
+**工业界参照**
 
-**三句话答高频**
+- GPT-3（2020）：175B 参数、300B tokens，证明 scale 带来 few-shot 能力。
+- Chinchilla（2022）：70B 参数 + 1.4T tokens，多项评测优于 280B Gopher；计算最优点 D*/N* ≈ 20 tokens/param（教学口径）。
+- Llama-3 8B（2024）：15T tokens（约 1875 tokens/param）；405B：15T tokens、128K 上下文——"过训练"路线代表。
+- DeepSeek-V3：671B 总参 / 37B 激活 MoE、14.8T tokens——稀疏激活代表。
+- 数据受限（Muennighoff 等，arXiv:2305.16264）：重复训练最多约 4 epochs 价值接近新鲜数据，之后边际收益急剧下降。
 
-1. Kaplan 短训练使小模型被系统性欠训练 → 得出「参数优先」；Chinchilla 让 schedule 匹配 token 数 → \(N\propto D\)（约 1:20）。
-2. IsoFLOP 固定 \(C\) 扫 \(N\) 找最低 loss，连线即 compute-optimal 轨迹。
-3. exponent 是经验参数，随架构/数据/优化器/scale 变化，不是自然常数。
+## 行业现状与最新进展（2024–2026）
 
-### 11.2 高频面试题与答题框架
+### Scaling law 六阶段演进（2017–2026）
 
-**Q1：\(C\approx6ND\) 怎么推导？什么时候失真？**
+scaling law 不是一条一次写成的定律，而是不断被修正的研究纲领（行业深度报告整理口径，2026-08）：
 
-- 每个 token：forward 一次 matmul `2N`；backward 对输入求梯度 `2N`、对权重求梯度 `2N`，合计 `6N`；训练 \(D\) tokens 得 \(6ND\)。
-- **失真**：忽略 embedding/norm/optimizer、attention 的 \(T^2\)、recomputation、padding、通信、低利用率，以及 MoE 的 active/total 差别。
-- 只适合同家族理论核算，不能替代 wall-clock。
+| 阶段 | 时间 | 核心问题 | 代表成果 | 一句话结论 |
+|---|---|---|---|---|
+| 0 误差幂律前史 | 2017 | 深度模型误差如何随规模变化 | Hestness 等 | 跨领域误差随数据/算力幂律下降，为预训练时代埋下伏笔 |
+| 1 预训练幂律确立 | 2020 | loss 是否可预测 | Kaplan、GPT-3、Henighan | loss 对 N/D/C 幂律；GPT-3（175B、300B tokens）证明 scale 带来 few-shot |
+| 2 能力 scaling 与涌现争论 | 2021–2022 | 规模是否带来质变 | Gopher、PaLM、Wei、Schaeffer | 参数扩张推动能力上限；Schaeffer 指出部分"涌现"是指标选择造成的假象 |
+| 3 计算最优与部署经济性 | 2022–2023 | 固定算力怎么分 | Chinchilla、LLaMA | 70B Chinchilla + 1.4T tokens 多项评测优于 280B Gopher；LLaMA 以部署成本为导向开启"过训练" |
+| 4 数据约束与质量 | 2023–2024 | 数据不够怎么办 | Muennighoff、Chung、FineWeb、DataComp-LM | 重复约 4 epochs 后边际收益急剧下降；过滤、去重、配比、质量上升为主轴 |
+| 5 新 scaling 轴 | 2024–2026 | 除预训练外还能 scale 什么 | o1、DeepSeek-R1、Snell、DiT、MoE scaling | 测试时计算、RL reasoning、扩散 Transformer 与视频；scaling law 演化为全链条资源优化框架 |
 
-**Q2：Kaplan 与 Chinchilla 为什么结论相反？**
+对本讲最直接相关的是阶段 3 与阶段 4：Chinchilla 回答"固定算力下 \(N:D\) 怎么分"，Muennighoff 回答"unique data 不足时 consumed tokens 的边际价值如何衰减"。
 
-- **Kaplan**：用固定长度 LR schedule，短训练的小模型被系统性欠训练，得出「更大模型、更少数据」的参数优先结论。
-- **Chinchilla**：让 LR schedule 与训练 token 数匹配，用更密集的 IsoFLOP 实验，得出参数与 tokens 近似等比例增长。
-- **本质**：Kaplan 的 confounder 是「欠训练」——不是模型不够好，是没训够。Porian 等进一步把差异归因到具体实验 recipe。
+### "过训练"时代：从 Chinchilla 最优到推理经济性
 
-**Q3：Chinchilla 的最优 \(N:D\) 比例？**
+Chinchilla 的最优只针对**单次训练 FLOPs**；一旦把部署后的推理成本计入 lifetime 目标，最优点就向"更小模型 + 更多 tokens"移动。工业界代表配置：
 
-- 约 **1:20**（参数量:tokens），即参数与 tokens 近似等比增长。
-- 例：一个 1B 模型应配约 20B tokens；与 Kaplan 的「模型更大、数据更少」形成对比。
+| 模型 | 参数 | 训练 tokens | tokens/param | 训练导向 |
+|---|---|---|---|---|
+| GPT-3（2020） | 175B | 300B | ≈1.7 | Kaplan 时代：参数优先 |
+| Chinchilla（2022） | 70B | 1.4T | ≈20 | 单次训练 FLOPs 最优 |
+| Llama-3 8B（2024） | 8B | 15T | ≈1875 | 推理经济性（"过训练"） |
+| DeepSeek-V3（2024） | 671B 总参 / 37B 激活 | 14.8T | ≈400（按激活参数口径） | MoE 稀疏激活解耦容量与成本 |
 
-**Q4：IsoFLOP 方法怎么做？**
+Llama-3 8B 的约 1875 tokens/param 是 Chinchilla 口径（约 20）的近百倍：一次性多花训练算力，换服务侧每个 token 更便宜；405B 档（15T tokens、128K 上下文）则承担另一端的高能力场景。DeepSeek-V3 展示了第三条路——总参数堆容量、激活参数控成本，14.8T tokens 的 \(6ND\) 用 37B 激活参数核算。
 
-- 固定几个 compute 预算 \(C_i\)，每档扫多个 \(N_{ij}\)，令 \(D_{ij}=C_i/(6N_{ij})\)。
-- 每档的 loss-\(N\) 曲线呈近似 U 形（\(N\) 太小容量不足、太大 undertrained），取离散最低点 \(N_{\mathrm{opt}}(C_i)\)。
-- 多档最低点连线，再拟合 \(N_{\mathrm{opt}}=aC^b\)，得到 compute-optimal 轨迹。
+### 阶段 5 新轴：scaling 从预训练规律到全链条资源优化
 
-**Q5：联合 loss law 怎么求 \(N_{\mathrm{opt}}\)？指数为什么和为 1？**
+- **MoE 稀疏激活：** 容量（总参）与每 token 成本（激活参数）解耦，\(6ND\) 的 \(N\) 必须换成激活口径。
+- **测试时计算：** o1 用 RL 优化解题过程，回答前完成拆解/规划/校验；DeepSeek-R1 以纯 RL 涌现长思考——推理阶段的算力成为可优化的新预算。
+- **RL reasoning：** 奖励信号驱动的能力 scaling 补充预训练 loss scaling。
+- **扩散 Transformer 与视频：** DiT 把 scaling law 带入视觉/视频生成域。
+- 一句话总结：scaling law 已从"预训练大模型规律"演化为覆盖训练/推理/数据/架构/对齐/多模态的全链条资源优化框架。
 
-- 代入 \(D=C/(6N)\) 到 \(L=E+A/N^\alpha+B/D^\beta\)，对 \(N\) 求导令零，得 \(N_{\mathrm{opt}}^{\alpha+\beta}=\frac{\alpha A}{\beta B}(\frac C6)^\beta\)。
-- 于是 \(N_{\mathrm{opt}}\propto C^{\beta/(\alpha+\beta)},\ D_{\mathrm{opt}}\propto C^{\alpha/(\alpha+\beta)}\)，两指数和为 1。
-- **为什么和为 1**：这是 \(C=6ND\) 约束的直接结果，是 sanity check，不是独立实验结论。
+### 对本讲学习者的启示
 
-**Q6：为什么拟合要在 log-space 且加权？**
+第一，本讲的 IsoFLOP 方法论没有过时，反而更通用——测试时计算、MoE、数据质量轴上的最优分配，本质上都是"固定预算下在多个杠杆间求最优"，与 \(C=6ND\) 下分配 \(N,D\) 同构。第二，指数是经验参数：Llama-3 与 DeepSeek-V3 的配置说明"最优"依赖目标函数（训练 FLOPs、wall-clock 还是 lifetime 成本），面试与工程决策都应先问"在优化什么成本"。第三，数据质量与 unique data 上限正在取代参数量成为第一瓶颈，阶段 4 的结论（约 4 epochs 后重复收益急剧下降）是规划数据管线时的硬约束。
 
-- loss 噪声随规模下降（heteroscedastic），log-space 让跨数量级的残差同量纲可比。
-- 简单 log-linear 回归的标准误会低估「选 minimum」带来的不确定性，需按 loss 方差加权或做 bootstrap。
+## 大厂面试真题与答题框架
 
-**Q7：最优解落在网格边界怎么办？**
+以下均为高频面试题（公开面经风格），不指向特定公司的特定考题。
 
-- 这是实验设计缺陷：只能报告 bound（\(N_{\mathrm{opt}}\le N_{\min}\) 或 \(\ge N_{\max}\)），不能当精确 optimum。
-- 把边界点当 optimum 会严重扭曲 exponent；必须向外扩网格重跑。
+**题目 1：Chinchilla 与 Kaplan 的结论为何不同？谁的实验设计更可信？**
+- 考点：lr schedule 与训练长度的耦合、IsoFLOP 设计、fixed recipe vs per-scale tuning。
+- 答题框架：1) Kaplan（2020）：loss 对 N/D/C 幂律，GPT-3（175B、300B tokens）证明 scale 带来 few-shot；但固定长度 lr schedule 使短训练的小模型被系统性欠训练，得出"参数优先"。2) Chinchilla（2022）：schedule 与训练 token 数匹配 + 密集 IsoFLOP，得到 N 与 D 近似等比增长，D*/N* ≈ 20 tokens/param。3) 实证：70B Chinchilla（1.4T tokens）多项评测优于 280B Gopher。4) 收尾：两者不矛盾，是 recipe 与实验域不同导致指数不同。
+- 加分项：提到后续复现/复分析（如 Besiroglu、Porian）指出拟合与 recipe 选择会显著影响系数；强调 exponent 是指定条件下的经验参数。
+- 踩坑：把 1:20 当自然常数；忽略 lr schedule 这一 confounder；简单说"Kaplan 错了"。
 
-**Q8：winner's curse 是什么？**
+**题目 2：给你 1e22 FLOPs 预算，怎么定 N 和 D？**
+- 考点：\(C\approx6ND\)、Chinchilla 比例、外推流程。
+- 答题框架：1) Chinchilla 口径一阶估计：D=20N 代入 C=6N·20N=120N²，得 N≈9.1B、D≈180B tokens。2) 声明口径：non-embedding 参数、tokenizer、loss 定义。3) 检查数据侧：unique 高质量数据是否够 180B；不足则进入数据受限 regime。4) 若部署导向，参照 Llama-3 8B 过训练（更小 N、更大 D）。5) 用小规模 IsoFLOP 校准本家族指数后再外推，报告外推倍率。
+- 加分项：区分 FLOPs-optimal 与 wall-clock-optimal；给出"目标函数不同则 N/D 不同"的敏感性讨论。
+- 踩坑：直接拿总参数（含 embedding）算；不问数据够不够就报数；把估算当结论而不给验证计划。
 
-- 每档从 noisy runs 选最小 loss，会系统偏向负噪声；候选越多、bias 越强。
-- 缓解：对 ridge 附近补 seeds、用独立 validation 确认、bootstrap 时重做「选 minimum」、报告 second-best 与 uncertainty。
+**题目 3：重复数据的价值曲线是怎样的？高质量数据不够时怎么办？**
+- 考点：data-constrained scaling（Muennighoff 等，arXiv:2305.16264）。
+- 答题框架：1) 区分 unique tokens U 与 consumed tokens D，epochs e=D/U。2) 核心结论：重复训练最多约 4 epochs 价值接近新鲜数据，之后边际收益急剧下降。3) 对策：质量过滤、去重、配比（FineWeb/DCLM 路线）提升每 token 有效信息；必要时补合成数据；或把预算转投参数/新轴。4) 拟合时把 D 与 U 分开口径，不能把重复 token 当独立信息。
+- 加分项：指出数据质量改变 scaling surface，不同质量的 1B tokens 不可比；提到"高质量 token 成为新瓶颈"的行业判断。
+- 踩坑：把 consumed tokens 等同于信息量；在"重复没损失"与"重复完全没用"两个极端之间选边。
 
-**Q9：\(\alpha,\beta\) 的含义？**
+**题目 4：既然 Chinchilla 给出计算最优，为什么 Llama-3 8B 用约 1875 tokens/param？**
+- 考点：训练最优 vs lifetime 成本最优；"过训练"的经济学。
+- 答题框架：1) Chinchilla 只优化单次训练 FLOPs。2) 部署后推理成本随服务量累积，小模型每 token 便宜。3) Llama-3 8B 用 15T tokens（约 1875 tokens/param，vs Chinchilla 约 20）一次性多花训练算力换长期推理节省。4) 结论：最优 D/N 是预期服务规模的函数，不是常数。
+- 加分项：定性给出"服务 token 量越大，最优点越向小模型大 tokens 移动"；提到 405B 档（15T tokens、128K 上下文）承担高能力场景。
+- 踩坑：把 Chinchilla 当部署指南；忽略过训练同样有边际收益递减与数据约束。
 
-- \(\alpha\) 大表示「增加参数」更快降低 model-limited excess loss；\(\beta\) 大表示「增加数据」更有效。
-- 它们不是模型能力常数，随 architecture/optimizer/data quality/tokenizer/scale 变化；\(E\) 也只是当前 domain 的 fitted floor，不一定是真实 Bayes entropy。
+**题目 5：MoE 模型的 \(6ND\) 怎么算？scaling law 口径要注意什么？**
+- 考点：总参数 vs 每 token 激活参数。
+- 答题框架：1) dense 的 N 指 non-embedding 参数。2) MoE 每 token 只激活专家子集，训练 FLOPs 由激活参数决定，容量由总参决定。3) 实例：DeepSeek-V3 671B 总参 / 37B 激活、14.8T tokens。4) 拟合与汇报要分开两个口径，或使用 routed/MoE 扩展 law。
+- 加分项：链接本讲"参数口径"一节；指出混用口径会污染拟合截距。
+- 踩坑：拿 671B 总参算 \(6ND\)；只报总参不报激活。
 
-**Q10：为什么不能只背 exponent？**
+**题目 6：怎么评价"涌现能力"的证据？**
+- 考点：Wei 涌现 vs Schaeffer 指标假象。
+- 答题框架：1) 涌现：能力随规模非线性跃迁，是 Gopher/PaLM 时代的争论焦点。2) Schaeffer 等指出：非线性/不连续指标（如 exact-match 准确率）会在平滑的底层改进上制造"突变"假象。3) 方法论：换连续指标复检、审查指标定义、检查统计显著性。4) 与 scaling law 兼容：loss 平滑下降不排斥某些下游指标的陡峭改善。
+- 加分项：能说明"同一能力、不同指标、结论相反"的具体案例逻辑。
+- 踩坑：直接断言"涌现是真/假"；只用一个指标下结论。
 
-- exponent 是「指定架构/数据/优化器/scale range 下的经验参数」，旧指数没有自动迁移性。
-- 研究重点应是数据质量、拟合诊断与外推风险；跨数据/硬件/尺度搬运指数（如本仓库 RTX 6000D proxy 与官方数据指数不同）是不可靠的。
+**题目 7：如何设计实验验证一个 scaling law 猜想？**
+- 考点：IsoFLOP 矩阵、sequential design、bootstrap、边界 optimum。
+- 答题框架：1) 固定 architecture family、tokenizer、数据、评估口径。2) 预算在 log space 铺开，每档覆盖预期最优两侧。3) 先做 throughput/LR 校准再铺主矩阵。4) Sequential 补点：最低档扫宽找 U 形，按当前 exponent 预测下一档。5) Bootstrap 时重做 winner selection；报告 exponent 区间、held-out tier 验证与外推倍率。
+- 加分项：winner's curse；leave-one-tier-out；声明 fixed recipe vs per-scale tuning 口径。
+- 踩坑：winner 落网格边界仍当精确 optimum；平均撒点浪费预算；只报拟合线不报原始 profile。
 
-### 11.3 手撕要点（\(6ND\) 与 \(N_{\mathrm{opt}}\) 推导）
+## 系统设计题
 
-面试让「推导 compute-optimal」时，按两条链写：
+**设计题 1：为一家公司规划下一代基座模型（预算约 1e23 FLOPs）**
+- 需求澄清：优化目标是单次训练 FLOPs 还是 lifetime 成本？预期服务 token 量级？unique 高质量数据可用量？是否要长上下文/多模态？集群实际利用率？
+- 规模估算：Chinchilla 口径 N*≈29B、D*≈580B tokens（由 N=sqrt(C/120)、D=20N）；推理导向可取约 10B 模型 + 约 1.7T tokens（约 170 tokens/param，介于 Chinchilla 的 20 与 Llama-3 8B 的 1875 之间）。
+- 架构：数据管线（FineWeb/DCLM 风格过滤、去重、配比）→ 小规模 IsoFLOP 校准本家族指数 → 主训练 → 下游评测与服务成本核算。
+- trade-off 表：
 
-```text
-1. C ≈ 6ND
-   每 token: forward 2N + backward(对 X) 2N + backward(对 W) 2N = 6N
-   训练 D tokens: C = 6ND
+| 方案 | 训练成本 | 推理成本/token | 数据需求 | 主要风险 |
+|---|---|---|---|---|
+| Chinchilla 最优（≈29B/580B） | 基准 | 高 | 580B unique 高质量 | 小规模指数外推失真 |
+| 过训练（≈10B/1.7T） | 同预算 | 显著更低 | 数据压力大；不足时重复 ≤4 epochs | 重复收益衰减、能力上限略低 |
+| MoE（小激活/大总参） | 同预算 | 中 | 同上 | 路由稳定性、口径汇报复杂 |
 
-2. 联合 law 求 N_opt
-   L(N,D) = E + A/N^α + B/D^β，D = C/(6N)
-   -> L(N|C) = E + A N^{-α} + B (6N/C)^β
-   -> dL/dN = -αA N^{-α-1} + βB(6/C)^β N^{β-1} = 0
-   -> N_opt^{α+β} = (αA/βB)(C/6)^β
-   -> N_opt ∝ C^{β/(α+β)}, D_opt ∝ C^{α/(α+β)}, 指数和 = 1
+- 评测方案：held-out loss、下游 benchmark、每百万 token 服务成本；正式训练前用 held-out tier 验证 loss 预测。
+- 追问预案：数据不够 → 重复（≤4 epochs）+ 质量过滤 + 合成数据；预算砍半 → 降 tier 重拟合并重报外推倍率；被问"为什么不信 Chinchilla 20" → 答"目标函数含推理成本，参照 Llama-3 8B 约 1875 tokens/param"。
+
+**设计题 2：设计 IsoFLOPs 实验矩阵（对齐 A3）**
+- 需求澄清：目标外推倍率（C_target/C_max）？tier 数与每档点数？单 run 时数上限？可承受 seed 数？
+- 规模估算：参照 A3 官方数据 72 条 runs、9 个 compute tiers（每档约 8 个规模）；S=512，total_train_tokens 须被 512×B 整除。
+- 架构：tier 在 log C 等距铺开；每档 N 覆盖预期最优两侧至少半个 decade；最低档先扫宽找 U 形，再按当前 exponent 预测下一档（sequential design）。
+- trade-off 表：
+
+| 策略 | runs 数 | 信息量 | 风险 |
+|---|---|---|---|
+| 全网格一次铺满 | 多 | 低 | 预算浪费在低价值点 |
+| sequential + 边界外扩 | 少 | 高 | 依赖预测，需保留确认预算 |
+| 每档二次插值 minimum | 少 | 中 | 引入"局部二次"假设 |
+
+- 评测方案：b+d≈1 sanity check；discrete/interpolated/joint-law 三法对比；bootstrap 重做 winner selection；residual 检查系统曲率；报告外推倍率。
+- 追问预案：winner 落边界 → 只报 bound 并扩网格；相邻点差小于噪声 → 补 seed 而非新规模；timeout run → 保留记录但不入正式 fit。
+
+**设计题 3：数据受限场景的数据策略（unique 高质量数据仅 300B tokens，目标是消费 1T+ tokens）**
+- 需求澄清：300B 的质量分布与来源？允许的合成数据比例？下游任务重点？质量过滤的算力预算？
+- 规模估算：按"重复约 4 epochs 内价值接近新鲜数据"（Muennighoff 等），300B×4≈1.2T consumed tokens 是接近新鲜价值的量级上限；再往上边际收益急剧下降。
+- 架构：质量轴优先（过滤、去重、配比，FineWeb/DCLM 路线）→ epochs 上限约束（约 4）→ 合成数据与课程补充 → 剩余预算转投参数或测试时计算。
+- trade-off 表：
+
+| 策略 | 有效信息 | 额外成本 | 风险 |
+|---|---|---|---|
+| 重复至约 4 epochs | 接近新鲜 | 低 | 超过 4 epochs 收益急剧下降 |
+| 更强质量过滤（牺牲数量） | 每 token 信息上升 | 过滤算力 | 可用 token 总量下降 |
+| 合成数据补充 | 量级补充 | 生成 + 校验成本 | 分布偏移、模式坍缩 |
+
+- 评测方案：不同 epochs/过滤强度下的 val loss 曲线；held-out 域评测防泄漏；下游 benchmark 对照。
+- 追问预案：被问"为什么不多重复几次" → 引约 4 epochs 后边际收益急剧下降的结论；被问"合成数据可信吗" → 答需 held-out 校验与配比实验，不能无条件信任。
+
+## 代码实现题
+
+**代码实现题 1：幂律 loss 拟合（log-log 线性回归 + Huber）**
+- 题目：给定观测 (x_i, L_i)，拟合 \(L(x)=L_\infty+A x^{-\alpha}\)，要求对离群点稳健。
+- 考察点：floor 处理（不能整体取 log）、log-space 回归、Huber 加权 IRLS。
+
+```python
+import numpy as np
+
+def fit_power_law(x, y, floor=0.0, delta=1.0, iters=100):
+    """拟合 y = floor + A * x**(-alpha)：扣 floor 后 log-log 线性回归 + Huber IRLS。"""
+    x = np.asarray(x, float)
+    y = np.asarray(y, float)
+    if np.any(y <= floor):
+        raise ValueError("存在低于 floor 的观测：floor 或数据有问题")
+    logx, logy = np.log(x), np.log(y - floor)
+    theta = np.array([np.mean(logy), 0.5])       # [logA, alpha] 初值
+    for _ in range(iters):
+        r = logy - (theta[0] - theta[1] * logx)  # 残差
+        w = np.where(np.abs(r) <= delta, 1.0, delta / np.abs(r))
+        X = np.stack([np.ones_like(logx), -logx], axis=1)
+        theta_new = np.linalg.solve(X.T @ (w[:, None] * X), X.T @ (w * logy))
+        if np.max(np.abs(theta_new - theta)) < 1e-10:
+            theta = theta_new
+            break
+        theta = theta_new
+    return float(np.exp(theta[0])), float(theta[1])  # (A, alpha)
 ```
 
-**三个必踩坑**
+- 验收标准：合成数据（已知 A、α）恢复误差 <1%；注入 5% 强噪声后 α 变化 <5%（Huber 生效）；floor>0 时不整体取 log；对非正值输入给出明确报错。
 
-1. **`L_∞+Ax^{-α}` 不能整体取 log 做线性回归**：加法项改变曲率，只能对幂律主项近似。
-2. **用 target \(C\) 而非 actual \(C\)**：rounding 后必须用实际 \(D\) 与实际 \(C=6ND\) 重算。
-3. **边界点当 optimum**：最低点在最小 \(N\) 时，结论是 \(N_{\mathrm{opt}}\le N_{\min}\)，不是等于。
+**代码实现题 2：Chinchilla 最优 N/D 求解器**
+- 题目：给定预算 C，输出 Chinchilla 口径的 (N*, D*)，并支持联合 loss law 的解析最优。
+- 考察点：\(C\approx6ND\)、D*=20N 的代数、联合 law \(L=E+A/N^\alpha+B/D^\beta\) 固定 C 的最优推导。
 
-### 11.4 高频追问与陷阱
+```python
+import math
 
-| 追问 | 正确方向 |
-| --- | --- |
-| 高 \(R^2\) 保证外推准吗？ | 否，in-domain fit 无法衡量域外函数形式是否成立 |
-| tokens 等于 unique tokens 吗？ | 否，data-constrained 会重复 epochs，过度重复 diminishing return |
-| FLOPs-optimal 等于 wall-clock-optimal 吗？ | 否，利用率随 N/batch/shape 变，要分开拟合 |
-| \(a+b\ne1\) 是 bug 吗？ | 常是 rounding/口径/fit 错，但也可能是函数形式失配 |
-| 过滤后的 1B tokens 与随机 Web 1B 一样吗？ | 否，数据质量改变每 token 有效信息，不在同一 scaling surface |
+def chinchilla_optimal(C, ratio=20.0, coeff=6.0):
+    """D = ratio*N 且 C = coeff*N*D  =>  N = sqrt(C/(coeff*ratio))。"""
+    if C <= 0:
+        raise ValueError("C must be positive")
+    N = math.sqrt(C / (coeff * ratio))
+    D = ratio * N
+    assert abs(coeff * N * D - C) / C < 1e-12
+    return N, D
 
-## 12. 结论与本讲小结
+def joint_law_optimal(C, A, B, alpha, beta, coeff=6.0):
+    """L = E + A/N^alpha + B/D^beta 固定 C 的解析最优：
+    N**(alpha+beta) = (alpha*A/(beta*B)) * (C/coeff)**beta。"""
+    if min(alpha, beta) <= 0:
+        raise ValueError("alpha/beta must be positive")
+    N = ((alpha * A) / (beta * B) * (C / coeff) ** beta) ** (1.0 / (alpha + beta))
+    D = C / (coeff * N)
+    return N, D
+```
+
+- 验收标准：C=1e22 时 `chinchilla_optimal` 返回 N*≈9.1e9、D*≈1.8e11；`joint_law_optimal` 的隐含指数 b=β/(α+β)、d=α/(α+β)，取 α≈0.34、β≈0.28 时 b≈0.45、d≈0.55 且 b+d=1；对非法输入抛错。
+
+**代码实现题 3：IsoFLOP 最优点选择器（含边界检测）**
+- 题目：从一批 runs（参数量、实际 tokens、final loss、状态）中按 compute tier 选最优点，并标记边界 optimum。
+- 考察点：用实际 tokens 反推 C、completed 过滤、边界只能报 bound。
+
+```python
+import math
+
+def select_isoflop_optima(runs, coeff=6.0):
+    """runs: [{parameters, tokens, final_loss, status}, ...]
+    按 compute tier 分组取 completed 最低 loss；winner 在扫描边界时置 boundary=True。"""
+    tiers = {}
+    for r in runs:
+        if r["status"] != "completed":
+            continue                                # timeout/OOM 不入正式 fit
+        C = coeff * r["parameters"] * r["tokens"]   # 用实际 tokens，而非 target
+        tiers.setdefault(round(math.log10(C), 1), []).append(r)
+    optima = []
+    for _, group in sorted(tiers.items()):
+        best = min(group, key=lambda r: r["final_loss"])
+        sizes = sorted(g["parameters"] for g in group)
+        optima.append({
+            "N_opt": best["parameters"],
+            "D_opt": best["tokens"],
+            "loss": best["final_loss"],
+            "boundary": best["parameters"] in (sizes[0], sizes[-1]),
+        })
+    return optima
+```
+
+- 验收标准：boundary=True 时调用方只能报 \(N_{\mathrm{opt}}\) 的 bound 而非精确值；C 由实际 tokens 计算（目标与实际不一致时以实际为准）；未完成 run 不参与选择但保留在实验日志中。
+
+## 11. 结论与本讲小结
 
 \(C\approx6ND\) 把模型规模和数据预算连接起来，IsoFLOP 则把“固定算力如何分配”变成可实验的问题。可靠结论依赖内部最优点、统一口径和足够动态范围，而不只是一条双对数直线。Lecture 11 将把离散 envelope 扩展为联合 loss law，并重点处理 bootstrap、诊断与外推不确定性。
 
@@ -589,4 +747,8 @@ arXiv:2102.01293, 2021. https://arxiv.org/abs/2102.01293
 - Stanford CS336, [Lecture 9 — Scaling Laws](https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf).
 - [A3 官方导读与本地实现](../experiments/official/a3-scaling.md).
 - [Scaling Laws 主题导航](../experiments/topics/scaling-laws.md).
-- 本仓库：[A3 IsoFLOP 报告](../assignments/assignment3-scaling/report/main.pdf).
+- 本仓库：[A3 IsoFLOP 报告](../assignments/spring2026/assignment3-scaling/report/writeup.pdf).
+- [Muennighoff et al., Scaling Data-Constrained Language Models](https://arxiv.org/abs/2305.16264)（访问日期 2026-10-04）.
+- [Llama 3: The Herd of Models](https://arxiv.org/abs/2407.21783)（访问日期 2026-10-04）.
+- [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437)（访问日期 2026-10-04）.
+- [Stanford CS336 课程主页](https://cs336.stanford.edu)（访问日期 2026-10-04）.

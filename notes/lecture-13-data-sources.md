@@ -7,7 +7,7 @@ lecturer: "Tatsunori Hashimoto"
 status: "已复习"
 sources:
   - "https://github.com/stanford-cs336/lectures/blob/main/lecture_13.py"
-  - "../assignments/assignment4-data/"
+  - "../assignments/spring2026/assignment4-data/"
 ---
 
 # Lecture 13 — 数据来源与数据集：先定义数据，再谈规模
@@ -16,7 +16,7 @@ sources:
 
 - 作者：ShaneLiu04
 - 课程：Stanford CS336, Spring 2026
-- 文档性质：原创中文自学综述，非课程提交
+- 文档性质：AI-assisted 原创中文自学综述，非课程提交
 - 适用对象：自学者、数据工程师与 LLM 研究者
 
 ## 摘要
@@ -228,7 +228,7 @@ N_{\text{usable}}
 | 概念 | 本仓库位置 | 可验证的契约 |
 | --- | --- | --- |
 | A4 总体任务与数据边界 | `experiments/official/a4-data.md` | WARC/WET、2500 WET、GPT-2 EOT 与固定训练预算 |
-| HTML/WET 输入 | `assignments/assignment4-data/cs336_data/wet_files.py` | 流式读取 record，不把全 shard 载入内存 |
+| HTML/WET 输入 | `assignments/spring2026/assignment4-data/cs336_data/wet_files.py` | 流式读取 record，不把全 shard 载入内存 |
 | 字节到文本 | `cs336_data/extract_lang.py` | 解码、正文抽取、语言 label 与 score |
 | 文档级统计 | `cs336_data/pipeline.py::PipelineStats` | 输入/输出文档和字符数、各拒绝原因 |
 | 文档边界 | `pipeline.py::tokenize_documents` | 每篇文档编码后追加 GPT-2 EOT，写 `uint16` |
@@ -262,6 +262,10 @@ N_{\text{usable}}
 - 训练/验证按文档随机切分后再去重，会让镜像跨 split 泄漏；应先建立近重复簇，再按簇切分。
 - 高 \(E_s\) 的小来源与低 \(E_s\) 的大来源“权重相同”，但记忆风险完全不同 [[9]](#ref-9)。
 - 把合成数据当作免费午餐，忽视递归训练下的 collapse 风险 [[11]](#ref-11)。
+- 把质量分类器分数当客观真值：FineWeb-edu 式“教育质量 0–5 分”继承打分模型的
+  偏好，换领域必须重校准，否则等于把某一个模型的偏好固化为训练分布。
+- 让数学/公式内容走通用网页抽取管道：现有抽取器会丢方程、扭曲符号、拍平代码，
+  Nemotron 数学管线为此从 98 个 CC 快照重抓原始 HTML 并用 lynx 保留布局。
 
 ## 10. Checklist
 
@@ -289,19 +293,19 @@ N_{\text{usable}}
 
 ## 11. 讨论：效度威胁与结论边界
 
-### 11.1 Construct validity
+### Construct validity
 
 - “token 数”不是“信息量”；\(N_{\text{usable}}\) 的每级比率都依赖阈值与工具版本；
 - 语言/质量 score 是模型输出，不是真值；其系统性偏差会被下游放大；
 - 人工抽查样本量小，只能发现粗错误，不能证明分布正确。
 
-### 11.2 Internal validity
+### Internal validity
 
 - 来源比较若不固定抽取器、tokenizer 与训练配方，差异无法归因于来源本身；
 - funnel 比率之间的相关性使“乘积估计”失真；
 - 本仓库 A4 只在 1000–2500 条 WET 上验证，任何全量结论都是外推。
 
-### 11.3 External validity
+### External validity
 
 - 单一 snapshot 的语言/域名分布不外推到其他时期；
 - 小模型的语料偏好（FineWeb 式 ablation）未必与大模型一致 [[6]](#ref-6)；
@@ -310,115 +314,459 @@ N_{\text{usable}}
 论文式表述应限定 snapshot、抽取器版本、过滤配置与验证协议，并公开被拒绝样本的聚合统计，
 而不是只报告“我们的语料更好”。
 
-## 12. 面试备考（Interview Prep）
+## 面试要点速记
 
-> 数据来源是 LLM 面试的数据工程高频题：面试官常从「WARC/WAT/WET 是什么」切入，追到
-> 「\(E_s\) 期望暴露」「数据受限 4 epochs」「model collapse」「provenance 怎么追踪」。
-> 核心是把「数据集」理解成**采样过程**（\(p_{\text{train}}=\sum w_s p_s\)），把「多大规模」
-> 升级为「什么分布、什么许可、什么暴露次数」。下面按「一页速览 → 高频题 → 手撕 → 追问」四层组织。
+**高频问题与答题要点**
 
-### 12.1 一页速览卡（面试前 1 分钟）
+1. **Q：WARC/WAT/WET 分别是什么？** 要点：原始 HTTP 响应（WARC）/ 元数据
+   （WAT）/ 提取文本（WET）；只存 WET 会丢 URL 与 provenance，治理与审计断层。
+2. **Q：\(E_s\)（期望暴露）衡量什么？** 要点：来源 s 的样本被模型看见的
+   期望次数×数据权重；\(E_s\) 越高记忆风险越大（canary 实验可校准阈值）。
+3. **Q：数据受限时的结论？** 要点：重复 ~4 epochs 内近似等效新数据；数据
+   受限时 compute-optimal 模型应更小。
+4. **Q：选 crawl snapshot 的偏差来源？** 要点：抓取时间、语言/域覆盖、
+   robots 屏蔽与封禁；部署域与快照时间的错配是系统性偏差，不是噪声。
+5. **Q：FineWeb 为什么不用默认 WET 而用 trafilatura 重抽？** 要点：
+   WET 混入导航/模板噪声；trafilatura 对正文判定更准，小模型 ablation
+   下游验证更优——抽取器选择与后续过滤同量级重要。
+6. **Q：FineWeb-edu 规模显著更小，为什么训练出的模型反而更强？** 要点：
+   llama-3-70b-instruct 对 50 万样本按教育质量 0–5 打分、滤掉 <3 分；
+   质量 > 规模的标志性案例；但“教育质量”口径不等于普适质量。
+7. **Q：合成数据什么时候安全、什么时候危险？** 要点：补足稀缺分布
+   （Anthropic 用合成数据补情景、Cosmopedia 重建教科书分布）一般安全；
+   多代替换真实数据有 model collapse 风险——真实+合成混合、比例受控
+   是主流做法。
+8. **Q：model collapse 争论的最新结论？** 要点：牛津/剑桥 Nature 论文
+   显示崩溃在各 AI 架构（含微调 LLM）普遍存在，“接触少量原始数据可防
+   退化（按 PPL 衡量）”的观点被挑战；持续获取多样人类数据成关键
+   （“先行者优势”）。
 
-**核心主张**：数据集不是中性文件集合，而是由「来源发现、抓取时机、抽取器、过滤器、混合权重」
-共同决定的采样过程；同一 URL 集合在不同管线下分布完全不同。
+**必背数字**
 
-**必背数字与公式**
+- 4 epochs 上限；\(E_s\) 与记忆率的单调关系；fine-tune“特殊数据”的收益
+  边际递减且随规模缩水。
 
-- 训练分布 \(p_{\text{train}}(x)=\sum_s w_s\,p_s(x\mid \text{crawl,extract,filter})\)。
-- 期望遍历次数 \(E_s=\frac{T\,w_s}{N_s}\)（比 \(w_s\) 更直接关联记忆风险）。
-- 数据重复约 **4 epochs** 后边际收益趋近于零（Muennighoff）。
-- 有效 token funnel \(N_{\text{usable}}=N_{\text{raw}}\cdot r_{\text{extract}}r_{\text{lang}}r_{\text{quality}}r_{\text{safety}}r_{\text{dedup}}\)，总通过率常在个位数百分比。
-- WARC（原始响应）/ WAT（元数据）/ WET（纯文本）。
+**工业界参照**
 
-**三句话答高频**
+- Common Crawl：2007 年起持续爬取，2024 年已索引约 27 亿网页；原始数据
+  须经 URL 黑名单 → 文本抽取 → 语言过滤 → 去重 → PII 移除后才可用。
+- FineWeb（2024）：96 个 CC 快照 → 15T tokens；trafilatura 抽取质量高于
+  默认 WET（尽管数据集显著更小）。
+- FineWeb-edu：50 万样本按教育质量 0–5 打分、滤掉 <3 分；规模显著更小却
+  优于 FineWeb 与其他公开数据集。
+- Nemotron-CC：预训练 20T tokens 三阶段（0–60% 多样性优先 / 60–90%
+  提高高质量占比 / 90–100% Wikipedia 级）；英文另用 8 个新增 CC 快照，
+  多语言 3 快照覆盖 15 种语言。
+- 合成数据锚点：Cosmopedia 用 Mixtral-8x7B-Instruct 生成 30M+ 文件、
+  25B tokens 教科书式数据；Nemotron STEM 实践 88.6k 题 × 3 类 prompt ×
+  4 模型扩增后模糊去重。
+- 数据量演进：GPT-2（2019）约 100B tokens、约 4 万美元训练成本；Qwen
+  去重过滤后 2.2T tokens；Llama-3 405B 用 15T tokens。
 
-1. 数据集是采样过程：C4/RefinedWeb/FineWeb 都源自 Common Crawl，但管线不同、分布大相径庭。
-2. \(E_s\) 衡量来源 token 被看到的期望次数，小来源即便权重低、\(E_s\) 高也构成记忆风险。
-3. 数据重复 4 epochs 后饱和；合成数据递归训练会 model collapse，只能补充稀缺分布。
+## 行业现状与最新进展（2024–2026）
 
-### 12.2 高频面试题与答题框架
+### 开源预训练数据集谱系与规模
 
-**Q1：WARC / WAT / WET 分别是什么？为什么 WET record ≠ 网页正文？**
+| 数据集 / 语料 | 年代 | 规模 | 关键做法 |
+| --- | --- | --- | --- |
+| GPT-2（WebText） | 2019 | 约 100B tokens | 外链过滤 + 去重；训练成本约 4 万美元 |
+| C4 | 2020 | 约 156B tokens | 启发式清洗的 CC 子集 [[1]](#ref-1) |
+| The Pile | 2020 | 800GB / 22 源 | 多源拼接 [[3]](#ref-3) |
+| Dolma | 2024 | 3T tokens | 透明工具链、可复现 ablation [[4]](#ref-4) |
+| FineWeb | 2024 | 15T tokens | 96 个 CC 快照、trafilatura 重抽 [[6]](#ref-6) |
+| FineWeb-edu | 2024 | 显著小于 FineWeb | 教育质量分类器过滤（<3 分剔除） |
+| Qwen 预训练 | 2024 | 去重过滤后 2.2T tokens | 全网文本/百科/书籍/代码/数学/垂类 |
+| Llama-3（405B） | 2024 | 15T tokens | 多源混合；大规模开源先例 |
+| Nemotron-CC | 2025–2026 口径 | 20T tokens | 三阶段配比 + 8 个新增英文 CC 快照 |
 
-- **WARC**：保存请求/响应、header、URL、原始 payload，可重新抽取与审计；**WAT**：解析后的 metadata/links；**WET**：预抽取纯文本，吞吐友好但丢 DOM、链接上下文与部分 provenance。
-- 同一页面可能被抓取多次，一个 record 可能只剩导航/错误页/乱码；所以 `WET record ≠ 网页正文 ≠ 训练文档`。
-- 只存 WET 会丢治理与审计能力，生产应保留 WARC 或等价 provenance。
+解读：token 预算约十五年增长两个数量级（100B → 15–20T），但同期质量口径
+同步收紧——FineWeb 证明抽取器与过滤决策同量级重要，FineWeb-edu 证明“更小
+但更准”可以胜出；从 raw crawl 到 usable tokens 的总通过率常在个位数百分比
+量级 [[4]](#ref-4)[[6]](#ref-6)，"raw PB"与"usable tokens"之间差一个数量级以上。
 
-**Q2：\(E_s\)（期望暴露）衡量什么？为什么比 \(w_s\) 更重要？**
+### 垂类专用管线：数学与代码
 
-- \(E_s=Tw_s/N_s\)：来源 \(s\) 的 token 平均被看到的次数，混合权重 \(w_s\)、总预算 \(T\)、来源大小 \(N_s\) 共同决定。
-- 小来源即便权重不大，\(E_s\) 高就反复暴露 → memorization 风险高。只报 \(w_s\) 不足以判断 mixing。
-- Carlini 等：逐字记忆概率随重复次数显著增长，低重复样本几乎不被复述，高重复样本提取率可观。
+通用网页管线对公式与代码有系统性偏差。数学侧（Nemotron 实践）：现有抽取
+管道（OpenWebMath、MegaMath 等）会丢方程、扭曲符号、拍平代码，因此从
+98 个 CC 快照（2014–2024）重新抓原始 HTML，用 lynx 文本浏览器保留布局，
+由 Phi-4 归一化为 LaTeX，FineMath 分类器保留高质量样本，再经 MinHash-LSH
+去重与 LLM Decontaminator 去污染。代码侧：全部来自 GitHub 原始源码，走
+类 BigCode 许可证检测管线（检测并删除无许可文件），哈希精确去重 +
+MinHash-LSH 模糊去重，并用 OpenCoder 式启发式过滤。
 
-**Q3：数据受限时的结论？（4 epochs）**
+| 环节 | 通用网页管线 | 数学专用管线 |
+| --- | --- | --- |
+| 抓取 | WET 预抽取文本 | 从 98 个 CC 快照重抓原始 HTML |
+| 抽取 | trafilatura 等正文抽取 | lynx 文本浏览器保留布局 |
+| 归一化 | 编码 / 空白清理 | Phi-4 归一化为 LaTeX |
+| 过滤 | 质量分类器 | FineMath 分类器 |
+| 去重 | 精确 hash + MinHash-LSH | MinHash-LSH |
+| 去污染 | n-gram / 重叠检查 | LLM Decontaminator |
 
-- Muennighoff 等：把「唯一 token \(D_u\)」与「重复次数 \(R\)」解耦，重复收益按幂律衰减，约 4 epochs 后趋近饱和。
-- 等价地有效数据量约束在约 \(4D_u\)；「再加一个 epoch」是决策不是默认，收益可由 scaling curve 预估。
+### 合成数据的工业采纳
 
-**Q4：数据混合权重怎么定？三种口径？**
+- **Cosmopedia（HF）**：用 Mixtral-8x7B-Instruct 生成 30M+ 文件、
+  250 亿 tokens 的合成教科书/博客/故事，重建 Phi-1.5 训练分布。
+- **Phi 家族**：以合成数据为主要来源，“教科书式”数据放大 token 效率 [[10]](#ref-10)。
+- **NVIDIA Nemotron-4-340B 家族**：专为生成合成数据设计、许可宽松。
+- **Magpie**：从对齐 LLM 直接提取高质量指令数据，微调模型有时可媲美
+  Llama-3-8B-Instruct。
+- **Anthropic**：训练 Claude 3 时用合成数据补足训练数据可能缺失的情景。
+- **STEM 合成实践（Nemotron）**：88.6k 题（GSM8K/MATH/AOPS/Stemez/
+  OpenStax）× 3 类 prompt（Similar/Harder/Varied）× 4 模型
+  （Qwen3-30B-A3B、Qwen3-235B-A22B thinking、DeepSeek-R1、DeepSeek-V3）
+  扩增后模糊去重。
 
-- 权重按**文档数 / 字节数 / token 数**计算会得到不同分布；真正影响优化的是训练时被采到的 token 概率。
-- 报告 mixing 必须同时给 \(w_s\)（权重）与 \(E_s\)（暴露），否则「来源占比」无法解释。
+### model collapse 争论与“先行者优势”
 
-**Q5：七类来源的「隐藏价格」是什么？**
+- 牛津/剑桥 Nature 论文：崩溃现象在各 AI 架构（含微调 LLM）普遍存在，
+  “预训练或定期接触少量原始数据可防退化（按 PPL 衡量）”的观点被挑战。
+- 但真实世界通常真实+合成累积混合而非完全替代，比例不过高时一般可避免
+  性能下降。
+- 持续获取多样人类数据成为关键——形成“先行者优势”：谁握有新鲜、多样的
+  人类数据，谁就避免递归退化。
 
-- 开放网页：覆盖广但模板/SEO/镜像/许可/PII；书籍：长程连贯但版权+出版选择偏差；百科：结构密度高但风格单一；代码：可执行验证但许可证/密钥；论文：技术密度高但 OCR/订阅复杂；论坛对话：贴近真实但毒性/身份/上下文缺失；合成：目标明确但继承 teacher 偏差。
+**对本讲学习者的启示**：工业界 2024–2026 的主线与本讲的采样过程视角完全
+一致——FineWeb/Nemotron-CC 的每一步都是对 \(p_s(x\mid\text{crawl},
+\text{extract},\text{filter})\) 的显式设计；质量分层（FineWeb-edu、三阶段
+配比）说明“token 数”正让位于“有效 token 数”；合成数据从尝鲜走向标配
+（Cosmopedia/Nemotron-4-340B/Magpie），但 collapse 争论提醒：合成是分布的
+补充而非替代，\(E_s\) 与配比约束仍是第一性工具。面试中能同时给出“管线
+细节 + 数字锚点 + 风险边界”的候选者明显占优。
 
-**Q6：model collapse 是什么？合成数据怎么用？**
+## 大厂面试真题与答题框架
 
-- 在递归生成的数据上反复训练，分布尾部逐步丢失（Shumailov 等），导致「失忆」与多样性坍缩。
-- 正确用法是**补充**稀缺分布（如 Phi 的教科书式合成数据），而非无节制稀释真实数据。
+以下为高频面试题（公开面经风格），不指向任何特定公司的真题。
 
-**Q7：provenance 与删除请求怎么追踪？**
+**题目 1：FineWeb 流水线每一步的动机是什么？**
+- 考点：URL 黑名单 → 文本抽取 → 语言过滤 → 去重 → PII 移除的全链路理解。
+- 答题框架：(1) 原始 crawl 被模板/SEO/镜像主导，URL 黑名单先挡源头；
+  (2) 抽取器决定正文 vs 导航（trafilatura 优于默认 WET，需下游 ablation
+  验证）；(3) 语言过滤控分布（fastText 只作估计）；(4) 去重控 \(E_s\) 与
+  记忆风险；(5) PII 移除是合规底线，逐级记录 funnel 与拒绝原因。
+- 加分项：报出 96 个 CC 快照、15T tokens；抽取器选择与过滤同量级重要。
+- 踩坑：只背步骤名说不出“为什么 WET 不够”；把语言分数当真值。
 
-- manifest 至少含 `document_id, source_uri, crawl_id, warc_path, record_offset, retrieved_at, extractor_version, content_hash, license_evidence, filter_decisions`。
-- 删除请求要能由 `document_id → shard → tokenized artifact` 传播，而不是只在原始文本层「删除」；这就是 manifest 作为一等数据结构存在的原因。
+**题目 2：合成数据的正确用法与风险？**
+- 考点：补缺 vs 稀释、model collapse、去重与质控成本。
+- 答题框架：(1) 定位——补足稀缺分布（Anthropic 补情景、Cosmopedia 重建
+  教科书分布），不是无节制稀释真实数据；(2) 生成器——专用模型
+  （Nemotron-4-340B）或从对齐 LLM 直接提取（Magpie）；(3) 质控——扩增后
+  模糊去重 + 污染检查；(4) 风险——递归训练 collapse（Nature 论文挑战
+  “少量原始数据可防退化”）；(5) 配比——真实+合成混合、比例受控。
+- 加分项：提“先行者优势”——持续获取多样人类数据成关键。
+- 踩坑：宣称“合成数据免费”；忽略 teacher 偏差继承。
 
-**Q8：有效数据量 funnel？为什么不能机械相乘？**
+**题目 3：如何为领域模型选数据源组合？**
+- 考点：来源发现、覆盖/密度/风险/成本/可验证性五维评估。
+- 答题框架：(1) 明确目标任务分布，列候选来源（通用网页 + 领域语料 +
+  代码/数学 + 合成）；(2) 逐源过五维评估；(3) 算 \(E_s\)——领域小语料
+  权重稍大就可能高暴露；(4) 固定模型与 token 预算做受控 ablation 验证
+  配比；(5) 冻结 snapshot 并写 manifest。
+- 加分项：引用 Nemotron-CC 三阶段（0–60% 多样性 / 60–90% 高质量 /
+  90–100% Wikipedia 级）作为课程式配比先例。
+- 踩坑：只按 token 数配比不看 \(E_s\)；把领域爬虫当干净数据。
 
-- \(N_{\text{usable}}=N_{\text{raw}}\cdot r_{\text{extract}}r_{\text{lang}}r_{\text{quality}}r_{\text{safety}}r_{\text{dedup}}\)。
-- 各通过率不独立，应记录逐级 funnel 与 rejection reason 交集；从 raw crawl 到最终语料总通过率常在个位数百分比（Dolma/FineWeb）。
+**题目 4：数据法务/许可怎么管？**
+- 考点：license 证据链、opt-out、删除传播。
+- 答题框架：(1) “公开可访问 ≠ 允许训练/再分发/商用”四问分开；
+  (2) 每来源保留许可证据（条款 URL、抓取时间、存档快照）而非只存结论；
+  (3) 记录 opt-out 遵守（robots、noai meta tag、DMCA）；(4) 删除请求沿
+  document_id → shard → tokenized artifact 传播；(5) 许可不明的来源单独
+  标记 + 敏感性分析。
+- 加分项：提 Data Provenance Initiative——大量许可标注缺失或与原始条款
+  不符 [[7]](#ref-7)。
+- 踩坑：只存清洗后文本导致无法响应删除；许可结论存了、证据没存。
 
-**Q9：memorization 风险怎么度量？**
+**题目 5：FineWeb-edu 比 FineWeb 小，为什么模型反而更强？**
+- 考点：质量 > 规模、数据受限 scaling。
+- 答题框架：(1) 做法——llama-3-70b-instruct 对 50 万样本按教育质量 0–5
+  打分、滤掉 <3 分；(2) 机理——数据受限时有效数据量约受 \(4D_u\) 约束，
+  质量过滤提升单位 token 信息密度；(3) 边界——“教育质量”口径不等于
+  普适质量，换领域需重校准打分器。
+- 加分项：连接 Muennighoff：约 4 epochs 后重复收益趋零 [[8]](#ref-8)。
+- 踩坑：泛化成“数据越小越好”；忽略打分器偏好被固化的问题。
 
-- 逐字记忆概率随模型规模与样本重复次数增长；canary 序列（已知内容）植入训练语料后测提取率，把「是否记忆」变成可测量指标。
-- 缓解：dedup、PII scrubbing、canary 监测；含 PII 的小来源只要 \(E_s\) 高就构成实质性风险。
+**题目 6：数学语料为什么不能直接用通用网页管线？**
+- 考点：领域抽取偏差、专用管线设计。
+- 答题框架：(1) 问题——现有抽取管道（OpenWebMath/MegaMath 等）会丢
+  方程、扭曲符号、拍平代码；(2) 方案——收集数学 URL（InfiMM-WebMath
+  等）→ 98 个 CC 快照（2014–2024）重抓原始 HTML → lynx 保留布局 →
+  Phi-4 归一化 LaTeX → FineMath 分类器 → MinHash-LSH → LLM
+  Decontaminator；(3) 通用教训——抽取器对领域内容的偏差是系统性的，
+  必须按领域评估。
+- 加分项：指出这解释了“同一 URL 集合在不同管线下分布完全不同”。
+- 踩坑：以为换质量阈值就能救回公式；忽略 benchmark 去污染。
 
-**Q10：为什么「公开可访问」≠「允许训练」？**
+**题目 7：\(E_s\) 高的来源意味着什么？如何处置？**
+- 考点：期望暴露、记忆、mixing 决策。
+- 答题框架：(1) 定义 \(E_s=Tw_s/N_s\)，小源即使权重小也可能高暴露；
+  (2) 后果——记忆与提取风险随重复次数增长 [[9]](#ref-9)，canary 可测；
+  (3) 处置——降权重、去重或补同类数据摊薄；(4) 报告规范——同时报
+  \(w_s\) 与 \(E_s\)。
+- 加分项：连接 ~4 epochs 饱和与“再加一个 epoch 是决策不是默认”。
+- 踩坑：只报权重不报 \(E_s\)；把平均 \(E_s\) 当上限（分布有长尾）。
 
-- 「公开可访问」「允许训练」「允许再分发」「允许商用」是四个不同问题；Data Provenance Initiative 发现大量数据集许可标注缺失或与原始条款不符。
-- 应保留许可证据（条款 URL、抓取时间、存档快照）而非结论，并记录 robots.txt/noai/DMCA opt-out 遵守情况。
+## 系统设计题
 
-### 12.3 手撕要点（\(E_s\) 与 funnel）
+**设计题 1：为 3T token 预算的领域模型设计数据源组合与配比框架**
 
-面试让「算期望暴露」或「估有效 token」时，按公式写：
+- 需求澄清：目标领域与任务？语言范围（单语/多语）？许可与合规边界？是否
+  允许合成数据？训练 compute 预算与数据获取预算各是多少？
+- 规模估算：参照 Qwen 去重过滤后 2.2T tokens 的多源构成（全网文本/百科/
+  书籍/代码/数学/垂类）；3T 预算可按 Nemotron-CC 三阶段思路分段（0–60%
+  多样性优先、60–90% 提高高质量占比、90–100% 领域 Wikipedia 级）；funnel
+  口径——raw crawl → usable 的总通过率常在个位数百分比，倒推原始抓取量
+  需预留 1–2 个数量级冗余。
+- 架构：(1) 来源登记层（manifest：owner/许可证据/snapshot ID）；(2) 抽取
+  与语言过滤层（trafilatura 式重抽 + fastText 估计）；(3) 质量分层
+  （分类器打分 + retained/discarded 分层抽查）；(4) 去重层（精确 hash +
+  MinHash-LSH）；(5) 配比与采样层（按 \(E_s\) 约束解混合权重）；(6) 验证层
+  （固定小模型 + token 预算做受控对比）。
+- trade-off：
 
-```text
-E_s = T * w_s / N_s     （来源 s 的平均期望遍历次数）
-  例：T=1T tokens, w_s=0.01, N_s=10B
-  E_s = 1e12 * 0.01 / 1e10 = 1 次
+| 决策 | 选项 A | 选项 B | 取舍 |
+| --- | --- | --- | --- |
+| 抽取 | 默认 WET | WARC 重抽 | A 便宜但丢正文与 provenance；B 可审计可重放 |
+| 质量 | 高阈值一刀切 | 分层保留低分 | A 密度高但覆盖窄；B 覆盖广需分层管理 |
+| 合成 | 不用 | 领域补缺 | A 无 collapse 风险；B 补缺口但需去重与配比 |
+| 去重 | 仅精确 hash | + MinHash-LSH | A 快但镜像漏网；B 慢但控 \(E_s\) 长尾 |
 
-usable funnel = raw × r_extract × r_lang × r_quality × r_safety × r_dedup
-  （各比率不独立，需记录逐级 funnel 与 rejection 交集）
+- 评测方案：固定模型规模与 token 预算，比较候选配比的 validation loss 与
+  领域 benchmark；canary 插入测记忆；对 retained/discarded 做分层抽查。
+- 追问预案：领域语料只有 50B tokens？——用 \(E_s\) 算暴露，阶段后置 +
+  比例受控的领域合成补缺；benchmark 被污染？——LLM Decontaminator 式
+  去污染 + 换 held-out 集。
+
+**设计题 2：公司级“数据来源审计与许可合规”管线**
+
+- 需求澄清：覆盖哪些来源（外购/爬取/开源/合成）？opt-out 政策口径？
+  删除请求 SLA？审计报告受众（法务/工程/外部）？
+- 规模估算：Data Provenance Initiative 对数千个常用数据集做审计即发现
+  大量许可标注缺失 [[7]](#ref-7)——企业级来源常在百到千量级；每来源需
+  保存条款 URL、抓取时间与存档快照三件套。
+- 架构：来源注册表（许可证据快照）→ 爬取执行器（robots/noai 遵守记录）
+  → 入库门禁（无许可证据即拒收、进待审区）→ document_id 贯通层
+  （raw → shard → tokenized）→ 删除传播引擎 → 审计报告生成（按来源/
+  许可/风险聚合）。
+- trade-off：
+
+| 决策 | 选项 A | 选项 B | 取舍 |
+| --- | --- | --- | --- |
+| 无许可来源 | 直接弃用 | 标记待审后用 | A 合规稳但覆盖损失；B 需敏感性分析兜底 |
+| 删除粒度 | 文档级屏蔽 | 派生层全量重算 | A 快但 token 层可能残留；B 彻底但贵 |
+| 证据存储 | 条款文本摘录 | 存档快照 | A 轻量但可争辩；B 可举证但存储重 |
+
+- 评测方案：抽样审计通过率；删除请求端到端演练（提出 → 各层可追踪 →
+  复查无残留）；许可证据覆盖率报告。
+- 追问预案：训练已开始才收到删除请求？——按 checkpoint 策略决定继续/
+  重训，document_id 保证可定位；许可条款在训练后变更？——保留“训练时点
+  证据”快照，法务评估是否重训。
+
+**设计题 3：合成数据生产与质控平台**
+
+- 需求澄清：用途（预训练补缺 vs 指令微调）？生成器来源（自研/专用模型/
+  对齐 LLM 提取）？允许的合成占比上限？
+- 规模估算：Cosmopedia 用 Mixtral-8x7B-Instruct 生成 30M+ 文件、25B
+  tokens；Nemotron STEM 实践 88.6k 题 × 3 类 prompt × 4 模型——生成侧
+  吞吐是放大器，质控（去重/污染检查）必须同规模扩展。
+- 架构：种子设计层（题目/prompt 模板）→ 生成调度层（多模型 × 多 prompt
+  变体）→ 质控层（模糊去重 + 质量分类器 + 污染检查）→ 配比层（合成
+  占比硬上限 + \(E_s\) 联合约束）→ 监控层（跨版本分布漂移检测，防递归
+  退化）。
+- trade-off：
+
+| 决策 | 选项 A | 选项 B | 取舍 |
+| --- | --- | --- | --- |
+| 生成器 | 通用 instruct 模型 | 专用合成模型（Nemotron-4-340B 式） | A 便宜；B 许可宽松、分布可控 |
+| 指令数据 | 人工标注 | 对齐 LLM 直接提取（Magpie 式） | A 贵但多样；B 快但继承 teacher 偏差 |
+| 占比控制 | 软配比 | 硬上限 | A 灵活；B 防 collapse 但可能留缺口 |
+
+- 评测方案：固定基座对比“+合成 vs 纯真实”微调（Magpie 报告中微调模型
+  有时可媲美 Llama-3-8B-Instruct 可作上界参照）；PPL 跨代监控退化；
+  下游任务回归。
+- 追问预案：多代累积后退化怎么发现？——PPL 趋势 + 尾部分布检测；Nature
+  论文口径下“少量原始数据可防退化”不可依赖，应控真实数据比例；合成数据
+  混入 benchmark 题？——污染检查前置于入库。
+
+## 代码实现题
+
+**代码题 1：Common Crawl 快照的 URL→语言→质量粗过滤流水线骨架**
+
+- 题目：给定 WARC/WET record 流，实现流式粗过滤：URL 黑名单 → 文本抽取
+  → 语言过滤 → 质量打分，并输出逐级 funnel 统计。
+- 考察点：流式处理（内存与 record 数无关）、funnel 统计、每条 decision
+  可追溯。
+
+```python
+from collections import Counter
+from dataclasses import dataclass, field
+
+
+@dataclass
+class FunnelStats:
+    rejects: Counter = field(default_factory=Counter)
+    retained: int = 0
+
+    def reject(self, stage: str) -> None:
+        self.rejects[stage] += 1
+
+    def report(self, n_input: int) -> dict:
+        return {
+            "n_input": n_input,
+            "rejects": dict(self.rejects),
+            "retained": self.retained,
+            "retention_rate": self.retained / n_input if n_input else 0.0,
+        }
+
+
+def url_blacklisted(url: str, blacklist: set) -> bool:
+    host = url.split("://", 1)[-1].split("/", 1)[0]
+    return any(host == d or host.endswith("." + d) for d in blacklist)
+
+
+def pipeline(records, blacklist, lang_id, min_lang_score,
+             quality_scorer, min_quality):
+    """records 逐条产出 (url, raw_text, extract_fn)，全程流式。"""
+    stats = FunnelStats()
+    kept = []
+    n_input = 0
+    for url, raw, extract in records:
+        n_input += 1
+        if url_blacklisted(url, blacklist):
+            stats.reject("url_blacklist")
+            continue
+        text = extract(raw)  # trafilatura 式正文抽取
+        if len(text) < 200:
+            stats.reject("too_short")
+            continue
+        lang, score = lang_id(text)  # fastText 只作估计，不当真值
+        if score < min_lang_score:
+            stats.reject("lang_filter")
+            continue
+        if quality_scorer(text) < min_quality:
+            stats.reject("quality_filter")
+            continue
+        stats.retained += 1
+        kept.append(text)
+    return kept, stats.report(n_input)
 ```
 
-**三个必踩坑**
+- 验收标准：内存占用与 record 总数无关；报告含每级拒绝数与总保留率；
+  同一输入重跑结果逐字节一致（无隐藏随机性）。
 
-1. **别把 token 数当信息量**：\(N_{\text{usable}}\) 每级比率依赖阈值与工具版本。
-2. **别只报 \(w_s\)**：小来源 \(E_s\) 高才是记忆风险的直接来源。
-3. **别在 split 后再去重**：镜像会跨 split 泄漏；应先建近重复簇，再按簇切分。
+**代码题 2：合成数据配比与模糊去重统计脚本**
 
-### 12.4 高频追问与陷阱
+- 题目：给定多来源 token 数与目标配比，输出各来源采样量与 \(E_s\)，并对
+  文档集合做 MinHash-LSH 近重复率统计；合成来源占比超硬上限时自动缩裁。
+- 考察点：配比口径（token vs 文档）、\(E_s=Tw_s/N_s\) 落地、LSH 分桶。
 
-| 追问 | 正确方向 |
-| --- | --- |
-| 用 URL 去重可以吗？ | 否，URL 会变、同 URL 内容也会变，应保留内容 hash |
-| fastText 语言标签是真值吗？ | 否，短文本/代码混写/小语种易错分 |
-| 抽样只看 retained 够吗？ | 否，必须分层看 discarded 才能发现群体性误杀 |
-| 合成数据是免费午餐吗？ | 否，递归训练有 model collapse 风险 |
-| 公开数据能随便训练吗？ | 否，访问/版权/隐私/用途是不同问题 |
+```python
+import hashlib
+from dataclasses import dataclass
 
-## 13. 小结
+
+def minhash_signature(shingles, n_perms: int = 128):
+    sig = []
+    for i in range(n_perms):
+        salt = int(hashlib.sha1(str(i).encode()).hexdigest(), 16)
+        sig.append(min(
+            salt ^ int.from_bytes(
+                hashlib.sha1(s.encode()).digest()[:8], "big")
+            for s in shingles))
+    return sig
+
+
+def near_duplicate_rate(docs, n_perms: int = 128, n_bands: int = 16,
+                        jaccard_threshold: float = 0.8) -> float:
+    sigs = [minhash_signature(set(d.lower().split()), n_perms) for d in docs]
+    rows = n_perms // n_bands
+    buckets = {}
+    for doc_id, sig in enumerate(sigs):
+        for b in range(n_bands):
+            key = hash(tuple(sig[b * rows:(b + 1) * rows]))
+            buckets.setdefault(key, []).append(doc_id)
+    dup, seen = 0, set()
+    for members in buckets.values():
+        for i in members:
+            for j in members:
+                if j <= i or j in seen:
+                    continue
+                agree = sum(x == y for x, y in zip(sigs[i], sigs[j]))
+                if agree / n_perms >= jaccard_threshold:
+                    seen.add(j)
+                    dup += 1
+    return dup / len(docs) if docs else 0.0
+
+
+@dataclass
+class MixPlan:
+    total_tokens: int        # T
+    synthetic_cap: float     # 合成占比硬上限，如 0.3
+
+
+def plan_mix(token_counts, weights, plan: MixPlan):
+    """按 token 配比采样并报告 E_s = T * w_s / N_s；合成超上限先缩裁。"""
+    assert abs(sum(weights.values()) - 1.0) < 1e-6
+    out = {}
+    for s, w in weights.items():
+        sampled = min(int(plan.total_tokens * w), token_counts[s])
+        out[s] = {
+            "sampled_tokens": sampled,
+            "E_s": plan.total_tokens * w / max(token_counts[s], 1),
+        }
+    synth = sum(v["sampled_tokens"] for s, v in out.items()
+                if s.startswith("synthetic"))
+    cap = int(plan.total_tokens * plan.synthetic_cap)
+    if synth > cap and synth:
+        scale = cap / synth
+        for s, v in out.items():
+            if s.startswith("synthetic"):
+                v["sampled_tokens"] = int(v["sampled_tokens"] * scale)
+    return out
+```
+
+- 验收标准：权重和校验；每个来源都输出 \(E_s\)；合成占比不超上限；
+  MinHash 结果确定性（sha1 无随机性）；近重复率随重复文档比例单调。
+
+**代码题 3：\(E_s\) 计算与高暴露来源风险报告器**
+
+- 题目：给定来源 token 数、混合权重与训练预算，输出各来源 \(E_s\) 排名，
+  对超过阈值（默认 4 epochs）的来源给出处置建议。
+- 考察点：\(E_s\) 公式落地、阈值化建议、报告规范（权重与暴露同时报）。
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass
+class Source:
+    name: str
+    tokens: int      # N_s
+    weight: float    # w_s
+
+
+def exposure_report(sources, total_tokens: int,
+                    warn_epochs: float = 4.0):
+    """约 4 epochs 后重复收益趋零 [[8]](#ref-8)；高暴露同时推高记忆风险。"""
+    rows = []
+    for s in sources:
+        e_s = total_tokens * s.weight / max(s.tokens, 1)
+        rows.append({
+            "source": s.name,
+            "N_s": s.tokens,
+            "w_s": s.weight,
+            "E_s": round(e_s, 2),
+            "action": ("dedup_or_downweight_or_add_data"
+                       if e_s > warn_epochs else "ok"),
+        })
+    return sorted(rows, key=lambda r: -r["E_s"])
+```
+
+- 验收标准：纯函数无副作用；报告按 \(E_s\) 降序；超阈值来源给出可执行
+  处置建议；\(N_s=0\) 时不除零。
+
+## 12. 小结
 
 数据规模只有在采样过程、来源边界和有效 token 暴露次数明确时才有意义。WARC 提供可重
 抽取能力，WET 提供处理便利，但二者都不是现成训练集；开源语料生态（C4 → The Pile →
@@ -480,4 +828,8 @@ arXiv:2305.17493, 2023. [link](https://arxiv.org/abs/2305.17493)
 - [Common Crawl — Get Started](https://commoncrawl.org/get-started)
 - [IIPC WARC specifications](https://iipc.github.io/warc-specifications/)
 - [Data Curation 主题导航](../experiments/topics/data-curation.md)
-- [A4 Data 官方题面](../assignments/assignment4-data/cs336_assignment4_data.pdf)
+- [A4 Data 官方题面](../assignments/spring2026/assignment4-data/cs336_assignment4_data.pdf)
+- [Scaling Data-Constrained Language Models（Muennighoff et al., arXiv:2305.16264）](https://arxiv.org/abs/2305.16264)（访问日期 2026-10-04）
+- [The Llama 3 Herd of Models（arXiv:2407.21783）](https://arxiv.org/abs/2407.21783)（访问日期 2026-10-04）
+- [DeepSeek-V3 Technical Report（arXiv:2412.19437）](https://arxiv.org/abs/2412.19437)（访问日期 2026-10-04）
+- [Stanford CS336 课程主页](https://cs336.stanford.edu)（访问日期 2026-10-04）
